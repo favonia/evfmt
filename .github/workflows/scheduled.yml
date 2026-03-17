@@ -1,0 +1,69 @@
+name: Scheduled
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    continue-on-error: true # informational deep-check; failures do not block routine changes
+    steps:
+      - name: 🛡️ Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+          disable-sudo: true
+      - name: 🚚 Check out the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: 🏗️ Set up nightly Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: nightly
+      - name: 📦️ Install cargo-fuzz
+        uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
+        with:
+          tool: cargo-fuzz
+      - name: 🧪 Run fuzz targets
+        run: |
+          for target in $(cargo fuzz list 2>/dev/null); do
+            echo "::group::Fuzzing $target"
+            cargo fuzz run "$target" -- -max_total_time=1800
+            echo "::endgroup::"
+          done
+
+  mutants:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    continue-on-error: true # informational deep-check; failures do not block routine changes
+    steps:
+      - name: 🛡️ Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+          disable-sudo: true
+      - name: 🚚 Check out the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: 🏗️ Set up Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+      - name: ⚡️ Cache Rust artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: 📦️ Install cargo-mutants
+        uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
+        with:
+          tool: cargo-mutants
+      - name: 🧪 Run mutation testing
+        run: cargo mutants --workspace --timeout=120
+      - name: 📦️ Upload mutation results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: always()
+        with:
+          name: mutation-results
+          path: mutants.out/

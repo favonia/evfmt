@@ -1,0 +1,53 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    "group:allNonMajor",
+    ":semanticCommitTypeAll(build)",
+    "customManagers:githubActionsVersions"
+  ],
+  "pip-compile": {
+    "managerFilePatterns": [
+      "/(^|/)\\.github/workflows/mdformat-requirements\\.txt$/"
+    ],
+    "lockFileMaintenance": {
+      "enabled": false
+    }
+  },
+  "pip_requirements": {
+    "enabled": false
+  },
+  "schedule": [
+    "on the first day instance on friday after 9pm"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^evfmt/data/emoji-data\\.txt$/"
+      ],
+      "matchStrings": [
+        "# Version: (?<currentValue>\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "unicode-org/unicodetools",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^final-(?<version>\\d+\\.\\d+)-\\d+$",
+      "versioningTemplate": "loose"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchManagers": [
+        "pip-compile"
+      ],
+      "matchPackageNames": [
+        "mdformat",
+        "mdformat-gfm"
+      ],
+      "groupName": "mdformat"
+    }
+  ]
+}

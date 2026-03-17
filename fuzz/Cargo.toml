@@ -1,0 +1,19 @@
+[package]
+name = "evfmt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+evfmt = { path = "../evfmt", features = [] }
+
+[[bin]]
+name = "scanner_crosscheck"
+path = "fuzz_targets/scanner_crosscheck.rs"
+test = false
+doc = false
+bench = false

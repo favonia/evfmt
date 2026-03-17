@@ -1,0 +1,11 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 65749cf852e678fda3aada733b46b0e9d2c86cee6ec64ea299048d8efdbf1cf0 # shrinks to input = "#\u{200d}\u{fe0e}🏻", policy = Policy { prefer_bare_for: All, treat_bare_as_text_for: None }
+cc 443e35406ae2a5250d2a09949cf27fd80678ff2ae84f542ac0760a1f1d21b6d4 # shrinks to input = "\u{200d}\u{fe0e}A\u{200d}#A", policy = Policy { prefer_bare_for: All, treat_bare_as_text_for: None }
+cc 65e823257958d13523e062800471c652d64e9ae17b6ba0d3686b29b6e8883f23 # shrinks to input = "\u{200d}\u{fe0e}A\u{200d}⌚", policy = Policy { prefer_bare_for: None, treat_bare_as_text_for: None }
+cc 64af1d28fae9e6a6dcb78a78b8e96eaee57c249b36bb23162f2d3a19f7dace9a # shrinks to input = "😀\u{200d}\u{200d}\u{fe0e}\u{200d}\u{200d}#A", policy = Policy { prefer_bare_for: All, treat_bare_as_text_for: None }
+cc 6f82dc7bcc882e92370bb9d19029aed988a6bc03192bda1fe6bc2602f67f5f17 # shrinks to input = "A\u{fe0e}🏻\u{200d}##", policy = Policy { prefer_bare_for: None, treat_bare_as_text_for: All }

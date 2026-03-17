@@ -1,0 +1,65 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  crates-io:
+    name: Publish evfmt
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && !github.event.release.prerelease)
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_TAG: ${{ github.event.release.tag_name || '' }}
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - name: 🛡️ Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+          disable-sudo: true
+      - name: 🚚 Check out the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: 🏗️ Set up Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+      - name: ⚡️ Cache Rust artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: 🔎 Detect crate version
+        id: version
+        shell: bash
+        run: |
+          version="$(
+            cargo metadata \
+              --format-version 1 \
+              --no-deps \
+              --manifest-path evfmt/Cargo.toml \
+            | jq -r '.packages[0].version'
+          )"
+          echo "crate_version=${version}" >> "$GITHUB_OUTPUT"
+      - name: 🔎 Require matching release tag
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          if [[ "${EXPECTED_TAG}" != "v${{ steps.version.outputs.crate_version }}" ]]; then
+            echo "Release tag ${EXPECTED_TAG} does not match evfmt/Cargo.toml version v${{ steps.version.outputs.crate_version }}." >&2
+            exit 1
+          fi
+      - name: 🧪 Verify publishable package
+        run: cargo publish --package evfmt --locked --dry-run
+      - name: 🚀 Publish to crates.io
+        if: github.event_name == 'release'
+        run: cargo publish --package evfmt --locked

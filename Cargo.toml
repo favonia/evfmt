@@ -1,0 +1,41 @@
+[workspace]
+members = ["evfmt"]
+exclude = ["fuzz"]
+resolver = "3"
+
+[workspace.package]
+rust-version = "1.88"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+missing_debug_implementations = "warn"
+single_use_lifetimes = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unused_qualifications = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+# restriction cherry-picks
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+mutex_atomic = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+string_slice = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+wildcard_enum_match_arm = "warn"
+str_to_string = "warn"
+# pedantic overrides: complexity metrics never lead to actual code changes
+too_many_lines = "allow"
+
+[profile.release]
+overflow-checks = true

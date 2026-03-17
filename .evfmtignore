@@ -1,0 +1,4 @@
+evfmt/data/
+evfmt/proptest-regressions/
+evfmt/tests/cli.rs
+fuzz/corpus/
