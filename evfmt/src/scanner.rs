@@ -3,29 +3,11 @@
 //! Recognizes singletons, keycap sequences, ZWJ chains, and standalone
 //! selector runs.
 //!
-//! Purity / reconstruction principle:
-//! aside from coalescing arbitrary non-structural text into
+//! Aside from coalescing arbitrary non-structural text into
 //! [`ScanKind::Passthrough`], this scanner is purely structural and lossless.
 //! Every non-passthrough [`ScanKind`] retains enough information to
 //! reconstruct its own raw slice bit-for-bit. Concatenating all
 //! [`ScanItem::raw`] values reconstructs the original input.
-//!
-//! AUDIT NOTE: scan priority order (in [`scan`]):
-//!
-//! 1. Standalone selector run: VS not attached to a recognized logical unit
-//! 2. Keycap: base `[VS] U+20E3`
-//! 3. ZWJ chain: two+ components joined by `U+200D`
-//! 4. Singleton: variation-sequence character `[VS]`
-//! 5. Passthrough: everything else, coalesced into runs
-//!
-//! Order matters: keycap must be checked before singleton so that `#️⃣`
-//! is recognized as a keycap sequence rather than consuming `#` as a
-//! singleton and leaving `⃣` in a standalone selector run. ZWJ must also
-//! precede singleton to avoid consuming the first component as a standalone
-//! singleton.
-//!
-//! The scanner maintains byte-position invariants: `pos` always advances by
-//! `ch.len_utf8()`, so all string slices land on valid UTF-8 boundaries.
 
 use std::ops::Range;
 
@@ -45,13 +27,13 @@ pub(crate) const KEYCAP_CAP: char = '\u{20E3}';
 
 /// Returns true if the character is a variation selector (VS15 or VS16).
 #[must_use]
-pub fn is_variation_selector(ch: char) -> bool {
+pub(crate) fn is_variation_selector(ch: char) -> bool {
     ch == VS_TEXT || ch == VS_EMOJI
 }
 
 /// Returns true if the character is a valid keycap base (`#`, `*`, `0`–`9`).
 #[must_use]
-pub fn is_keycap_base(ch: char) -> bool {
+pub(crate) fn is_keycap_base(ch: char) -> bool {
     ch == '#' || ch == '*' || ch.is_ascii_digit()
 }
 
@@ -149,14 +131,14 @@ pub enum ZwjSequence {
 /// variation selector. Any additional selectors in the same run trail the
 /// first selector rather than the base itself.
 #[must_use]
-pub fn effective_selector(selectors: &[char]) -> Option<char> {
+pub(crate) fn effective_selector(selectors: &[char]) -> Option<char> {
     selectors.first().copied()
 }
 
 /// Return the selector run at the terminal selector-bearing position of a ZWJ
 /// component.
 #[must_use]
-pub fn zwj_component_terminal_selectors(component: &ZwjComponent) -> &[char] {
+pub(crate) fn zwj_component_terminal_selectors(component: &ZwjComponent) -> &[char] {
     if component.emoji_modifier.is_some() {
         &component.selectors_after_modifier
     } else {
@@ -167,7 +149,7 @@ pub fn zwj_component_terminal_selectors(component: &ZwjComponent) -> &[char] {
 /// Return the only selector that can directly affect the terminal position of a
 /// ZWJ component.
 #[must_use]
-pub fn zwj_component_effective_selector(component: &ZwjComponent) -> Option<char> {
+pub(crate) fn zwj_component_effective_selector(component: &ZwjComponent) -> Option<char> {
     effective_selector(zwj_component_terminal_selectors(component))
 }
 
@@ -208,6 +190,19 @@ pub fn scan_crosscheck(input: &str) -> (Vec<ScanItem<'_>>, Vec<ScanItem<'_>>) {
 }
 
 fn scan_state_machine(input: &str) -> Vec<ScanItem<'_>> {
+    // AUDIT NOTE: scan priority order matters here:
+    // 1. Standalone selector run: VS not attached to a recognized logical unit
+    // 2. Keycap: base `[VS] U+20E3`
+    // 3. ZWJ chain: two+ components joined by `U+200D`
+    // 4. Singleton: variation-sequence character `[VS]`
+    // 5. Passthrough: everything else, coalesced into runs
+    //
+    // Keycap must be checked before singleton so that `#️⃣` stays a keycap
+    // instead of splitting into `#` plus a stray selector run. ZWJ must also
+    // precede singleton to avoid consuming the first component on its own.
+    //
+    // `pos` always advances by `ch.len_utf8()`, so all string slices stay on
+    // valid UTF-8 boundaries.
     let mut items = Vec::new();
     let mut pos = 0;
     let mut passthrough_start: Option<usize> = None;

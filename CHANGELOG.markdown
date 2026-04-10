@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+Changes:
+
+- Reorganized the library API so high-level helpers live at the crate root.
+- Reduced visibility of internal scanner and slot helpers.
+- Tightened and clarified module documentation.
+
 ## 0.1.0 (2026-04-09)
 
 Initial release.

@@ -240,12 +240,12 @@ fn read_stdin() -> Result<String, io::Error> {
     Ok(buf)
 }
 
-/// Write content to a file atomically via a temp file + rename.
-///
-/// AUDIT NOTE: write-then-rename avoids partial writes on crash. The temp file
-/// is in the same directory to guarantee same-filesystem rename (no cross-device
-/// copy). On failure, the temp file is cleaned up. File permissions/ownership
-/// are NOT preserved — rename inherits the temp file's defaults.
+// Write content to a file atomically via a temp file + rename.
+//
+// AUDIT NOTE: write-then-rename avoids partial writes on crash. The temp file
+// is in the same directory to guarantee same-filesystem rename. On failure,
+// the temp file is cleaned up. File permissions and ownership are not
+// preserved; rename inherits the temp file's defaults.
 fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     let dir = path.parent().unwrap_or(path);
     let temp_path = dir.join(format!(
