@@ -18,6 +18,9 @@ use predicates::prelude::PredicateBooleanExt;
 
 use evfmt::expr;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt as _;
+
 fn evfmt() -> Command {
     Command::cargo_bin("evfmt").unwrap()
 }
@@ -52,6 +55,43 @@ fn format_already_canonical_unchanged() {
     evfmt().arg(file.path()).assert().success().code(0);
 
     file.assert("Hello, world!");
+}
+
+#[cfg(unix)]
+#[test]
+fn format_preserves_mode_bits() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.sh");
+    file.write_str("\u{00A9}").unwrap();
+    std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o751)).unwrap();
+
+    evfmt().arg(file.path()).assert().success().code(0);
+
+    file.assert("\u{00A9}\u{FE0F}");
+    let mode = std::fs::metadata(file.path()).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o751);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn format_preserves_extended_attributes_when_supported() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    if let Err(error) = xattr::set(file.path(), "user.evfmt-test", b"kept") {
+        assert!(
+            matches!(error.kind(), std::io::ErrorKind::Unsupported),
+            "failed to set test xattr: {error}"
+        );
+        return;
+    }
+
+    evfmt().arg(file.path()).assert().success().code(0);
+
+    file.assert("\u{00A9}\u{FE0F}");
+    let value = xattr::get(file.path(), "user.evfmt-test").unwrap();
+    assert_eq!(value.as_deref(), Some(b"kept".as_slice()));
 }
 
 // --- Check mode ---

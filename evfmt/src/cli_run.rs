@@ -1,13 +1,17 @@
 use std::fs;
-use std::io::{self, Read as _};
+use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
+use tempfile::NamedTempFile;
 
 use evfmt::expr;
 use evfmt::formatter::{self, FormatResult, Policy};
 
 use crate::cli_args::{RESERVED_COMMANDS, SharedArgs};
+
+#[cfg(unix)]
+use std::os::unix::fs as unix_fs;
 
 const PROG: &str = env!("CARGO_BIN_NAME");
 
@@ -164,9 +168,16 @@ fn process_file(path: &Path, policy: &Policy, check: bool, had_error: &mut bool)
     match result {
         FormatResult::Unchanged => false,
         FormatResult::Changed(new_content) => {
-            if let Err(error) = atomic_write(path, &new_content) {
-                eprintln!("{PROG}: {display_name}: {error}");
-                *had_error = true;
+            match atomic_write(path, &new_content) {
+                Ok(warnings) => {
+                    for warning in warnings {
+                        eprintln!("{PROG}: {display_name}: warning: {warning}");
+                    }
+                }
+                Err(error) => {
+                    eprintln!("{PROG}: {display_name}: {error}");
+                    *had_error = true;
+                }
             }
             true
         }
@@ -244,24 +255,84 @@ fn read_stdin() -> Result<String, io::Error> {
 //
 // AUDIT NOTE: write-then-rename avoids partial writes on crash. The temp file
 // is in the same directory to guarantee same-filesystem rename. On failure,
-// the temp file is cleaned up. File permissions and ownership are not
-// preserved; rename inherits the temp file's defaults.
-fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
+// the temp file is cleaned up.
+//
+// DESIGN NOTE: the goal is to approximate the observable behavior of an
+// in-place rewrite while keeping atomic replacement. In practice that means
+// preserving access-control and security-relevant metadata that an in-place
+// write would typically leave alone, while still letting normal rewrite
+// effects such as updated modification/change times happen naturally. This
+// cannot fully match true in-place writing because rename-based replacement
+// swaps the inode; hard-link identity and other inode-bound behavior are not
+// preserved.
+//
+// Metadata is copied onto the temp file before the rename so the replacement
+// preserves the original file's permissions and, on Unix, best-effort
+// ownership and extended attributes.
+fn atomic_write(path: &Path, content: &str) -> Result<Vec<String>, String> {
     let dir = path.parent().unwrap_or(path);
-    let temp_path = dir.join(format!(
-        ".{PROG}-tmp-{}",
-        path.file_name()
-            .map_or_else(|| "file".to_owned(), |n| n.to_string_lossy().to_string())
-    ));
+    let mut temp_file = match create_temp_file(dir) {
+        Ok(file) => file,
+        Err(error) => return Err(format!("temp-file create error: {error}")),
+    };
 
-    if let Err(error) = fs::write(&temp_path, content) {
+    if let Err(error) = temp_file.as_file_mut().write_all(content.as_bytes()) {
         return Err(format!("write error: {error}"));
     }
 
-    if let Err(error) = fs::rename(&temp_path, path) {
-        let _ = fs::remove_file(&temp_path);
+    let warnings = preserve_metadata(path, temp_file.path())?;
+
+    if let Err(error) = temp_file.persist(path) {
         return Err(format!("rename error: {error}"));
     }
 
+    Ok(warnings)
+}
+
+fn create_temp_file(dir: &Path) -> io::Result<NamedTempFile> {
+    tempfile::Builder::new()
+        .prefix(&format!(".{PROG}-tmp-"))
+        .tempfile_in(dir)
+}
+
+fn preserve_metadata(path: &Path, temp_path: &Path) -> Result<Vec<String>, String> {
+    let metadata = fs::metadata(path).map_err(|error| format!("metadata read error: {error}"))?;
+
+    fs::set_permissions(temp_path, metadata.permissions())
+        .map_err(|error| format!("permission preserve error: {error}"))?;
+
+    #[cfg(unix)]
+    return Ok(preserve_unix_metadata(path, temp_path, &metadata));
+
+    #[cfg(not(unix))]
+    Ok(Vec::new())
+}
+
+#[cfg(unix)]
+fn preserve_unix_metadata(path: &Path, temp_path: &Path, metadata: &fs::Metadata) -> Vec<String> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let mut warnings = Vec::new();
+
+    if let Err(warning) = preserve_xattrs(path, temp_path) {
+        warnings.push(warning);
+    }
+
+    if let Err(error) = unix_fs::chown(temp_path, Some(metadata.uid()), Some(metadata.gid())) {
+        warnings.push(format!("ownership preserve failed: {error}"));
+    }
+
+    warnings
+}
+
+#[cfg(unix)]
+fn preserve_xattrs(path: &Path, temp_path: &Path) -> Result<(), String> {
+    for attr in xattr::list(path).map_err(|error| format!("xattr list error: {error}"))? {
+        let attr_display = Path::new(&attr).display();
+        let value = xattr::get(path, &attr)
+            .map_err(|error| format!("xattr read error for {attr_display}: {error}"))?;
+        xattr::set(temp_path, &attr, value.as_deref().unwrap_or_default())
+            .map_err(|error| format!("xattr preserve error for {attr_display}: {error}"))?;
+    }
     Ok(())
 }
