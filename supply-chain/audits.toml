@@ -6,6 +6,11 @@ who = "favonia <favonia@gmail.com>"
 criteria = "safe-to-run"
 delta = "2.3.0 -> 2.4.1"
 
+[[audits.id-arena]]
+who = "favonia <favonia@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "2.2.1 -> 2.3.0"
+
 [[audits.indexmap]]
 who = "favonia <favonia@gmail.com>"
 criteria = "safe-to-run"
@@ -21,6 +26,11 @@ who = "favonia <favonia@gmail.com>"
 criteria = "safe-to-run"
 delta = "1.10.0 -> 1.11.0"
 
+[[audits.semver]]
+who = "favonia <favonia@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.25 -> 1.0.28"
+
 [[audits.zerocopy-derive]]
 who = "favonia <favonia@gmail.com>"
 criteria = "safe-to-run"
@@ -28,12 +38,12 @@ delta = "0.8.42 -> 0.8.48"
 
 [[trusted.hashbrown]]
 criteria = "safe-to-deploy"
-user-id = 55123             # rust-lang-owner
+user-id = 55123 # rust-lang-owner
 start = "2025-04-30"
 end = "2027-04-10"
 
 [[trusted.libc]]
 criteria = "safe-to-deploy"
-user-id = 55123             # rust-lang-owner
+user-id = 55123 # rust-lang-owner
 start = "2024-08-15"
 end = "2027-04-10"

@@ -1,0 +1,1 @@
+exclude = ["supply-chain/**/*.toml"]

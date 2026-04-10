@@ -15,6 +15,10 @@ categories = ["command-line-utilities", "development-tools", "text-processing"]
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 ignore = "0.4"
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+xattr = "1.5"
 
 [dev-dependencies]
 assert_cmd = "=2.2.0"
