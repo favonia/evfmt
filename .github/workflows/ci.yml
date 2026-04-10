@@ -157,8 +157,6 @@ jobs:
   semver:
     name: Semver check
     runs-on: ubuntu-latest
-    env:
-      BASELINE_REV: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
     steps:
       - name: 🛡️ Harden runner
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
@@ -167,8 +165,6 @@ jobs:
           disable-sudo: true
       - name: 🚚 Check out the repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          fetch-depth: 0
       - name: 🏗️ Set up Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
@@ -179,12 +175,8 @@ jobs:
         uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
         with:
           tool: cargo-semver-checks
-      - name: 📥️ Fetch baseline revision
-        if: github.event_name != 'push' || !github.event.created
-        run: git fetch --no-tags --depth=1 origin "${BASELINE_REV}"
       - name: 🧪 Run semver checks
-        if: github.event_name != 'push' || !github.event.created
-        run: cargo semver-checks -p evfmt --baseline-rev "${BASELINE_REV}"
+        run: cargo semver-checks -p evfmt
 
   machete:
     name: Unused dependencies
