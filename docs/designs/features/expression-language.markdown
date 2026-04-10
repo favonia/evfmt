@@ -20,18 +20,18 @@ except_expr   = "except(" expr ")"
 
 ## Atoms
 
-| Form             | Meaning                                                                  |
-| ---------------- | ------------------------------------------------------------------------ |
-| `all`            | Every character                                                          |
-| `none`           | No character                                                             |
-| `ascii`          | ASCII characters (U+0000-U+007F)                                         |
-| `emoji-defaults` | Variation-sequence code points whose Unicode default side is emoji       |
-| `rights-marks`   | ©️, ®️, ™️                                                               |
-| `arrows`         | Arrow characters                                                         |
-| `card-suits`     | ♠️, ♣️, ♥️, ♦️                                                           |
-| `u(XXXX)`        | A single code point                                                      |
-| `'c'`            | A single character; selectors inside the quotes do not matter            |
-| `"abc"`          | Union of contained characters; selectors inside the quotes do not matter |
+| Form             | Meaning                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| `all`            | Every character                                                                    |
+| `none`           | No character                                                                       |
+| `ascii`          | ASCII characters (U+0000-U+007F)                                                   |
+| `emoji-defaults` | Variation-sequence code points whose Unicode default side is emoji                 |
+| `rights-marks`   | The rights marks currently listed in Unicode's `emoji-variation-sequences.txt`     |
+| `arrows`         | The arrow characters currently listed in Unicode's `emoji-variation-sequences.txt` |
+| `card-suits`     | The card suits currently listed in Unicode's `emoji-variation-sequences.txt`       |
+| `u(XXXX)`        | A single code point                                                                |
+| `'c'`            | A single character; selectors inside the quotes do not matter                      |
+| `"abc"`          | Union of contained characters; selectors inside the quotes do not matter           |
 
 ## Combinators
 
@@ -53,15 +53,21 @@ Matches variation-sequence code points whose Unicode default side is emoji. This
 
 ### `rights-marks`
 
-Matches ©️, ®️, ™️.
+Matches the rights marks currently listed in Unicode's `emoji-variation-sequences.txt`: ©️ (`U+00A9`), ®️ (`U+00AE`), ™️ (`U+2122`).
+
+This is a project-defined set tied to the repository's pinned Unicode version, not a permanently frozen member list. It may change when `evfmt` upgrades Unicode support.
 
 ### `arrows`
 
-Matches the project-defined arrow set.
+Matches the arrow characters currently listed in Unicode's `emoji-variation-sequences.txt`: ↔️ (`U+2194`), ↕️ (`U+2195`), ↖️ (`U+2196`), ↗️ (`U+2197`), ↘️ (`U+2198`), ↙️ (`U+2199`), ↩️ (`U+21A9`), ↪️ (`U+21AA`), ➡️ (`U+27A1`), ⤴️ (`U+2934`), ⤵️ (`U+2935`), ⬅️ (`U+2B05`), ⬆️ (`U+2B06`), ⬇️ (`U+2B07`).
+
+This is a project-defined set tied to the repository's pinned Unicode version, not a permanently frozen member list. It may change when `evfmt` upgrades Unicode support.
 
 ### `card-suits`
 
-Matches ♠️, ♣️, ♥️, ♦️.
+Matches the card suits currently listed in Unicode's `emoji-variation-sequences.txt`: ♠️ (`U+2660`), ♣️ (`U+2663`), ♥️ (`U+2665`), ♦️ (`U+2666`).
+
+This is a project-defined set tied to the repository's pinned Unicode version, not a permanently frozen member list. It may change when `evfmt` upgrades Unicode support.
 
 ## Examples
 

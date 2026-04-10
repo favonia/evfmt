@@ -118,7 +118,7 @@ With the default values `--treat-bare-as-text-for=ascii` and `--prefer-bare-for=
 | Preferring bare (`ascii`)            | Change text to bare for ASCII   | Change emoji to bare for none              |
 | Not preferring bare (except `ascii`) | Change bare to text for none    | Change bare to emoji for non-ASCII         |
 
-The expression language for these two options supports combinators (`union`, `subtract`, `except`), named sets (`ascii`, `emoji-defaults`, `arrows`, `card-suits`, ...), single characters (`u(00A9)`, `'#'`), and string literals (`"#*"`) as unions of their characters. In quoted literals, selectors do not matter, so adding or removing them does not change the expression. Run `evfmt --help-expression` for the full reference.
+The expression language for these two options supports combinators (`union`, `subtract`, `except`), named sets (`ascii`, `emoji-defaults`, `arrows`, `card-suits`, ...), single characters (`u(00A9)`, `'#'`), and string literals (`"#*"`) as unions of their characters. In quoted literals, selectors do not matter, so adding or removing them does not change the expression. Named sets may change when `evfmt` upgrades Unicode support. Run `evfmt --help-expression` for the full reference.
 
 The more detailed policy decision table and derivation model live in [docs/designs/features/formatter-policy.markdown](docs/designs/features/formatter-policy.markdown).
 

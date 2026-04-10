@@ -34,11 +34,21 @@ Atoms
   none              No character
   ascii             Variation-sequence characters in U+0000-U+007F
   emoji-defaults    Variation-sequence characters whose Unicode default is emoji
-  rights-marks      (C) (U+00A9), (R) (U+00AE), TM (U+2122)
-  arrows            14 arrow characters (U+2194-U+2199, U+21A9-U+21AA,
-                    U+27A1, U+2934-U+2935, U+2B05-U+2B07)
-  card-suits        Spade (U+2660), Club (U+2663), Heart (U+2665),
-                    Diamond (U+2666)
+  rights-marks      Characters currently listed in Unicode's
+                    emoji-variation-sequences.txt as rights marks:
+                    ©︎ (U+00A9), ®︎ (U+00AE), ™︎ (U+2122)
+                    This set may change when evfmt upgrades Unicode.
+  arrows            Characters currently listed in Unicode's
+                    emoji-variation-sequences.txt as arrows:
+                    ↔︎ (U+2194), ↕︎ (U+2195), ↖︎ (U+2196), ↗︎ (U+2197),
+                    ↘︎ (U+2198), ↙︎ (U+2199), ↩︎ (U+21A9), ↪︎ (U+21AA),
+                    ➡︎ (U+27A1), ⤴︎ (U+2934), ⤵︎ (U+2935), ⬅︎ (U+2B05),
+                    ⬆︎ (U+2B06), ⬇︎ (U+2B07)
+                    This set may change when evfmt upgrades Unicode.
+  card-suits        Characters currently listed in Unicode's
+                    emoji-variation-sequences.txt as card suits:
+                    ♠︎ (U+2660), ♣︎ (U+2663), ♥︎ (U+2665), ♦︎ (U+2666)
+                    This set may change when evfmt upgrades Unicode.
 
 Literals
 --------
