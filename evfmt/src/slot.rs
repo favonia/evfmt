@@ -1,16 +1,8 @@
 //! Slot-level analysis for emoji variation handling.
 //!
-//! Boundary:
-//! this module owns the intermediate slot model between sequence-aware
-//! scanning and higher-level policy decisions.
-//!
-//! It reduces scanned structure into slot kinds, records which selector
-//! states are reasonable in that slot, and resolves selector state for a slot
+//! This module reduces scanned structure into slot kinds, records which
+//! selector states are reasonable in that slot, and resolves selector state
 //! once policy is applied.
-//!
-//! It does not classify user-visible violations and it does not rewrite text.
-//! Those responsibilities live in [`crate::classify()`] and
-//! [`crate::formatter`] respectively.
 
 use std::ops::Range;
 
@@ -246,13 +238,6 @@ fn zwj_has_extra_selectors(sequence: &scanner::ZwjSequence) -> bool {
     }
 }
 
-/// Scan and analyze an entire input string.
-#[must_use]
-pub fn analyze_text(input: &str) -> Vec<SlotAnalysis<'_>> {
-    let items = scanner::scan(input);
-    items.iter().map(analyze_scan_item).collect()
-}
-
 /// Borrowed view of the two policy predicates shared by internal resolution,
 /// classification, and canonicalization code.
 #[derive(Debug, Clone, Copy)]
@@ -264,11 +249,6 @@ pub(crate) struct PolicyView<'a> {
 }
 
 /// Derive the formatter-resolved selector state for a slot.
-///
-/// Boundary:
-/// this answers "which selector state should this slot resolve to?" for the
-/// slot model. It does not assign violation categories and it does not render
-/// repaired text.
 ///
 /// Returns `None` when the item is not a real slot.
 #[must_use]
@@ -354,7 +334,7 @@ pub(crate) fn resolve_singleton_with_view(
 /// - Components without variation-sequence data canonically have no selector; unsupported
 ///   selectors in ZWJ context are removed.
 #[must_use]
-pub fn canonical_zwj_component_selector(comp: &scanner::ZwjComponent) -> Option<char> {
+pub(crate) fn canonical_zwj_component_selector(comp: &scanner::ZwjComponent) -> Option<char> {
     if let Some(info) = unicode::variation_sequence_info(comp.base) {
         if info.default_side == DefaultSide::Text && comp.emoji_modifier.is_none() {
             Some(VS_EMOJI)
@@ -371,6 +351,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::analyze_text;
 
     #[test]
     fn reasonable_set_contains_distinguishes_membership() {

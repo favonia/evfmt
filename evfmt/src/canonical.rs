@@ -1,11 +1,7 @@
 //! Private canonicalization helpers.
 //!
-//! Boundary:
-//! this module owns text repair only. It takes already-scanned items and emits
-//! their canonical serialized form under formatter policy.
-//!
-//! User-visible diagnostics intentionally do not live here; they are part of
-//! [`crate::classify()`].
+//! These helpers take already-scanned items and emit their canonical serialized
+//! form under formatter policy.
 
 use crate::scanner::{self, KEYCAP_CAP, ScanItem, ScanKind, ZWJ, ZwjComponent, ZwjSequence};
 use crate::slot::{self, PolicyView};

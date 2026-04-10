@@ -1,19 +1,10 @@
 //! Policy-aware diagnostics for scanned emoji variation structures.
 //!
-//! Boundary:
-//! this module owns user-visible diagnostics about whether a scanned item is
-//! already canonical under formatter policy, and if not, why.
-//!
 //! It sits above [`crate::scanner`] and [`crate::slot`]:
 //!
 //! - [`crate::scanner`] decides structural item boundaries
 //! - [`crate::slot`] provides slot-level analysis for policy-bearing positions
 //! - `classify` turns that structural information into violation categories
-//!
-//! This module intentionally does not repair text. Repair logic lives in
-//! [`crate::formatter`].
-
-use std::ops::Range;
 
 use crate::formatter::Policy;
 use crate::scanner::{self, ScanItem, ScanKind};
@@ -30,19 +21,6 @@ pub enum ViolationKind {
     BareNeedsResolution,
     /// Wrong or missing FE0F in a keycap or ZWJ sequence.
     SequenceSelectorViolation,
-}
-
-/// A single non-canonical scanned item together with its canonical replacement.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Finding {
-    /// Byte range of the offending item in the original input.
-    pub span: Range<usize>,
-    /// Original raw source slice for the item.
-    pub raw: String,
-    /// Why the item is non-canonical.
-    pub violation: ViolationKind,
-    /// Canonical replacement for the item under the given policy.
-    pub replacement: String,
 }
 
 /// Classify a scanned item under the current formatter policy.
@@ -63,38 +41,6 @@ pub struct Finding {
 #[must_use]
 pub fn classify(item: &ScanItem<'_>, policy: &Policy) -> Option<ViolationKind> {
     classify_with_view(item, &policy.as_view())
-}
-
-/// Find all non-canonical items in an input string together with their
-/// canonical replacements.
-///
-/// # Examples
-///
-/// ```rust
-/// use evfmt::{Policy, ViolationKind, find_violations};
-///
-/// let policy = Policy::default();
-/// let findings = find_violations("A\u{FE0F} \u{00A9}", &policy);
-///
-/// assert_eq!(findings.len(), 2);
-/// assert_eq!(findings[0].violation, ViolationKind::IllegalSelector);
-/// assert_eq!(findings[0].replacement, "");
-/// assert_eq!(findings[1].replacement, "\u{00A9}\u{FE0F}");
-/// ```
-#[must_use]
-pub fn find_violations(input: &str, policy: &Policy) -> Vec<Finding> {
-    scanner::scan(input)
-        .into_iter()
-        .filter_map(|item| {
-            let violation = classify(&item, policy)?;
-            Some(Finding {
-                span: item.span.clone(),
-                raw: item.raw.to_owned(),
-                violation,
-                replacement: crate::formatter::canonicalize_item(&item, policy),
-            })
-        })
-        .collect()
 }
 
 fn classify_with_view(item: &ScanItem<'_>, policy: &slot::PolicyView<'_>) -> Option<ViolationKind> {
@@ -179,6 +125,7 @@ mod tests {
 
     use super::*;
     use crate::expr;
+    use crate::find_violations;
     use crate::scanner::scan;
 
     fn default_policy() -> Policy {

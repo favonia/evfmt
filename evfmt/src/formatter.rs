@@ -1,14 +1,7 @@
 //! Core formatting engine.
 //!
-//! Boundary:
-//! this module is the public repair API. It owns whole-text formatting,
-//! single-pass repair over scanner items, and the public formatter policy type.
-//!
-//! It delegates structural recognition to [`crate::scanner`], singleton
-//! selector-state reasoning to [`crate::slot`], and low-level per-item repair
-//! assembly to a private canonicalization helper module.
-//!
-//! For diagnostics without rewriting text, use [`crate::classify()`] instead.
+//! This module provides whole-text formatting, per-item canonicalization, and
+//! the public formatter policy type.
 //
 // formatter.rs — The core formatting engine.
 //
@@ -86,11 +79,6 @@ pub enum FormatResult {
 
 /// Format the input text according to the given policy.
 ///
-/// Boundary:
-/// this function is the high-level library entry point for text rewriting.
-/// Callers that only need analysis should use [`crate::scanner`] and
-/// [`crate::classify()`] directly.
-///
 /// # Examples
 ///
 /// ```rust
@@ -124,11 +112,6 @@ pub fn format_text(input: &str, policy: &Policy) -> FormatResult {
 }
 
 /// Canonicalize a single scanned item according to the formatter policy.
-///
-/// Boundary:
-/// this is the per-item repair API. It assumes item boundaries were already
-/// determined by [`crate::scanner`] and does not perform diagnostics beyond
-/// producing canonical output for that item.
 ///
 /// # Examples
 ///

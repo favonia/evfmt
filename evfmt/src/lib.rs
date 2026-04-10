@@ -56,6 +56,9 @@
 //! assert!(classify(&items[3], &policy).is_some());
 //! ```
 //!
+//! Use [`find_violations`] for a whole-input diagnostic report, or
+//! [`analyze_text`] for whole-input slot analysis.
+//!
 //! If the default policy is not suitable, parse expressions from [`expr`] and
 //! construct a [`Policy`] explicitly. In this example, `rights-marks` contains
 //! `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to remain bare.
@@ -79,10 +82,12 @@
 //!
 //! Public module boundaries:
 //!
-//! - [`formatter`] is the rewrite-oriented API: whole-text formatting and
+//! - the crate root is the high-level API: whole-input formatting and
+//!   convenience analysis helpers
+//! - [`formatter`] is the repair-oriented item API: formatter policy and
 //!   per-item canonicalization
-//! - [`mod@classify`] is the diagnostics-oriented API: scan an item and ask why it
-//!   is non-canonical
+//! - [`mod@classify`] is the diagnostics-oriented item API: ask why a scanned
+//!   item is non-canonical
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
 //!   chains, standalone selector runs, and passthrough slices
 //! - [`slot`] exposes the lower-level slot model for advanced tooling
@@ -93,6 +98,8 @@
 
 mod canonical;
 
+use std::ops::Range;
+
 pub mod classify;
 pub mod expr;
 pub mod formatter;
@@ -100,8 +107,62 @@ pub mod scanner;
 pub mod slot;
 pub mod unicode;
 
-pub use classify::{Finding, ViolationKind, classify, find_violations};
+pub use classify::{ViolationKind, classify};
 pub use formatter::{FormatResult, Policy, canonicalize_item, format_text};
-pub use scanner::{
-    ScanItem, ScanKind, ZwjComponent, ZwjLink, ZwjSequence, effective_selector, scan,
+pub use scanner::{ScanItem, ScanKind, ZwjComponent, ZwjLink, ZwjSequence, scan};
+pub use slot::{
+    ReasonableSet, SelectorState, SlotAnalysis, SlotKind, analyze_scan_item, canonical_state,
+    resolve_singleton,
 };
+
+/// A single non-canonical scanned item together with its canonical replacement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finding {
+    /// Byte range of the offending item in the original input.
+    pub span: Range<usize>,
+    /// Original raw source slice for the item.
+    pub raw: String,
+    /// Why the item is non-canonical.
+    pub violation: ViolationKind,
+    /// Canonical replacement for the item under the given policy.
+    pub replacement: String,
+}
+
+/// Find all non-canonical items in an input string together with their
+/// canonical replacements.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{Policy, ViolationKind, find_violations};
+///
+/// let policy = Policy::default();
+/// let findings = find_violations("A\u{FE0F} \u{00A9}", &policy);
+///
+/// assert_eq!(findings.len(), 2);
+/// assert_eq!(findings[0].violation, ViolationKind::IllegalSelector);
+/// assert_eq!(findings[0].replacement, "");
+/// assert_eq!(findings[1].replacement, "\u{00A9}\u{FE0F}");
+/// ```
+#[must_use]
+pub fn find_violations(input: &str, policy: &Policy) -> Vec<Finding> {
+    scan(input)
+        .into_iter()
+        .filter_map(|item| {
+            let violation = classify(&item, policy)?;
+            Some(Finding {
+                span: item.span.clone(),
+                raw: item.raw.to_owned(),
+                violation,
+                replacement: canonicalize_item(&item, policy),
+            })
+        })
+        .collect()
+}
+
+/// Analyze an entire input string into slot-level structures.
+#[must_use]
+pub fn analyze_text(input: &str) -> Vec<SlotAnalysis<'_>> {
+    let items = scan(input);
+    items.iter().map(analyze_scan_item).collect()
+}
