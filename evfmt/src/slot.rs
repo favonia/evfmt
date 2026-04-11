@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use crate::expr::Expr;
+use crate::charset::CharSet;
 use crate::formatter::Policy;
 use crate::scanner::{self, ScanItem, ScanKind, VS_EMOJI, VS_TEXT};
 use crate::unicode::{self, DefaultSide};
@@ -242,10 +242,10 @@ fn zwj_has_extra_selectors(sequence: &scanner::ZwjSequence) -> bool {
 /// classification, and canonicalization code.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PolicyView<'a> {
-    /// Expression for characters whose bare form is preferred.
-    pub(crate) prefer_bare_for: &'a Expr,
-    /// Expression for characters whose bare form means text presentation.
-    pub(crate) treat_bare_as_text_for: &'a Expr,
+    /// Charset for characters whose bare form is preferred.
+    pub(crate) prefer_bare: &'a CharSet,
+    /// Charset for characters whose bare form means text presentation.
+    pub(crate) bare_as_text: &'a CharSet,
 }
 
 /// Derive the formatter-resolved selector state for a slot.
@@ -306,13 +306,13 @@ pub(crate) fn resolve_singleton_with_view(
     } else {
         SelectorState::Bare
     };
-    let bare_side = if policy.treat_bare_as_text_for.matches(base) {
+    let bare_side = if policy.bare_as_text.contains(base) {
         SelectorState::Text
     } else {
         SelectorState::Emoji
     };
 
-    if policy.prefer_bare_for.matches(base) {
+    if policy.prefer_bare.contains(base) {
         match current {
             SelectorState::Text | SelectorState::Emoji if current != bare_side => current,
             SelectorState::Bare | SelectorState::Text | SelectorState::Emoji => SelectorState::Bare,
@@ -348,10 +348,9 @@ pub(crate) fn canonical_zwj_component_selector(comp: &scanner::ZwjComponent) -> 
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
-
     use super::*;
     use crate::analyze_text;
+    use crate::charset::{CharSet, NamedSetId};
 
     #[test]
     fn reasonable_set_contains_distinguishes_membership() {
@@ -401,6 +400,7 @@ mod tests {
         let slot = &slots[0];
         assert_eq!(slot.slot_kind, SlotKind::StandaloneEvs);
         assert!(slot.reasonable_states.contains(SelectorState::Bare));
+        #[allow(clippy::unwrap_used)]
         let info = unicode::variation_sequence_info(base).unwrap();
         assert!(slot.reasonable_states.contains(SelectorState::Bare));
         assert_eq!(
@@ -611,11 +611,11 @@ mod tests {
     fn canonical_state_prefers_bare_when_policy_says_so() {
         let item = scanner::scan("#\u{FE0E}");
         let analysis = analyze_scan_item(&item[0]);
-        let prefer_bare_for = crate::expr::parse_expr_only("ascii").unwrap();
-        let bare_is_text_for = crate::expr::parse_expr_only("ascii").unwrap();
+        let prefer_bare = CharSet::named(NamedSetId::Ascii);
+        let bare_as_text = CharSet::named(NamedSetId::Ascii);
         let policy = PolicyView {
-            prefer_bare_for: &prefer_bare_for,
-            treat_bare_as_text_for: &bare_is_text_for,
+            prefer_bare: &prefer_bare,
+            bare_as_text: &bare_as_text,
         };
         assert_eq!(
             canonical_state_with_view(&analysis, &policy),
@@ -627,13 +627,13 @@ mod tests {
     fn canonical_state_resolves_non_prefer_bare_slot_explicitly() {
         let item = scanner::scan("\u{00A9}");
         let analysis = analyze_scan_item(&item[0]);
-        let prefer_bare_for = crate::expr::parse_expr_only("ascii").unwrap();
-        let bare_is_text_for = crate::expr::parse_expr_only("ascii").unwrap();
+        let prefer_bare = CharSet::named(NamedSetId::Ascii);
+        let bare_as_text = CharSet::named(NamedSetId::Ascii);
         let policy = PolicyView {
-            prefer_bare_for: &prefer_bare_for,
-            treat_bare_as_text_for: &bare_is_text_for,
+            prefer_bare: &prefer_bare,
+            bare_as_text: &bare_as_text,
         };
-        // ©️ is non-ASCII → not in bare_is_text_for → bare resolves to emoji.
+        // ©️ is non-ASCII -> not in bare_as_text -> bare resolves to emoji.
         assert_eq!(
             canonical_state_with_view(&analysis, &policy),
             Some(SelectorState::Emoji)

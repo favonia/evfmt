@@ -93,14 +93,12 @@ pub fn is_emoji_modifier(ch: char) -> bool {
 // --- Tests ---
 #[cfg(test)]
 mod tests {
-    // Tests use unwrap/expect for concise assertions — a panic IS the failure signal.
-    #![allow(clippy::unwrap_used, clippy::expect_used)]
-
     use super::*;
 
     #[test]
     fn test_number_sign_has_variation_sequence() {
         assert!(has_variation_sequence('#'));
+        #[allow(clippy::unwrap_used)]
         let info = variation_sequence_info('#').unwrap();
         assert!(info.has_text_vs);
         assert!(info.has_emoji_vs);
@@ -109,12 +107,14 @@ mod tests {
 
     #[test]
     fn test_watch_is_emoji_default() {
+        #[allow(clippy::unwrap_used)]
         let info = variation_sequence_info('\u{231A}').unwrap();
         assert_eq!(info.default_side, DefaultSide::Emoji);
     }
 
     #[test]
     fn test_copyright_is_text_default() {
+        #[allow(clippy::unwrap_used)]
         let info = variation_sequence_info('\u{00A9}').unwrap();
         assert_eq!(info.default_side, DefaultSide::Text);
     }
@@ -127,6 +127,7 @@ mod tests {
 
     #[test]
     fn test_sparkles_is_emoji_default() {
+        #[allow(clippy::unwrap_used)]
         let info = variation_sequence_info('\u{2728}').unwrap();
         assert_eq!(info.default_side, DefaultSide::Emoji);
     }
@@ -164,6 +165,8 @@ mod tests {
 
     /// Independently parse `emoji-variation-sequences.txt` and return
     /// (`text_vs_set`, `emoji_vs_set`) of code points.
+    // Malformed pinned Unicode data is a test fixture failure.
+    #[allow(clippy::expect_used)]
     fn parse_variation_sequences_independently() -> (BTreeSet<u32>, BTreeSet<u32>) {
         let data = std::fs::read_to_string("data/emoji-variation-sequences.txt")
             .expect("failed to read emoji-variation-sequences.txt");
@@ -213,6 +216,8 @@ mod tests {
         parse_emoji_property_independently("Emoji_Modifier")
     }
 
+    // Malformed pinned Unicode data is a test fixture failure.
+    #[allow(clippy::expect_used)]
     fn parse_emoji_property_independently(wanted_property: &str) -> BTreeSet<u32> {
         let data =
             std::fs::read_to_string("data/emoji-data.txt").expect("failed to read emoji-data.txt");

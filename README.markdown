@@ -12,7 +12,7 @@ It is both a command-line tool and a Rust library.
 
 This project was developed with AI assistance, guided by [detailed design documents](docs/designs/README.markdown) and substantial testing.
 
-## 🔣 What Are Variation Selectors
+## 🔣 What Are Variation Selectors?
 
 Many Unicode characters have dual presentations, text and emoji:
 
@@ -65,11 +65,23 @@ cargo install --path evfmt
 ### 🛠️ Fixing Mode
 
 ```sh
-# Format files in place
-evfmt README.md docs/*.md
+# Format one file.
+evfmt README.md
+```
 
-# A bare heart becomes the emoji-form heart by default.
-# Both commands print: Love ❤️
+```sh
+# Format a group of files.
+evfmt docs/*.md
+```
+
+```sh
+# Format the current project.
+evfmt .
+```
+
+```sh
+# A bare heart (U+2764) becomes the emoji-form heart by default.
+# The first command prints the same string as the second command: Love ❤️
 printf '%b' 'Love \u2764' | evfmt -
 printf '%b' 'Love \u2764\ufe0f'
 ```
@@ -78,49 +90,153 @@ printf '%b' 'Love \u2764\ufe0f'
 
 ```sh
 # Check without modifying (exits 1 if changes are needed)
-evfmt check README.md
+evfmt check .
+```
 
+```sh
 # If a file name is ambiguous with a command, add `--` or use `./`
 evfmt -- check
 evfmt ./check
 ```
 
-## 🧭 What the Default Policy Does
+## 📐 Resolution Policy
 
 By default, `evfmt` leaves bare ASCII characters alone, but adds explicit selectors to non-ASCII characters with dual presentations so they render more consistently across platforms.
 
-For example, `#` stays bare. The copyright sign (`©︎`, U+00A9) gets an explicit emoji selector under the default policy, so a bare copyright sign is normalized to `©️`.
+For example, `#` stays bare. A bare copyright sign (U+00A9) gets an explicit emoji selector under the default policy, so it is normalized to `©️` (U+00A9 U+FE0F).
 
-## 📐 Resolution Policy
+The defaults work well for most projects: bare ASCII characters in text presentation are left alone, while all other characters with dual presentations get an explicit selector, defaulting to emoji.
 
-The defaults work well for most projects: bare ASCII characters in text presentation are left alone, while all other characters with dual presentations get an explicit selector—defaulting to emoji.
+⚠️ `evfmt` is a formatter, not a presentation editor. If you want to change how the copyright sign looks on your platform—say, switching it from emoji presentation to text presentation—do that in your editor by adding or removing the variation selector (`U+FE0E` or `U+FE0F`). Run `evfmt` only after you are happy with how your document renders.
 
-⚠️ `evfmt` is a formatter, not a presentation editor. If you want to change how the copyright sign looks on your platform—say, switching it from emoji presentation to text presentation—do that in your editor by adding or removing the variant selector (`U+FE0E` or `U+FE0F`). Run `evfmt` only after you are happy with how your document renders.
+### Cookbook
 
-### ⚙️ Customizing the Policy
+Use these recipes when the default policy is close to what you want, but a small class of symbols needs different handling.
 
-The policy is shaped by two ideas: how bare characters render on your _reference platform_, and which bare characters are stable across the _target platforms_ where you want consistent results. Two options control the policy:
+#### Keep Text-Looking Marks in Text Presentation
 
-- `--treat-bare-as-text-for`: Which characters the reference platform shows as text when bare. Many modern platforms show bare non-ASCII characters as emoji, so the default is `ascii`.
-- `--prefer-bare-for`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default is `ascii`, so non-ASCII characters always get an explicit selector for maximum cross-platform consistency.
+Use this when copyright, registered, and trademark-style marks should render as text-style symbols, but you still want explicit selectors for portability:
 
-These two options together completely determine what the tool does when it encounters each form:
+```sh
+evfmt \
+  --add-bare-as-text=rights-marks \
+  README.markdown
+```
 
-|                     | Treating bare as text            | Not treating bare as text         |
-| ------------------- | -------------------------------- | --------------------------------- |
-| Preferring bare     | Change text to bare; keep others | Change emoji to bare; keep others |
-| Not preferring bare | Change bare to text; keep others | Change bare to emoji; keep others |
+With that option, bare rights marks normalize to explicit text forms such as `©︎`, `®︎`, and `™︎`. Explicit emoji-form marks such as `©️` stay emoji.
 
-With the default values `--treat-bare-as-text-for=ascii` and `--prefer-bare-for=ascii`, we can derive the following actions:
+#### Keep Text-Looking Marks Bare
 
-|                                      | Treating bare as text (`ascii`) | Not treating bare as text (except `ascii`) |
-| ------------------------------------ | ------------------------------- | ------------------------------------------ |
-| Preferring bare (`ascii`)            | Change text to bare for ASCII   | Change emoji to bare for none              |
-| Not preferring bare (except `ascii`) | Change bare to text for none    | Change bare to emoji for non-ASCII         |
+Use this when copyright and trademark-style marks already look like text on your reference platform, and you want their text presentation to stay bare in your files:
 
-The expression language for these two options supports combinators (`union`, `subtract`, `except`), named sets (`ascii`, `emoji-defaults`, `arrows`, `card-suits`, ...), single characters (`u(00A9)`, `'#'`), and string literals (`"#*"`) as unions of their characters. In quoted literals, selectors do not matter, so adding or removing them does not change the expression. Named sets may change when `evfmt` upgrades Unicode support. Run `evfmt --help-expression` for the full reference.
+```sh
+evfmt \
+  --add-bare-as-text=rights-marks \
+  --add-prefer-bare=rights-marks \
+  README.markdown
+```
 
-The more detailed policy decision table and derivation model live in [docs/designs/features/formatter-policy.markdown](docs/designs/features/formatter-policy.markdown).
+With those options, bare or text-form copyright-style marks normalize to bare copyright-style marks. Explicit emoji-form marks such as `©️` stay emoji.
+
+#### Keep Symbols as Text
+
+Use this when arrows and card suits should stay text-style symbols in a technical document, log, or README:
+
+```sh
+evfmt \
+  --add-bare-as-text=arrows,card-suits \
+  README.markdown
+```
+
+With that option, bare arrows and card suits normalize to explicit text forms such as `➡︎` and `♠︎`. Explicit emoji-form symbols such as `➡️` and `♠️` stay emoji.
+
+### ⚙️ Detailed Explanation
+
+The policy is shaped by two choices: how bare characters render on your _reference platform_, and which bare characters are stable enough to keep bare in your files. A reference platform is the environment whose bare-character rendering you are using as your baseline, usually the editor, terminal, or browser where you review the formatted text.
+
+The CLI exposes those choices as two mutable sets:
+
+- `bare-as-text`: Which characters the reference platform shows as text when bare. Many modern platforms show bare non-ASCII characters as emoji, so the default set is `ascii`.
+- `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is also `ascii`, so non-ASCII characters always get an explicit selector for maximum cross-platform consistency.
+
+To choose the right policy, first decide whether a character's bare form looks like text or emoji on your reference platform. Put it in `bare-as-text` if the bare form looks like text. Then decide whether the character should stay bare in the files you publish, as long as doing so preserves the intended presentation. Put it in `prefer-bare` if bare spelling is stable enough for your target platforms.
+
+The two choices determine how `evfmt` repairs each ambiguous standalone character:
+
+| If a character is...                | `evfmt` does this                                   |
+| ----------------------------------- | --------------------------------------------------- |
+| in `bare-as-text` and `prefer-bare` | changes explicit text to bare; leaves others alone  |
+| in `bare-as-text` only              | changes bare to explicit text; leaves others alone  |
+| in `prefer-bare` only               | changes explicit emoji to bare; leaves others alone |
+| in neither set                      | changes bare to explicit emoji; leaves others alone |
+
+With the default sets `bare-as-text = ascii` and `prefer-bare = ascii`, ASCII bare forms stay bare and non-ASCII bare forms get explicit emoji selectors.
+
+#### Policy Flags
+
+Use these flags to update the policy sets. Each flag takes one or more comma-separated charset items:
+
+- To update the `bare-as-text` set:
+
+  <dl>
+  <dt><code>--set-bare-as-text=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
+  <dd>Replaces <code>bare-as-text</code> with the specified charset items.</dd>
+  <dt><code>--add-bare-as-text=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
+  <dd>Adds charset items to <code>bare-as-text</code>.</dd>
+  <dt><code>--remove-bare-as-text=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
+  <dd>Removes charset items from <code>bare-as-text</code>.</dd>
+  </dl>
+
+- To update the `prefer-bare` set:
+
+  <dl>
+  <dt><code>--set-prefer-bare=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
+  <dd>Replaces <code>prefer-bare</code> with the specified charset items.</dd>
+  <dt><code>--add-prefer-bare=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
+  <dd>Adds charset items to <code>prefer-bare</code>.</dd>
+  <dt><code>--remove-prefer-bare=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
+  <dd>Removes charset items from <code>prefer-bare</code>.</dd>
+  </dl>
+
+Both policy sets start as `ascii`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
+
+Supported charset items are:
+
+- `ascii`: ASCII characters with text/emoji variation forms, such as `#`, `*`, and digits
+- `emoji-defaults`: characters whose bare form defaults to emoji presentation in Unicode
+- `rights-marks`: copyright and registered/trademark-style marks
+- `arrows`: arrow symbols with text/emoji variation forms
+- `card-suits`: card suit symbols with text/emoji variation forms
+- `u(HEX)`: one Unicode code point, for example `u(00A9)`
+- a single character, for example `#`, `*`, or `©️`; variation selectors are allowed and ignored when choosing the character
+
+Use commas to combine items: `ascii,rights-marks,u(00A9)`. Named sets may change when `evfmt` upgrades Unicode support.
+
+Use `all` by itself to select every character `evfmt` can format. For example, `--remove-prefer-bare=all` makes every format-supported character require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII then normalizes to explicit text form and bare non-ASCII normalizes to explicit emoji form.
+
+## Ignore Filters
+
+By default, `evfmt` skips files ignored by Git, files matched by `.evfmtignore`, and hidden files or directories. Change the enabled ignore filters only when the project has a specific reason to include or exclude one of those classes.
+
+- `--set-ignore=<filter>[,<filter>...]`
+- `--add-ignore=<filter>[,<filter>...]`
+- `--remove-ignore=<filter>[,<filter>...]`
+
+Ignore flags take one or more comma-separated filter labels:
+
+- `git`: ignore files matched by Git ignore rules
+- `evfmt`: ignore files matched by `.evfmtignore`
+- `hidden`: ignore hidden files and directories
+
+Use commas to combine labels: `git,evfmt,hidden`.
+
+Use `all` by itself to select every ignore filter. For example, `--remove-ignore=all` formats everything reachable from the operands, including Git-ignored, `.evfmtignore`-ignored, and hidden files. Use `none` by itself with `--set-ignore` to disable all ignore filters.
+
+Use this when you want to format hidden files while still honoring Git ignore rules and `.evfmtignore`:
+
+```sh
+evfmt --remove-ignore=hidden .
+```
 
 ## 🚪 Exit Codes
 

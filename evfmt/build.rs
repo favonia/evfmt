@@ -2,9 +2,11 @@
 // source file containing a lookup table of emoji variation sequence information.
 // The generated file gets included into `src/variation.rs` via `include!`.
 
-// Build scripts panic on failure — there's no caller to propagate errors to,
-// and a failed build script should halt compilation.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// This build script treats malformed Unicode data and output failures as fatal.
+// There is no runtime caller to recover here; panicking stops compilation with
+// a direct build error, and localizing every generated-line write would obscure
+// the table-generation flow.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 // Build scripts have no public API to document.
 #![allow(missing_docs)]
 

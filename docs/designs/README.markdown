@@ -21,7 +21,7 @@ Use this file as a retrieval map. Each design note has "Read when:" and "Defines
 ### Feature models
 
 - [`features/formatter-policy.markdown`](features/formatter-policy.markdown) — policy defaults, warning semantics, exit codes
-- [`features/expression-language.markdown`](features/expression-language.markdown) — set DSL grammar, named sets, combinators
+- [`features/charset-api.markdown`](features/charset-api.markdown) — typed policy charset API, named sets, and set operations
 - [`features/sequence-handling.markdown`](features/sequence-handling.markdown) — durable sequence-family contracts and policy boundaries
 
 ## Directory Scope

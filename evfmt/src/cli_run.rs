@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -5,10 +6,12 @@ use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use tempfile::NamedTempFile;
 
-use evfmt::expr;
+use evfmt::charset::{CharSet, NamedSetId};
 use evfmt::formatter::{self, FormatResult, Policy};
 
-use crate::cli_args::{RESERVED_COMMANDS, SharedArgs};
+use crate::cli_args::{
+    OperationId, OrderedOperation, ParsedCommand, RESERVED_COMMANDS, SharedArgs,
+};
 
 #[cfg(unix)]
 use std::os::unix::fs as unix_fs;
@@ -33,13 +36,10 @@ impl ExitStatus {
 }
 
 #[must_use]
-pub(crate) fn run(args: &SharedArgs, check: bool, allow_reserved_files: bool) -> ExitStatus {
-    if args.help_expression {
-        print!("{}", expr::EXPRESSION_HELP);
-        return ExitStatus::Success;
-    }
+pub(crate) fn run(command: &ParsedCommand) -> ExitStatus {
+    let args = &command.args;
 
-    if let Err(message) = validate_reserved_names(args, allow_reserved_files) {
+    if let Err(message) = validate_reserved_names(args, command.allow_reserved_files) {
         eprintln!("{PROG}: {message}");
         return ExitStatus::UsageOrIoError;
     }
@@ -52,9 +52,10 @@ pub(crate) fn run(args: &SharedArgs, check: bool, allow_reserved_files: bool) ->
     let has_stdin = stdin_count == 1;
 
     if args.files.is_empty() && !has_stdin {
-        if check && !allow_reserved_files {
+        if command.check && !command.allow_reserved_files {
             eprintln!(
-                "{PROG}: no files specified (if you meant a file named `check`, use `evfmt -- check`)"
+                "{PROG}: no files specified \
+                 (if you meant a file named `check`, use `evfmt -- check`)"
             );
         } else {
             eprintln!("{PROG}: no files specified");
@@ -63,25 +64,28 @@ pub(crate) fn run(args: &SharedArgs, check: bool, allow_reserved_files: bool) ->
     }
 
     let mut had_error = false;
-    let files = expand_paths(&args.files, args.no_ignore, &mut had_error);
+    let Ok(ignore_settings) = build_ignore_settings(&command.ordered_operations) else {
+        return ExitStatus::UsageOrIoError;
+    };
+    let files = expand_paths(&args.files, ignore_settings, &mut had_error);
 
-    let Ok(policy) = build_policy(args) else {
+    let Ok(policy) = build_policy(&command.ordered_operations) else {
         return ExitStatus::UsageOrIoError;
     };
 
     let mut any_changed = false;
 
-    if has_stdin && let Some(changed) = process_stdin(&policy, check, &mut had_error) {
+    if has_stdin && let Some(changed) = process_stdin(&policy, command.check, &mut had_error) {
         any_changed |= changed;
     }
 
     for path in &files {
-        any_changed |= process_file(path, &policy, check, &mut had_error);
+        any_changed |= process_file(path, &policy, command.check, &mut had_error);
     }
 
     if had_error {
         ExitStatus::UsageOrIoError
-    } else if check && any_changed {
+    } else if command.check && any_changed {
         ExitStatus::CheckFoundChanges
     } else {
         ExitStatus::Success
@@ -97,35 +101,434 @@ fn validate_reserved_names(args: &SharedArgs, allow_reserved_files: bool) -> Res
             .find(|path| RESERVED_COMMANDS.contains(path))
     {
         return Err(format!(
-            "`{reserved}` is reserved as a subcommand; use `--` before file operands, for example `evfmt -- {reserved}`"
+            "`{reserved}` is reserved as a subcommand; use `--` before file operands, \
+             for example `evfmt -- {reserved}`"
         ));
     }
     Ok(())
 }
 
-fn build_policy(args: &SharedArgs) -> Result<Policy, ()> {
-    Ok(Policy::default()
-        .with_prefer_bare_for(parse_policy_expr(
-            "--prefer-bare-for",
-            &args.prefer_bare_for,
-        )?)
-        .with_treat_bare_as_text_for(parse_policy_expr(
-            "--treat-bare-as-text-for",
-            &args.treat_bare_as_text_for,
-        )?))
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CharacterTarget {
+    PreferBare,
+    BareAsText,
 }
 
-fn parse_policy_expr(flag: &str, input: &str) -> Result<expr::Expr, ()> {
-    match expr::parse(input) {
-        Ok(result) => {
-            for warning in &result.warnings {
-                eprintln!("{PROG}: {flag}: {warning}");
-            }
-            Ok(result.expr)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UpdateKind {
+    Set,
+    Add,
+    Remove,
+}
+
+fn build_policy(operations: &[OrderedOperation]) -> Result<Policy, ()> {
+    let prefer_bare = apply_character_operations(
+        CharSet::named(NamedSetId::Ascii),
+        operations.iter(),
+        CharacterTarget::PreferBare,
+    )?;
+    let bare_as_text = apply_character_operations(
+        CharSet::named(NamedSetId::Ascii),
+        operations.iter(),
+        CharacterTarget::BareAsText,
+    )?;
+
+    Ok(Policy::default()
+        .with_prefer_bare(prefer_bare)
+        .with_bare_as_text(bare_as_text))
+}
+
+fn build_ignore_settings(operations: &[OrderedOperation]) -> Result<IgnoreSettings, ()> {
+    let mut settings = IgnoreSettings::default();
+    for operation in operations {
+        let Some(kind) = ignore_update_kind(operation.id) else {
+            continue;
+        };
+        let parsed = parse_ignore_list(kind, &operation.value)
+            .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
+        match kind {
+            UpdateKind::Set => settings = IgnoreSettings::from_labels(&parsed),
+            UpdateKind::Add => settings.enable(&parsed),
+            UpdateKind::Remove => settings.disable(&parsed),
         }
-        Err(error) => {
-            eprintln!("{PROG}: {flag}: {error}");
-            Err(())
+    }
+    Ok(settings)
+}
+
+fn apply_character_operations<'a, I>(
+    mut current: CharSet,
+    operations: I,
+    target: CharacterTarget,
+) -> Result<CharSet, ()>
+where
+    I: Iterator<Item = &'a OrderedOperation>,
+{
+    for operation in operations {
+        let Some(kind) = character_update_kind(operation.id, target) else {
+            continue;
+        };
+        let parsed = parse_character_list(kind, &operation.value)
+            .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
+        current = match kind {
+            UpdateKind::Set => parsed,
+            UpdateKind::Add => current | parsed,
+            UpdateKind::Remove => current - parsed,
+        };
+    }
+
+    Ok(current)
+}
+
+fn report_usage_error(flag: &str, error: &CliParseError) {
+    eprintln!("{PROG}: {flag}: {error}");
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CliParseError {
+    message: String,
+}
+
+impl std::fmt::Display for CliParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IgnoreLabel {
+    Git,
+    Evfmt,
+    Hidden,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct IgnoreSettings {
+    git: bool,
+    evfmt: bool,
+    hidden: bool,
+}
+
+impl Default for IgnoreSettings {
+    fn default() -> Self {
+        Self {
+            git: true,
+            evfmt: true,
+            hidden: true,
+        }
+    }
+}
+
+impl IgnoreSettings {
+    fn from_labels(labels: &[IgnoreLabel]) -> Self {
+        let mut settings = Self {
+            git: false,
+            evfmt: false,
+            hidden: false,
+        };
+        settings.enable(labels);
+        settings
+    }
+
+    fn enable(&mut self, labels: &[IgnoreLabel]) {
+        for label in labels {
+            match label {
+                IgnoreLabel::Git => self.git = true,
+                IgnoreLabel::Evfmt => self.evfmt = true,
+                IgnoreLabel::Hidden => self.hidden = true,
+            }
+        }
+    }
+
+    fn disable(&mut self, labels: &[IgnoreLabel]) {
+        for label in labels {
+            match label {
+                IgnoreLabel::Git => self.git = false,
+                IgnoreLabel::Evfmt => self.evfmt = false,
+                IgnoreLabel::Hidden => self.hidden = false,
+            }
+        }
+    }
+}
+
+fn parse_character_list(kind: UpdateKind, input: &str) -> Result<CharSet, CliParseError> {
+    let items = split_list_items(input)?;
+    if items.len() == 1 {
+        match items[0] {
+            "all" => return Ok(CharSet::all()),
+            "none" if kind == UpdateKind::Set => return Ok(CharSet::none()),
+            "none" => {
+                return Err(CliParseError {
+                    message: "`none` is only allowed with `--set-*`".to_owned(),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    if items.iter().any(|item| *item == "all" || *item == "none") {
+        return Err(CliParseError {
+            message: "`all` and `none` must appear alone".to_owned(),
+        });
+    }
+
+    let mut set = CharSet::none();
+    for item in items {
+        set |= parse_character_item(item)?;
+    }
+
+    Ok(set)
+}
+
+fn split_list_items(input: &str) -> Result<Vec<&str>, CliParseError> {
+    if input.trim().is_empty() {
+        return Err(CliParseError {
+            message: "empty list".to_owned(),
+        });
+    }
+
+    let mut items = Vec::new();
+    for raw_item in input.split(',') {
+        let item = raw_item.trim();
+        if item.is_empty() {
+            return Err(CliParseError {
+                message: "empty list item".to_owned(),
+            });
+        }
+        items.push(item);
+    }
+
+    Ok(items)
+}
+
+fn parse_character_item(item: &str) -> Result<CharSet, CliParseError> {
+    if let Some(named_set) = parse_named_set(item) {
+        return Ok(CharSet::named(named_set));
+    }
+
+    if item.starts_with("u(") {
+        return parse_code_point_item(item);
+    }
+
+    if let Some(ch) = parse_naked_single(item) {
+        return parse_singleton_item(item, ch);
+    }
+
+    if looks_like_identifier(item) {
+        let mut message = format!("unknown preset `{item}`");
+        if let Some(suggestion) = suggest_name(item, &named_set_names()) {
+            let _ = write!(message, "; did you mean `{suggestion}`?");
+        }
+        return Err(CliParseError { message });
+    }
+
+    Err(CliParseError {
+        message: format!("invalid selector item `{item}`"),
+    })
+}
+
+fn parse_ignore_list(kind: UpdateKind, input: &str) -> Result<Vec<IgnoreLabel>, CliParseError> {
+    let items = split_list_items(input)?;
+    let mut labels = Vec::with_capacity(items.len());
+
+    if items.len() == 1 && items[0] == "none" {
+        if kind == UpdateKind::Set {
+            return Ok(labels);
+        }
+        return Err(CliParseError {
+            message: "`none` is only allowed with `--set-ignore`".to_owned(),
+        });
+    }
+
+    if items.len() == 1 && items[0] == "all" {
+        return Ok(vec![
+            IgnoreLabel::Git,
+            IgnoreLabel::Evfmt,
+            IgnoreLabel::Hidden,
+        ]);
+    }
+
+    for item in items {
+        let label = match item {
+            "git" => IgnoreLabel::Git,
+            "evfmt" => IgnoreLabel::Evfmt,
+            "hidden" => IgnoreLabel::Hidden,
+            _ => {
+                let mut message = format!("unknown ignore label `{item}`");
+                if let Some(suggestion) = suggest_name(item, &["git", "evfmt", "hidden"]) {
+                    let _ = write!(message, "; did you mean `{suggestion}`?");
+                }
+                return Err(CliParseError { message });
+            }
+        };
+        labels.push(label);
+    }
+
+    Ok(labels)
+}
+
+fn parse_named_set(item: &str) -> Option<NamedSetId> {
+    match item {
+        "ascii" => Some(NamedSetId::Ascii),
+        "emoji-defaults" => Some(NamedSetId::EmojiDefaults),
+        "rights-marks" => Some(NamedSetId::RightsMarks),
+        "arrows" => Some(NamedSetId::Arrows),
+        "card-suits" => Some(NamedSetId::CardSuits),
+        _ => None,
+    }
+}
+
+fn parse_code_point_item(item: &str) -> Result<CharSet, CliParseError> {
+    let Some(hex) = item
+        .strip_prefix("u(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    else {
+        return Err(CliParseError {
+            message: format!("invalid code point item `{item}`"),
+        });
+    };
+    if !(4..=6).contains(&hex.len()) || !hex.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err(CliParseError {
+            message: format!("invalid code point item `{item}`"),
+        });
+    }
+    #[allow(clippy::expect_used)]
+    let value =
+        u32::from_str_radix(hex, 16).expect("validated 4-6 ASCII hex digits always fit in u32");
+    let Some(ch) = char::from_u32(value) else {
+        return Err(CliParseError {
+            message: format!("invalid code point item `{item}`"),
+        });
+    };
+    parse_singleton_item(item, ch)
+}
+
+fn parse_singleton_item(item: &str, ch: char) -> Result<CharSet, CliParseError> {
+    let set = CharSet::singleton(ch);
+    if set == CharSet::none() {
+        return Err(CliParseError {
+            message: format!(
+                "character item `{item}` is not eligible for emoji variation selectors"
+            ),
+        });
+    }
+    Ok(set)
+}
+
+fn named_set_names() -> [&'static str; 5] {
+    [
+        "ascii",
+        "emoji-defaults",
+        "rights-marks",
+        "arrows",
+        "card-suits",
+    ]
+}
+
+fn parse_naked_single(item: &str) -> Option<char> {
+    let mut base = None;
+    for ch in item.chars() {
+        if ch == '\u{FE0E}' || ch == '\u{FE0F}' {
+            continue;
+        }
+        if base.replace(ch).is_some() {
+            return None;
+        }
+    }
+    base
+}
+
+fn looks_like_identifier(item: &str) -> bool {
+    item.chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+}
+
+fn suggest_name<'a>(input: &str, choices: &'a [&str]) -> Option<&'a str> {
+    let mut best = None;
+    let mut best_distance = usize::MAX;
+    for &choice in choices {
+        let distance = edit_distance(input, choice);
+        if distance < best_distance {
+            best_distance = distance;
+            best = Some(choice);
+        }
+    }
+
+    if best_distance <= 3 { best } else { None }
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let left: Vec<char> = left.chars().collect();
+    let right: Vec<char> = right.chars().collect();
+    let mut prev: Vec<usize> = (0..=right.len()).collect();
+    let mut curr = vec![0; right.len() + 1];
+
+    for (i, lch) in left.iter().enumerate() {
+        curr[0] = i + 1;
+        for (j, rch) in right.iter().enumerate() {
+            let substitution_cost = usize::from(lch != rch);
+            curr[j + 1] = (prev[j + 1] + 1)
+                .min(curr[j] + 1)
+                .min(prev[j] + substitution_cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+
+    prev[right.len()]
+}
+
+fn character_update_kind(id: OperationId, target: CharacterTarget) -> Option<UpdateKind> {
+    match target {
+        CharacterTarget::PreferBare => match id {
+            OperationId::SetPreferBare => Some(UpdateKind::Set),
+            OperationId::AddPreferBare => Some(UpdateKind::Add),
+            OperationId::RemovePreferBare => Some(UpdateKind::Remove),
+            OperationId::SetBareAsText
+            | OperationId::AddBareAsText
+            | OperationId::RemoveBareAsText
+            | OperationId::SetIgnore
+            | OperationId::AddIgnore
+            | OperationId::RemoveIgnore => None,
+        },
+        CharacterTarget::BareAsText => match id {
+            OperationId::SetBareAsText => Some(UpdateKind::Set),
+            OperationId::AddBareAsText => Some(UpdateKind::Add),
+            OperationId::RemoveBareAsText => Some(UpdateKind::Remove),
+            OperationId::SetPreferBare
+            | OperationId::AddPreferBare
+            | OperationId::RemovePreferBare
+            | OperationId::SetIgnore
+            | OperationId::AddIgnore
+            | OperationId::RemoveIgnore => None,
+        },
+    }
+}
+
+fn ignore_update_kind(id: OperationId) -> Option<UpdateKind> {
+    match id {
+        OperationId::SetIgnore => Some(UpdateKind::Set),
+        OperationId::AddIgnore => Some(UpdateKind::Add),
+        OperationId::RemoveIgnore => Some(UpdateKind::Remove),
+        OperationId::SetPreferBare
+        | OperationId::AddPreferBare
+        | OperationId::RemovePreferBare
+        | OperationId::SetBareAsText
+        | OperationId::AddBareAsText
+        | OperationId::RemoveBareAsText => None,
+    }
+}
+
+impl OperationId {
+    const fn flag_name(self) -> &'static str {
+        match self {
+            Self::SetPreferBare => "--set-prefer-bare",
+            Self::AddPreferBare => "--add-prefer-bare",
+            Self::RemovePreferBare => "--remove-prefer-bare",
+            Self::SetBareAsText => "--set-bare-as-text",
+            Self::AddBareAsText => "--add-bare-as-text",
+            Self::RemoveBareAsText => "--remove-bare-as-text",
+            Self::SetIgnore => "--set-ignore",
+            Self::AddIgnore => "--add-ignore",
+            Self::RemoveIgnore => "--remove-ignore",
         }
     }
 }
@@ -203,7 +606,11 @@ fn emit_result(label: &str, original: &str, result: FormatResult, check: bool) -
     }
 }
 
-fn expand_paths(operands: &[PathBuf], no_ignore: bool, had_error: &mut bool) -> Vec<PathBuf> {
+fn expand_paths(
+    operands: &[PathBuf],
+    ignore_settings: IgnoreSettings,
+    had_error: &mut bool,
+) -> Vec<PathBuf> {
     let fs_operands: Vec<&PathBuf> = operands.iter().filter(|f| f.as_os_str() != "-").collect();
 
     if fs_operands.is_empty() {
@@ -217,14 +624,21 @@ fn expand_paths(operands: &[PathBuf], no_ignore: bool, had_error: &mut bool) -> 
 
     builder.sort_by_file_path(Ord::cmp);
 
-    if no_ignore {
+    builder.hidden(ignore_settings.hidden);
+
+    if ignore_settings.git {
+        builder.git_ignore(true).git_global(true).git_exclude(true);
+    } else {
         builder
-            .ignore(false)
             .git_ignore(false)
             .git_global(false)
             .git_exclude(false);
-    } else {
+    }
+
+    if ignore_settings.evfmt {
         builder.add_custom_ignore_filename(format!(".{PROG}ignore"));
+    } else {
+        builder.ignore(false);
     }
 
     let mut files = Vec::new();
@@ -335,4 +749,255 @@ fn preserve_xattrs(path: &Path, temp_path: &Path) -> Result<(), String> {
             .map_err(|error| format!("xattr preserve error for {attr_display}: {error}"))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn operation(id: OperationId, value: &str) -> OrderedOperation {
+        OrderedOperation {
+            id,
+            value: value.to_owned(),
+        }
+    }
+
+    #[allow(clippy::panic)]
+    fn assert_parse_error<T>(result: Result<T, CliParseError>, expected: &str) {
+        let Err(error) = result else {
+            panic!("parse should fail");
+        };
+        assert!(
+            error.to_string().contains(expected),
+            "expected error containing {expected:?}, got {error}"
+        );
+    }
+
+    #[test]
+    fn exit_status_codes_match_cli_contract() {
+        assert_eq!(ExitStatus::Success.code(), 0);
+        assert_eq!(ExitStatus::CheckFoundChanges.code(), 1);
+        assert_eq!(ExitStatus::UsageOrIoError.code(), 2);
+    }
+
+    #[test]
+    fn reserved_file_names_require_explicit_separator() {
+        let args = SharedArgs {
+            files: vec![PathBuf::from("plain.txt"), PathBuf::from("check")],
+        };
+
+        assert!(validate_reserved_names(&args, true).is_ok());
+        #[allow(clippy::expect_used)]
+        let error = validate_reserved_names(&args, false).expect_err("check is reserved");
+        assert!(error.contains("reserved as a subcommand"));
+    }
+
+    #[test]
+    fn ignore_settings_apply_label_updates() {
+        let mut settings = IgnoreSettings::from_labels(&[IgnoreLabel::Git]);
+
+        assert!(settings.git);
+        assert!(!settings.evfmt);
+        assert!(!settings.hidden);
+
+        settings.enable(&[IgnoreLabel::Evfmt, IgnoreLabel::Hidden]);
+        assert!(settings.git);
+        assert!(settings.evfmt);
+        assert!(settings.hidden);
+
+        settings.disable(&[IgnoreLabel::Git, IgnoreLabel::Hidden]);
+        assert!(!settings.git);
+        assert!(settings.evfmt);
+        assert!(!settings.hidden);
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn character_lists_parse_shortcuts_and_comma_lists() {
+        let all = parse_character_list(UpdateKind::Add, "all").unwrap();
+        assert!(all.contains('#'));
+        assert!(all.contains('\u{00A9}'));
+
+        assert_eq!(
+            parse_character_list(UpdateKind::Set, "none").unwrap(),
+            CharSet::none()
+        );
+
+        let set = parse_character_list(UpdateKind::Add, " ascii, u(00A9), *\u{FE0F} ").unwrap();
+        assert!(set.contains('#'));
+        assert!(set.contains('*'));
+        assert!(set.contains('\u{00A9}'));
+        assert!(!set.contains('\u{2728}'));
+    }
+
+    #[test]
+    fn character_lists_reject_invalid_shortcut_usage() {
+        assert_parse_error(
+            parse_character_list(UpdateKind::Add, "none"),
+            "`none` is only allowed",
+        );
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "all,ascii"),
+            "`all` and `none` must appear alone",
+        );
+        assert_parse_error(parse_character_list(UpdateKind::Set, ""), "empty list");
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "ascii,"),
+            "empty list item",
+        );
+    }
+
+    #[test]
+    fn character_items_report_specific_errors() {
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "arowws"),
+            "did you mean `arrows`?",
+        );
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "u(110000)"),
+            "invalid code point item",
+        );
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "u(00ag)"),
+            "invalid code point item",
+        );
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "u(00A9"),
+            "invalid code point item",
+        );
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "u(0041)"),
+            "not eligible for emoji variation selectors",
+        );
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "A"),
+            "not eligible for emoji variation selectors",
+        );
+        assert_parse_error(
+            parse_character_list(UpdateKind::Set, "\u{00A9}#"),
+            "invalid selector item",
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn ignore_lists_parse_shortcuts_and_labels() {
+        assert_eq!(
+            parse_ignore_list(UpdateKind::Set, "none").unwrap(),
+            Vec::<IgnoreLabel>::new()
+        );
+        assert_eq!(
+            parse_ignore_list(UpdateKind::Remove, "all").unwrap(),
+            [IgnoreLabel::Git, IgnoreLabel::Evfmt, IgnoreLabel::Hidden]
+        );
+        assert_eq!(
+            parse_ignore_list(UpdateKind::Add, " git, hidden ").unwrap(),
+            [IgnoreLabel::Git, IgnoreLabel::Hidden]
+        );
+    }
+
+    #[test]
+    fn ignore_lists_reject_invalid_labels() {
+        assert_parse_error(
+            parse_ignore_list(UpdateKind::Add, "none"),
+            "`none` is only allowed with `--set-ignore`",
+        );
+        assert_parse_error(
+            parse_ignore_list(UpdateKind::Set, "hdden"),
+            "did you mean `hidden`?",
+        );
+        assert_parse_error(parse_ignore_list(UpdateKind::Set, "  "), "empty list");
+        assert_parse_error(
+            parse_ignore_list(UpdateKind::Set, "git,"),
+            "empty list item",
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn policy_operations_apply_to_their_target_in_order() {
+        let policy = build_policy(&[
+            operation(OperationId::SetPreferBare, "none"),
+            operation(OperationId::AddPreferBare, "rights-marks"),
+            operation(OperationId::RemovePreferBare, "u(00AE)"),
+            operation(OperationId::SetBareAsText, "all"),
+            operation(OperationId::RemoveBareAsText, "ascii"),
+            operation(OperationId::AddBareAsText, "card-suits"),
+            operation(OperationId::SetIgnore, "none"),
+        ])
+        .unwrap();
+
+        assert!(policy.prefer_bare.contains('\u{00A9}'));
+        assert!(!policy.prefer_bare.contains('\u{00AE}'));
+        assert!(!policy.prefer_bare.contains('#'));
+        assert!(!policy.bare_as_text.contains('#'));
+        assert!(policy.bare_as_text.contains('\u{00A9}'));
+        assert!(policy.bare_as_text.contains('\u{2660}'));
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn ignore_operations_apply_left_to_right() {
+        let settings = build_ignore_settings(&[
+            operation(OperationId::SetIgnore, "none"),
+            operation(OperationId::AddIgnore, "git,hidden"),
+            operation(OperationId::RemoveIgnore, "hidden"),
+            operation(OperationId::AddPreferBare, "rights-marks"),
+        ])
+        .unwrap();
+
+        assert!(settings.git);
+        assert!(!settings.evfmt);
+        assert!(!settings.hidden);
+    }
+
+    #[test]
+    fn update_kind_helpers_classify_operation_ids() {
+        assert_eq!(
+            character_update_kind(OperationId::SetPreferBare, CharacterTarget::PreferBare),
+            Some(UpdateKind::Set)
+        );
+        assert_eq!(
+            character_update_kind(OperationId::AddBareAsText, CharacterTarget::BareAsText),
+            Some(UpdateKind::Add)
+        );
+        assert_eq!(
+            character_update_kind(OperationId::RemoveIgnore, CharacterTarget::PreferBare),
+            None
+        );
+        assert_eq!(
+            ignore_update_kind(OperationId::RemoveIgnore),
+            Some(UpdateKind::Remove)
+        );
+        assert_eq!(ignore_update_kind(OperationId::SetBareAsText), None);
+    }
+
+    #[test]
+    fn edit_distance_supports_suggestions_threshold() {
+        assert_eq!(edit_distance("hdden", "hidden"), 1);
+        assert_eq!(suggest_name("unrelated", &named_set_names()), None);
+        assert_eq!(
+            suggest_name("card-suit", &named_set_names()),
+            Some("card-suits")
+        );
+    }
+
+    #[test]
+    fn flag_names_match_public_options() {
+        assert_eq!(OperationId::SetPreferBare.flag_name(), "--set-prefer-bare");
+        assert_eq!(OperationId::AddPreferBare.flag_name(), "--add-prefer-bare");
+        assert_eq!(
+            OperationId::RemovePreferBare.flag_name(),
+            "--remove-prefer-bare"
+        );
+        assert_eq!(OperationId::SetBareAsText.flag_name(), "--set-bare-as-text");
+        assert_eq!(OperationId::AddBareAsText.flag_name(), "--add-bare-as-text");
+        assert_eq!(
+            OperationId::RemoveBareAsText.flag_name(),
+            "--remove-bare-as-text"
+        );
+        assert_eq!(OperationId::SetIgnore.flag_name(), "--set-ignore");
+        assert_eq!(OperationId::AddIgnore.flag_name(), "--add-ignore");
+        assert_eq!(OperationId::RemoveIgnore.flag_name(), "--remove-ignore");
+    }
 }

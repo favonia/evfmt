@@ -3,20 +3,20 @@
 // These tests exercise the evfmt binary end-to-end using assert_cmd
 // and assert_fs. They cover the full public CLI contract:
 //   - Format mode (in-place rewrite), check mode (exit 1 if changes needed)
-//   - stdin/stdout via `-`, --help-expression
+//   - stdin/stdout via `-`
 //   - Error cases: multiple dashes, invalid UTF-8, no files, partial failure
-//   - Directory traversal, .evfmtignore, --no-ignore, --ignore, hidden files
-//   - Help text / design doc consistency
+//   - Ordered set operations for policy and ignore filters
+//   - Directory traversal, .evfmtignore, hidden files
 
-// Tests use unwrap for concise assertions — a panic IS the failure signal.
+// This integration test file uses `unwrap` pervasively for fixture setup.
+// A setup failure should fail the test immediately, and localizing each call
+// would obscure the CLI behavior each test is asserting.
 #![allow(missing_docs)]
 #![allow(clippy::unwrap_used)]
 
 use assert_cmd::Command;
 use assert_fs::prelude::*;
 use predicates::prelude::PredicateBooleanExt;
-
-use evfmt::expr;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
@@ -25,10 +25,64 @@ fn evfmt() -> Command {
     Command::cargo_bin("evfmt").unwrap()
 }
 
-fn read_expression_doc() -> String {
-    let doc_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../docs/designs/features/expression-language.markdown");
-    std::fs::read_to_string(doc_path).unwrap()
+// --- Help output ---
+
+#[test]
+fn help_describes_stateful_options() {
+    evfmt()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Policy [prefer-bare]:"))
+        .stdout(predicates::str::contains("Policy [bare-as-text]:"))
+        .stdout(predicates::str::contains(
+            "--set-prefer-bare <CHARSET[,CHARSET]...>",
+        ))
+        .stdout(predicates::str::contains(
+            "--set-bare-as-text <CHARSET[,CHARSET]...>",
+        ))
+        .stdout(predicates::str::contains(
+            "--set-ignore <FILTER[,FILTER]...>",
+        ))
+        .stdout(predicates::str::contains(
+            "CHARSET: ascii, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), or a single character.",
+        ))
+        .stdout(predicates::str::contains(
+            "FILTER: git, evfmt, or hidden.",
+        ))
+        .stdout(predicates::str::contains(
+            "Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.",
+        ))
+        .stdout(predicates::str::contains("Unicode defaults").not())
+        .stdout(predicates::str::contains("--help-expression").not());
+}
+
+#[test]
+fn check_help_describes_stateful_options() {
+    evfmt()
+        .arg("check")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Policy [prefer-bare]:"))
+        .stdout(predicates::str::contains("Policy [bare-as-text]:"))
+        .stdout(predicates::str::contains(
+            "--set-prefer-bare <CHARSET[,CHARSET]...>",
+        ))
+        .stdout(predicates::str::contains(
+            "--set-ignore <FILTER[,FILTER]...>",
+        ))
+        .stdout(predicates::str::contains(
+            "CHARSET: ascii, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), or a single character.",
+        ))
+        .stdout(predicates::str::contains(
+            "FILTER: git, evfmt, or hidden.",
+        ))
+        .stdout(predicates::str::contains(
+            "Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.",
+        ))
+        .stdout(predicates::str::contains("Unicode defaults").not())
+        .stdout(predicates::str::contains("--help-expression").not());
 }
 
 // --- Format mode ---
@@ -37,7 +91,7 @@ fn read_expression_doc() -> String {
 fn format_rewrites_file() {
     let tmp = assert_fs::TempDir::new().unwrap();
     // ©️ is eligible, text-default in Unicode, not bare-preferred → gets FE0F with default policy
-    // (treat-bare-as-text-for='ascii' does not match non-ASCII ©️, so bare resolves to emoji).
+    // (bare-as-text='ascii' does not match non-ASCII ©️, so bare resolves to emoji).
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
@@ -177,23 +231,6 @@ fn check_stdin_canonical_does_not_echo_stdout() {
         .stdout("");
 }
 
-// --- Help expression ---
-
-#[test]
-fn help_expression_prints_reference() {
-    evfmt()
-        .arg("--help-expression")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("Expression Language"));
-}
-
-#[test]
-fn help_expression_works_without_files() {
-    // --help-expression should not require file arguments.
-    evfmt().arg("--help-expression").assert().success();
-}
-
 // --- Error cases ---
 
 #[test]
@@ -303,19 +340,134 @@ fn partial_failure_exits_2() {
         .code(2);
 }
 
+// --- Ordered set operations ---
+
 #[test]
-fn invalid_policy_expression_exits_2() {
+fn set_prefer_bare_keeps_rights_mark_bare() {
     let tmp = assert_fs::TempDir::new().unwrap();
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
     evfmt()
-        .arg("--prefer-bare-for")
-        .arg("ascii_suffix")
+        .arg("--set-prefer-bare=ascii,rights-marks")
+        .arg("--set-bare-as-text=ascii,rights-marks")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn left_to_right_prefer_bare_operations_are_respected() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}\u{FE0F}").unwrap();
+
+    evfmt()
+        .arg("--add-prefer-bare=rights-marks")
+        .arg("--remove-prefer-bare=rights-marks")
+        .arg("--add-bare-as-text=rights-marks")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    file.assert("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn remove_prefer_bare_can_force_ascii_to_text() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("#").unwrap();
+
+    evfmt()
+        .arg("--remove-prefer-bare=ascii")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    file.assert("#\u{FE0E}");
+}
+
+#[test]
+fn clearing_bare_as_text_and_prefer_bare_force_ascii_to_emoji() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("#").unwrap();
+
+    evfmt()
+        .arg("--set-prefer-bare=none")
+        .arg("--set-bare-as-text=none")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    file.assert("#\u{FE0F}");
+}
+
+#[test]
+fn add_prefer_bare_accepts_naked_single_with_selector() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--add-prefer-bare=\u{00A9}\u{FE0F}")
+        .arg("--add-bare-as-text=\u{00A9}")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn unknown_preset_reports_suggestion() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--set-prefer-bare=arowws")
         .arg(file.path())
         .assert()
         .code(2)
-        .stderr(predicates::str::contains("--prefer-bare-for"));
+        .stderr(predicates::str::contains("did you mean `arrows`?"));
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn none_is_rejected_for_add_operations() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--add-prefer-bare=none")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("`none` is only allowed"));
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn ineligible_character_items_are_rejected() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--add-prefer-bare=u(0041)")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains(
+            "not eligible for emoji variation selectors",
+        ));
 
     file.assert("\u{00A9}");
 }
@@ -352,14 +504,14 @@ fn evfmtignore_skips_matched_files() {
 }
 
 #[test]
-fn no_ignore_overrides_ignore_files() {
+fn remove_ignore_evfmt_overrides_evfmtignore() {
     let tmp = assert_fs::TempDir::new().unwrap();
     tmp.child(".evfmtignore").write_str("skip.txt\n").unwrap();
     tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
     tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
 
     evfmt()
-        .arg("--no-ignore")
+        .arg("--remove-ignore=evfmt")
         .arg(tmp.path())
         .assert()
         .success();
@@ -369,22 +521,74 @@ fn no_ignore_overrides_ignore_files() {
 }
 
 #[test]
-fn ignore_overrides_no_ignore() {
+fn all_shortcut_applies_to_add_and_remove_ignore() {
     let tmp = assert_fs::TempDir::new().unwrap();
     tmp.child(".evfmtignore").write_str("skip.txt\n").unwrap();
+    tmp.child(".hidden.txt").write_str("\u{00A9}").unwrap();
     tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
     tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
 
-    // --ignore after --no-ignore: last flag wins, ignore files are respected.
     evfmt()
-        .arg("--no-ignore")
-        .arg("--ignore")
+        .arg("--remove-ignore=all")
+        .arg("--add-ignore=git")
         .arg(tmp.path())
         .assert()
         .success();
 
-    tmp.child("skip.txt").assert("\u{00A9}");
+    tmp.child(".hidden.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("skip.txt").assert("\u{00A9}\u{FE0F}");
     tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn set_ignore_none_then_add_hidden_reenables_only_hidden_filtering() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    tmp.child(".evfmtignore").write_str("skip.txt\n").unwrap();
+    tmp.child(".hidden.txt").write_str("\u{00A9}").unwrap();
+    tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
+    tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--set-ignore=none")
+        .arg("--add-ignore=hidden")
+        .arg(tmp.path())
+        .assert()
+        .success();
+
+    tmp.child(".hidden.txt").assert("\u{00A9}");
+    tmp.child("skip.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn ignore_labels_apply_left_to_right() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    tmp.child(".hidden.txt").write_str("\u{00A9}").unwrap();
+    tmp.child("visible.txt").write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--remove-ignore=hidden")
+        .arg("--add-ignore=hidden")
+        .arg(tmp.path())
+        .assert()
+        .success();
+
+    tmp.child(".hidden.txt").assert("\u{00A9}");
+    tmp.child("visible.txt").assert("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn unknown_ignore_label_reports_suggestion() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--set-ignore=hdden")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("did you mean `hidden`?"));
 }
 
 #[test]
@@ -431,48 +635,4 @@ fn empty_directory_succeeds() {
     std::fs::create_dir(dir.path()).unwrap();
 
     evfmt().arg(dir.path()).assert().success().code(0);
-}
-
-// --- Help text / design doc consistency ---
-
-#[test]
-fn help_text_and_design_doc_agree_on_named_sets() {
-    let help = expr::EXPRESSION_HELP;
-    let doc = read_expression_doc();
-
-    // Every named set display name must appear in both.
-    let named_sets = [
-        "ascii",
-        "emoji-defaults",
-        "rights-marks",
-        "arrows",
-        "card-suits",
-    ];
-    for name in &named_sets {
-        assert!(
-            help.contains(name),
-            "EXPRESSION_HELP missing named set {name:?}"
-        );
-        assert!(
-            doc.contains(name),
-            "expression-language.markdown missing named set {name:?}"
-        );
-    }
-}
-
-#[test]
-fn help_text_and_design_doc_agree_on_combinators() {
-    let help = expr::EXPRESSION_HELP;
-    let doc = read_expression_doc();
-
-    for keyword in ["union(", "subtract(", "except("] {
-        assert!(
-            help.contains(keyword),
-            "EXPRESSION_HELP missing combinator {keyword:?}"
-        );
-        assert!(
-            doc.contains(keyword),
-            "expression-language.markdown missing combinator {keyword:?}"
-        );
-    }
 }

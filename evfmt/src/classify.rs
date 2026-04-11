@@ -8,7 +8,7 @@
 
 use crate::formatter::Policy;
 use crate::scanner::{self, ScanItem, ScanKind};
-use crate::slot::{self, SelectorState};
+use crate::slot::{self, PolicyView, SelectorState};
 
 /// Classification of how a scanned item violates canonical form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,7 +43,7 @@ pub fn classify(item: &ScanItem<'_>, policy: &Policy) -> Option<ViolationKind> {
     classify_with_view(item, &policy.as_view())
 }
 
-fn classify_with_view(item: &ScanItem<'_>, policy: &slot::PolicyView<'_>) -> Option<ViolationKind> {
+fn classify_with_view(item: &ScanItem<'_>, policy: &PolicyView<'_>) -> Option<ViolationKind> {
     match &item.kind {
         ScanKind::Passthrough => None,
         ScanKind::StandaloneSelectors(_) => Some(ViolationKind::IllegalSelector),
@@ -52,10 +52,7 @@ fn classify_with_view(item: &ScanItem<'_>, policy: &slot::PolicyView<'_>) -> Opt
     }
 }
 
-fn violation_for_singleton(
-    item: &ScanItem<'_>,
-    policy: &slot::PolicyView<'_>,
-) -> Option<ViolationKind> {
+fn violation_for_singleton(item: &ScanItem<'_>, policy: &PolicyView<'_>) -> Option<ViolationKind> {
     let analysis = slot::analyze_scan_item(item);
 
     if analysis.has_extra_selectors || !analysis.reasonable_states.contains(analysis.current_state)
@@ -121,17 +118,15 @@ fn zwj_has_noncanonical_component_selector(sequence: &scanner::ZwjSequence) -> b
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
-
     use super::*;
-    use crate::expr;
+    use crate::charset::{CharSet, NamedSetId};
     use crate::find_violations;
     use crate::scanner::scan;
 
     fn default_policy() -> Policy {
         Policy {
-            prefer_bare_for: expr::parse_expr_only("ascii").unwrap(),
-            treat_bare_as_text_for: expr::parse_expr_only("ascii").unwrap(),
+            prefer_bare: CharSet::named(NamedSetId::Ascii),
+            bare_as_text: CharSet::named(NamedSetId::Ascii),
         }
     }
 

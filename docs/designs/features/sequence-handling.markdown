@@ -91,10 +91,10 @@ This split matters because only the last class is a real policy choice. The othe
 
 ## Relation to policy
 
-| Context                  | Policy applies?                           | Behavior                                                       |
-| ------------------------ | ----------------------------------------- | -------------------------------------------------------------- |
-| Standalone EVS           | Yes, if multiple reasonable states remain | Governed by `--prefer-bare-for` and `--treat-bare-as-text-for` |
-| Keycap                   | No                                        | Fixed canonical form: `base FE0F 20E3`                         |
-| Modifier sequence defect | No                                        | Remove legacy `FE0F` before the modifier                       |
-| ZWJ-related sequence     | No                                        | Apply fixed fully-qualified sequence discipline                |
-| Not-a-slot               | No                                        | Remove illegal selector usage                                  |
+| Context                  | Policy applies?                           | Behavior                                             |
+| ------------------------ | ----------------------------------------- | ---------------------------------------------------- |
+| Standalone EVS           | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets |
+| Keycap                   | No                                        | Fixed canonical form: `base FE0F 20E3`               |
+| Modifier sequence defect | No                                        | Remove legacy `FE0F` before the modifier             |
+| ZWJ-related sequence     | No                                        | Apply fixed fully-qualified sequence discipline      |
+| Not-a-slot               | No                                        | Remove illegal selector usage                        |

@@ -61,10 +61,10 @@ This is the key reduction step. Fixed-cleanup cases such as keycap, modifier-def
 
 ### Policy layer
 
-This layer applies only when more than one reasonable state remains. The intended public policy is base-indexed and uses two predicates:
+This layer applies only when more than one reasonable state remains. The intended public policy is base-indexed and uses two charset-membership predicates:
 
 - `prefer_bare(base)`
-- `treat_bare_as_text(base)`
+- `bare_as_text(base)`
 
 If a slot has zero or one reasonable states, policy does not apply.
 
@@ -123,7 +123,7 @@ The following cases do not enter policy:
 
 ### Step 4: Apply policy to ambiguous standalone slots
 
-When multiple reasonable states remain, policy resolves them using `--prefer-bare-for` and `--treat-bare-as-text-for`.
+When multiple reasonable states remain, policy resolves them using the preferred-bare set and the bare-as-text set.
 
 ### Step 5: Iterate until stable
 

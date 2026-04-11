@@ -13,6 +13,7 @@ This note applies the project principles to explanatory documents with the same 
 - In quick-start sections, including tutorials and other first-use flows, show what an example string means and what result to expect.
 - Mention internal mechanisms only when they change what the reader must choose, configure, or verify.
 - Historical or Unicode-background detail is worth adding only when it helps explain current formatter behavior, policy choices, or likely user confusion.
+- Do not explain checked-in source-stability workarounds in user task flows. If source bytes need explicit selectors or escaped code points, choose wording that preserves the reader-facing meaning without exposing that maintenance detail.
 
 ## Point-Of-Use Clarity
 
@@ -26,6 +27,7 @@ This note applies the project principles to explanatory documents with the same 
 - Put byte-level proofs, edge cases, and deeper normalization details in later technical sections or design notes when they do not change the immediate beginner-facing takeaway.
 - Keep a short warning or qualification near the example only when omitting it would create a wrong setup or misleading expectation.
 - Durable feature semantics still belong in `docs/designs/features/`; explanatory documents may summarize them but should not become their defining source.
+- Do not send readers from user-facing explanations to design documents to understand feature behavior. Design-document links are acceptable for project provenance or contributor orientation, but not as a substitute for explaining user-facing behavior in the README.
 
 ## Stable Terms
 

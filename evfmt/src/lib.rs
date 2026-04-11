@@ -36,7 +36,8 @@
 //!
 //! ```rust
 //! use evfmt::{
-//!     Policy, ScanKind, canonicalize_item, classify, find_violations, scan,
+//!     Policy, ScanKind, ViolationKind, canonicalize_item, classify,
+//!     find_violations, scan,
 //! };
 //!
 //! let policy = Policy::default();
@@ -53,28 +54,30 @@
 //!
 //! let repaired = canonicalize_item(&items[1], &policy);
 //! assert_eq!(repaired, "");
-//! assert!(classify(&items[3], &policy).is_some());
+//! assert_eq!(
+//!     classify(&items[5], &policy),
+//!     Some(ViolationKind::BareNeedsResolution),
+//! );
 //! ```
 //!
 //! Use [`find_violations`] for a whole-input diagnostic report, or
 //! [`analyze_text`] for whole-input slot analysis.
 //!
-//! If the default policy is not suitable, parse expressions from [`expr`] and
+//! If the default policy is not suitable, build charsets from [`charset`] and
 //! construct a [`Policy`] explicitly. In this example, `rights-marks` contains
 //! `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to remain bare.
 //!
 //! ```rust
-//! use evfmt::{Policy, expr, format_text};
+//! use evfmt::{CharSet, NamedSetId, Policy, format_text};
 //!
+//! let ascii_and_rights_marks =
+//!     CharSet::named(NamedSetId::Ascii) | CharSet::named(NamedSetId::RightsMarks);
 //! let policy = Policy::default()
-//!     .with_prefer_bare_for(expr::parse_expr_only("union(ascii, rights-marks)")?)
-//!     .with_treat_bare_as_text_for(expr::parse_expr_only(
-//!         "union(ascii, rights-marks)",
-//!     )?);
+//!     .with_prefer_bare(ascii_and_rights_marks)
+//!     .with_bare_as_text(ascii_and_rights_marks);
 //!
 //! let formatted = format_text("\u{00A9}", &policy);
 //! assert_eq!(formatted, evfmt::FormatResult::Unchanged);
-//! # Ok::<(), evfmt::expr::ParseError>(())
 //! ```
 //!
 //! Here "variation-sequence character" means a character listed in Unicode's
@@ -91,8 +94,8 @@
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
 //!   chains, standalone selector runs, and passthrough slices
 //! - [`slot`] exposes the lower-level slot model for advanced tooling
-//! - [`expr`] defines the character-set expression language used by policy
-//!   options such as `--prefer-bare-for`, including parsing and evaluation
+//! - [`charset`] defines the typed character-set model used by the library
+//!   policy API
 //! - [`unicode`] provides Unicode emoji metadata used by scanning and
 //!   canonicalization
 
@@ -100,13 +103,14 @@ mod canonical;
 
 use std::ops::Range;
 
+pub mod charset;
 pub mod classify;
-pub mod expr;
 pub mod formatter;
 pub mod scanner;
 pub mod slot;
 pub mod unicode;
 
+pub use charset::{CharSet, NamedSetId};
 pub use classify::{ViolationKind, classify};
 pub use formatter::{FormatResult, Policy, canonicalize_item, format_text};
 pub use scanner::{ScanItem, ScanKind, ZwjComponent, ZwjLink, ZwjSequence, scan};
