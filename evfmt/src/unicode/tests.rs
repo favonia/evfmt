@@ -5,8 +5,6 @@ fn test_number_sign_has_variation_sequence() {
     assert!(has_variation_sequence('#'));
     #[allow(clippy::unwrap_used)]
     let info = variation_sequence_info('#').unwrap();
-    assert!(info.has_text_vs);
-    assert!(info.has_emoji_vs);
     assert_eq!(info.default_side, DefaultSide::Text);
 }
 
@@ -158,6 +156,12 @@ fn test_conformance_variation_sequences() {
     // The variation-sequence set should be the union of text_vs and emoji_vs.
     let variation_sequence_set: BTreeSet<u32> = text_vs.union(&emoji_vs).copied().collect();
 
+    // The build script asserts text_vs == emoji_vs; verify independently.
+    assert_eq!(
+        text_vs, emoji_vs,
+        "expected every variation-sequence character to have both text and emoji entries"
+    );
+
     // Verify VARIATION_ENTRIES has exactly the right set of code points.
     let generated_cps: BTreeSet<u32> = VARIATION_ENTRIES
         .iter()
@@ -168,21 +172,6 @@ fn test_conformance_variation_sequences() {
         variation_sequence_set, generated_cps,
         "variation-sequence set mismatch between source data and generated table"
     );
-
-    // Verify each entry's has_text_vs and has_emoji_vs flags.
-    for entry in VARIATION_ENTRIES {
-        let cp = entry.code_point as u32;
-        assert_eq!(
-            entry.has_text_vs,
-            text_vs.contains(&cp),
-            "has_text_vs mismatch for U+{cp:04X}"
-        );
-        assert_eq!(
-            entry.has_emoji_vs,
-            emoji_vs.contains(&cp),
-            "has_emoji_vs mismatch for U+{cp:04X}"
-        );
-    }
 }
 
 #[test]

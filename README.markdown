@@ -25,7 +25,7 @@ Many Unicode characters have dual presentations, text and emoji:
 
 Unicode provides invisible variation selectors (`U+FE0E` for text, `U+FE0F` for emoji) to request a specific presentation (though platforms may not always honor the request). Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, the same file may look different on different platforms. `evfmt` normalizes these selectors for you.
 
-The emoji selector `U+FE0F` also appears in multi-character emoji sequences such as keycaps and [ZWJ sequences](https://www.unicode.org/reports/tr51/#def_emoji_zwj_sequence) (where multiple emoji are joined into one). `evfmt` normalizes these sequences to their [fully qualified](https://www.unicode.org/reports/tr51/#def_fully_qualified_emoji) forms as well.
+The emoji selector `U+FE0F` also appears in multi-character emoji sequences such as keycaps and [Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/#def_emoji_zwj_sequence) (where multiple emoji are joined into one). `evfmt` normalizes these sequences to their [fully qualified](https://www.unicode.org/reports/tr51/#def_fully_qualified_emoji) forms as well.
 
 ## ✨️ What It Does
 
@@ -99,7 +99,39 @@ evfmt -- check
 evfmt ./check
 ```
 
-## 📐 Resolution Policy
+### 🚪 Exit Codes
+
+| Code | Meaning                               |
+| ---- | ------------------------------------- |
+| `0`  | Success (or no changes in check mode) |
+| `1`  | Changes needed (check mode only)      |
+| `2`  | Error (I/O, invalid UTF-8, usage)     |
+
+## 🙈 Ignore Filters
+
+By default, `evfmt` skips files ignored by Git, files matched by `.evfmtignore`, and hidden files or directories. Change the enabled ignore filters only when the project has a specific reason to include or exclude one of those classes.
+
+- `--set-ignore=<filter>[,<filter>...]`
+- `--add-ignore=<filter>[,<filter>...]`
+- `--remove-ignore=<filter>[,<filter>...]`
+
+Ignore flags take one or more comma-separated filter labels:
+
+- `git`: ignore files matched by Git ignore rules
+- `evfmt`: ignore files matched by `.evfmtignore`
+- `hidden`: ignore hidden files and directories
+
+Use commas to combine labels: `git,evfmt,hidden`.
+
+Use `all` by itself to select every ignore filter. For example, `--remove-ignore=all` formats everything reachable from the operands, including Git-ignored, `.evfmtignore`-ignored, and hidden files. Use `none` by itself with `--set-ignore` to disable all ignore filters.
+
+Use this when you want to format hidden files while still honoring Git ignore rules and `.evfmtignore`:
+
+```sh
+evfmt --remove-ignore=hidden .
+```
+
+## 📐 Policy for Dual Presentations
 
 By default, `evfmt` leaves bare ASCII characters alone, but adds explicit selectors to non-ASCII characters with dual presentations so they render more consistently across platforms.
 
@@ -109,7 +141,7 @@ The defaults work well for most projects: bare ASCII characters in text presenta
 
 ⚠️ `evfmt` is a formatter, not a presentation editor. If you want to change how the copyright sign looks on your platform—say, switching it from emoji presentation to text presentation—do that in your editor by adding or removing the variation selector (`U+FE0E` or `U+FE0F`). Run `evfmt` only after you are happy with how your document renders.
 
-### Cookbook
+### 📖 Cookbook
 
 Use these recipes when the default policy is close to what you want, but a small class of symbols needs different handling.
 
@@ -214,37 +246,11 @@ Use commas to combine items: `ascii,rights-marks,u(00A9)`. Named sets may change
 
 Use `all` by itself to select every character `evfmt` can format. For example, `--remove-prefer-bare=all` makes every format-supported character require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII then normalizes to explicit text form and bare non-ASCII normalizes to explicit emoji form.
 
-## Ignore Filters
+## 🧩 Normalization of Emoji ZWJ Sequences
 
-By default, `evfmt` skips files ignored by Git, files matched by `.evfmtignore`, and hidden files or directories. Change the enabled ignore filters only when the project has a specific reason to include or exclude one of those classes.
+[Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/#def_emoji_zwj_sequence) are sequences of multiple emoji characters joined by the zero-width joiner (ZWJ; `U+200D`). For example, the rainbow flag 🏳️‍🌈 is the white flag 🏳️ and the rainbow 🌈 joined together. These sequences are intended for emoji presentation only, so what should a formatter do when a component carries an explicit text variation selector (`U+FE0E`)? This situation should not arise in practice, but a formatter must handle it. [Unicode Technical Standard #51](https://www.unicode.org/reports/tr51/) says such a selector breaks the entire sequence, and the platform should display the components as separate images. A formatter must therefore either remove the ZWJ joiners to honor the text selector, or remove the text selector to restore the sequence.
 
-- `--set-ignore=<filter>[,<filter>...]`
-- `--add-ignore=<filter>[,<filter>...]`
-- `--remove-ignore=<filter>[,<filter>...]`
-
-Ignore flags take one or more comma-separated filter labels:
-
-- `git`: ignore files matched by Git ignore rules
-- `evfmt`: ignore files matched by `.evfmtignore`
-- `hidden`: ignore hidden files and directories
-
-Use commas to combine labels: `git,evfmt,hidden`.
-
-Use `all` by itself to select every ignore filter. For example, `--remove-ignore=all` formats everything reachable from the operands, including Git-ignored, `.evfmtignore`-ignored, and hidden files. Use `none` by itself with `--set-ignore` to disable all ignore filters.
-
-Use this when you want to format hidden files while still honoring Git ignore rules and `.evfmtignore`:
-
-```sh
-evfmt --remove-ignore=hidden .
-```
-
-## 🚪 Exit Codes
-
-| Code | Meaning                               |
-| ---- | ------------------------------------- |
-| `0`  | Success (or no changes in check mode) |
-| `1`  | Changes needed (check mode only)      |
-| `2`  | Error (I/O, invalid UTF-8, usage)     |
+`evfmt` chooses to restore the sequence: it normalizes every ZWJ sequence to its [fully qualified](https://www.unicode.org/reports/tr51/#def_fully_qualified_emoji) form, replacing text selectors with emoji selectors where needed. This intentionally departs from a strict reading of the standard, but keeps all changes limited to variation selectors and matches the most likely user intent. `evfmt` also inserts missing emoji selectors on bare components to bring ZWJ sequences to their fully qualified forms.
 
 ## ⚖️ License
 

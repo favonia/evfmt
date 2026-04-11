@@ -13,8 +13,15 @@ fn select_chars(chars: &'static [char]) -> BoxedStrategy<char> {
     select(chars).boxed()
 }
 
-fn selector_run_strategy(max_len: usize) -> BoxedStrategy<Vec<char>> {
-    prop::collection::vec(prop_oneof![Just(VS_TEXT), Just(VS_EMOJI)], 0..max_len).boxed()
+fn selector_run_strategy(max_len: usize) -> BoxedStrategy<Vec<VariationSelector>> {
+    prop::collection::vec(
+        prop_oneof![
+            Just(VariationSelector::Text),
+            Just(VariationSelector::Emoji)
+        ],
+        0..max_len,
+    )
+    .boxed()
 }
 
 fn interesting_char_strategy() -> BoxedStrategy<char> {
@@ -50,17 +57,17 @@ fn scannerish_fragment_strategy() -> BoxedStrategy<String> {
     prop_oneof![
         8 => interesting_char_strategy().prop_map(|ch| ch.to_string()),
         3 => (interesting_char_strategy(), selector_run_strategy(4))
-            .prop_map(|(base, selectors)| {
+            .prop_map(|(base, variation_selectors)| {
                 let mut s = String::new();
                 s.push(base);
-                s.extend(selectors);
+                s.extend(variation_selectors.iter().map(|vs| vs.to_char()));
                 s
             }),
         2 => (select_chars(&['#', '*', '0', '1', '9']), selector_run_strategy(3))
-            .prop_map(|(base, selectors)| {
+            .prop_map(|(base, variation_selectors)| {
                 let mut s = String::new();
                 s.push(base);
-                s.extend(selectors);
+                s.extend(variation_selectors.iter().map(|vs| vs.to_char()));
                 s.push(KEYCAP_CAP);
                 s
             }),
@@ -74,13 +81,13 @@ fn scannerish_fragment_strategy() -> BoxedStrategy<String> {
         ).prop_map(|(base1, selectors1, modifier1, selectors2, joiner_selectors, base2)| {
             let mut s = String::new();
             s.push(base1);
-            s.extend(selectors1);
+            s.extend(selectors1.iter().map(|vs| vs.to_char()));
             if let Some(modifier) = modifier1 {
                 s.push(modifier);
-                s.extend(selectors2);
+                s.extend(selectors2.iter().map(|vs| vs.to_char()));
             }
             s.push(ZWJ);
-            s.extend(joiner_selectors);
+            s.extend(joiner_selectors.iter().map(|vs| vs.to_char()));
             s.push(base2);
             s
         }),
@@ -93,7 +100,7 @@ fn scannerish_fragment_strategy() -> BoxedStrategy<String> {
             s.push(ZWJ);
             s.push(base2);
             s.push(ZWJ);
-            s.push(VS_EMOJI);
+            s.push(VariationSelector::Emoji.to_char());
             s.push(ZWJ);
             s
         }),
@@ -165,7 +172,7 @@ fn test_scan_standalone_selector_at_start() {
     assert_eq!(items.len(), 1);
     assert!(matches!(
         items[0].kind,
-        ScanKind::StandaloneSelectors(ref selectors) if selectors == &[VS_EMOJI]
+        ScanKind::StandaloneVariationSelectors(ref variation_selectors) if variation_selectors == &[VariationSelector::Emoji]
     ));
 }
 
@@ -176,25 +183,30 @@ fn test_scan_standalone_selector_after_ineligible() {
     assert!(matches!(items[0].kind, ScanKind::Passthrough));
     assert!(matches!(
         items[1].kind,
-        ScanKind::StandaloneSelectors(ref selectors) if selectors == &[VS_EMOJI]
+        ScanKind::StandaloneVariationSelectors(ref variation_selectors) if variation_selectors == &[VariationSelector::Emoji]
     ));
 }
 
 #[test]
-fn test_is_variation_selector_only_accepts_vs15_and_vs16() {
-    assert!(is_variation_selector(VS_TEXT));
-    assert!(is_variation_selector(VS_EMOJI));
-    assert!(!is_variation_selector('A'));
-    assert!(!is_variation_selector(ZWJ));
+fn test_variation_selector_from_char_rejects_non_selectors() {
+    assert!(VariationSelector::from_char(VariationSelector::Text.to_char()).is_some());
+    assert!(VariationSelector::from_char(VariationSelector::Emoji.to_char()).is_some());
+    assert!(VariationSelector::from_char('A').is_none());
+    assert!(VariationSelector::from_char(ZWJ).is_none());
 }
 
 #[test]
-fn test_consume_optional_selector_run_advances_over_variation_selectors() {
-    let input = "\u{FE0F}\u{FE0E}A";
-    let (end, selectors) = consume_optional_selector_run(input, 0);
-
-    assert_eq!(selectors, vec![VS_EMOJI, VS_TEXT]);
-    assert_eq!(end, "\u{FE0F}\u{FE0E}".len());
+fn test_variation_selector_from_char_only_accepts_vs15_and_vs16() {
+    assert_eq!(
+        VariationSelector::from_char(VS_TEXT),
+        Some(VariationSelector::Text)
+    );
+    assert_eq!(
+        VariationSelector::from_char(VS_EMOJI),
+        Some(VariationSelector::Emoji)
+    );
+    assert_eq!(VariationSelector::from_char('A'), None);
+    assert_eq!(VariationSelector::from_char(ZWJ), None);
 }
 
 #[test]
@@ -214,8 +226,8 @@ fn test_scan_singleton_bare() {
         items[0].kind,
         ScanKind::Singleton {
             base: '\u{00A9}',
-            ref selectors
-        } if selectors.is_empty()
+            ref variation_selectors
+        } if variation_selectors.is_empty()
     ));
 }
 
@@ -227,8 +239,8 @@ fn test_scan_singleton_with_vs() {
         items[0].kind,
         ScanKind::Singleton {
             base: '#',
-            ref selectors
-        } if selectors == &[VS_EMOJI]
+            ref variation_selectors
+        } if variation_selectors == &[VariationSelector::Emoji]
     ));
 }
 
@@ -237,22 +249,21 @@ fn test_scan_crosscheck_runs_both_scanners() {
     let input = "#\u{FE0F}\u{20E3}\u{200D}";
     let (legacy, state_machine) = scan_crosscheck(input);
 
-    assert_eq!(legacy, scan_legacy(input));
-    assert_eq!(state_machine, scan_state_machine(input));
+    assert_eq!(legacy, state_machine);
     assert_eq!(state_machine, scan(input));
 }
 
 #[test]
 fn test_scan_singleton_conflicting_selectors_stay_attached() {
-    // # + FE0F + FE0E stays one logical singleton with a selector run.
+    // # + FE0F + FE0E stays one logical singleton with a variation selector run.
     let items = scan("#\u{FE0F}\u{FE0E}");
     assert_eq!(items.len(), 1);
     assert!(matches!(
         items[0].kind,
         ScanKind::Singleton {
             base: '#',
-            ref selectors
-        } if selectors == &[VS_EMOJI, VS_TEXT]
+            ref variation_selectors
+        } if variation_selectors == &[VariationSelector::Emoji, VariationSelector::Text]
     ));
 }
 
@@ -262,7 +273,7 @@ fn test_scan_standalone_selector_run() {
     assert_eq!(items.len(), 1);
     assert!(matches!(
         items[0].kind,
-        ScanKind::StandaloneSelectors(ref selectors) if selectors == &[VS_EMOJI, VS_TEXT]
+        ScanKind::StandaloneVariationSelectors(ref variation_selectors) if variation_selectors == &[VariationSelector::Emoji, VariationSelector::Text]
     ));
 }
 
@@ -274,8 +285,8 @@ fn test_scan_keycap_correct() {
         items[0].kind,
         ScanKind::Keycap {
             base: '#',
-            ref selectors
-        } if selectors == &[VS_EMOJI]
+            ref variation_selectors
+        } if variation_selectors == &[VariationSelector::Emoji]
     ));
 }
 
@@ -287,8 +298,8 @@ fn test_scan_keycap_bare() {
         items[0].kind,
         ScanKind::Keycap {
             base: '#',
-            ref selectors
-        } if selectors.is_empty()
+            ref variation_selectors
+        } if variation_selectors.is_empty()
     ));
 }
 
@@ -300,8 +311,8 @@ fn test_scan_keycap_wrong_vs() {
         items[0].kind,
         ScanKind::Keycap {
             base: '#',
-            ref selectors
-        } if selectors == &[VS_TEXT]
+            ref variation_selectors
+        } if variation_selectors == &[VariationSelector::Text]
     ));
 }
 
@@ -314,9 +325,9 @@ fn test_scan_keycap_all_bases() {
         assert!(matches!(
             items[0].kind,
             ScanKind::Keycap {
-                ref selectors,
+                ref variation_selectors,
                 ..
-            } if selectors == &[VS_EMOJI]
+            } if variation_selectors == &[VariationSelector::Emoji]
         ));
     }
 }
@@ -354,8 +365,11 @@ fn test_scan_zwj_with_fe0f() {
     if let ScanKind::Zwj(ref seq) = items[0].kind {
         match seq {
             ZwjSequence::Joined { head, .. } => {
-                assert_eq!(head.selectors_after_base, vec![VS_EMOJI]);
-                assert!(head.selectors_after_modifier.is_empty());
+                assert_eq!(
+                    head.variation_selectors_after_base,
+                    vec![VariationSelector::Emoji]
+                );
+                assert!(head.variation_selectors_after_modifier.is_empty());
             }
             ZwjSequence::Terminal(_) => panic!("expected joined sequence"),
         }
@@ -398,12 +412,12 @@ fn test_scan_zwj_preserves_selector_run_after_joiner() {
         match seq {
             ZwjSequence::Joined { head, link, tail } => {
                 assert_eq!(head.base, '\u{1F525}');
-                assert_eq!(link.selectors, vec![VS_EMOJI]);
+                assert_eq!(link.variation_selectors, vec![VariationSelector::Emoji]);
                 match tail.as_ref() {
                     ZwjSequence::Terminal(last) => {
                         assert_eq!(last.base, '\u{2764}');
-                        assert!(last.selectors_after_base.is_empty());
-                        assert!(last.selectors_after_modifier.is_empty());
+                        assert!(last.variation_selectors_after_base.is_empty());
+                        assert!(last.variation_selectors_after_modifier.is_empty());
                     }
                     ZwjSequence::Joined { .. } => panic!("expected terminal tail"),
                 }
@@ -413,25 +427,6 @@ fn test_scan_zwj_preserves_selector_run_after_joiner() {
         assert_eq!(items[0].raw, input);
     } else {
         panic!("expected Zwj");
-    }
-}
-
-#[test]
-#[allow(clippy::expect_used, clippy::panic)]
-fn test_try_zwj_stops_before_trailing_joiner_selector_joiner() {
-    let input = "\u{2764}\u{200D}\u{1F525}\u{200D}\u{FE0F}\u{200D}";
-    let (end, seq) = try_zwj(input, 0, '\u{2764}').expect("expected valid ZWJ prefix");
-
-    assert_eq!(end, "\u{2764}\u{200D}\u{1F525}".len());
-    match seq {
-        ZwjSequence::Joined { head, tail, .. } => {
-            assert_eq!(head.base, '\u{2764}');
-            match tail.as_ref() {
-                ZwjSequence::Terminal(last) => assert_eq!(last.base, '\u{1F525}'),
-                ZwjSequence::Joined { .. } => panic!("expected terminal tail"),
-            }
-        }
-        ZwjSequence::Terminal(_) => panic!("expected joined sequence"),
     }
 }
 
@@ -447,7 +442,7 @@ fn test_scan_zwj_leaves_trailing_joiner_selector_joiner_unconsumed() {
     assert_eq!(items[1].raw, "\u{200D}");
     assert!(matches!(
         items[2].kind,
-        ScanKind::StandaloneSelectors(ref selectors) if selectors == &[VS_EMOJI]
+        ScanKind::StandaloneVariationSelectors(ref variation_selectors) if variation_selectors == &[VariationSelector::Emoji]
     ));
     assert_eq!(items[2].raw, "\u{FE0F}");
     assert!(matches!(items[3].kind, ScanKind::Passthrough));
@@ -487,58 +482,57 @@ fn test_scan_zwj_keeps_longest_valid_prefix_before_invalid_post_joiner_base() {
     assert_eq!(items[2].raw, "\u{FE0F}");
     assert!(matches!(
         items[2].kind,
-        ScanKind::StandaloneSelectors(ref selectors) if selectors == &[VS_EMOJI]
+        ScanKind::StandaloneVariationSelectors(ref variation_selectors) if variation_selectors == &[VariationSelector::Emoji]
     ));
     assert_eq!(items[3].raw, "\u{200D}");
     assert!(matches!(items[3].kind, ScanKind::Passthrough));
 }
 
 #[test]
-fn test_state_machine_matches_legacy_for_ineligible_base_selector_zwj() {
+fn test_crosscheck_ineligible_base_selector_zwj() {
     let input = "\u{00A1}\u{FE0E}\u{200D}";
-    let legacy = scan_legacy(input);
-    let state_machine = scan_state_machine(input);
-
+    let (legacy, state_machine) = scan_crosscheck(input);
     assert_eq!(state_machine, legacy);
-    assert_eq!(state_machine.len(), 3);
-    assert!(matches!(state_machine[0].kind, ScanKind::Passthrough));
-    assert_eq!(state_machine[0].raw, "\u{00A1}");
+
+    let items = scan(input);
+    assert_eq!(items.len(), 3);
+    assert!(matches!(items[0].kind, ScanKind::Passthrough));
+    assert_eq!(items[0].raw, "\u{00A1}");
     assert!(matches!(
-        state_machine[1].kind,
-        ScanKind::StandaloneSelectors(ref selectors) if selectors == &[VS_TEXT]
+        items[1].kind,
+        ScanKind::StandaloneVariationSelectors(ref variation_selectors) if variation_selectors == &[VariationSelector::Text]
     ));
-    assert_eq!(state_machine[1].raw, "\u{FE0E}");
-    assert!(matches!(state_machine[2].kind, ScanKind::Passthrough));
-    assert_eq!(state_machine[2].raw, "\u{200D}");
+    assert_eq!(items[1].raw, "\u{FE0E}");
+    assert!(matches!(items[2].kind, ScanKind::Passthrough));
+    assert_eq!(items[2].raw, "\u{200D}");
 }
 
 #[test]
-fn test_state_machine_matches_legacy_for_singleton_then_modifier_then_zwj() {
+fn test_crosscheck_singleton_then_modifier_then_zwj() {
     let input = "#\u{1F3FB}\u{200D}";
-    let legacy = scan_legacy(input);
-    let state_machine = scan_state_machine(input);
-
+    let (legacy, state_machine) = scan_crosscheck(input);
     assert_eq!(state_machine, legacy);
-    assert_eq!(state_machine.len(), 2);
+
+    let items = scan(input);
+    assert_eq!(items.len(), 2);
     assert!(matches!(
-        state_machine[0].kind,
+        items[0].kind,
         ScanKind::Singleton {
             base: '#',
-            ref selectors
-        } if selectors.is_empty()
+            ref variation_selectors
+        } if variation_selectors.is_empty()
     ));
-    assert_eq!(state_machine[0].raw, "#");
-    assert!(matches!(state_machine[1].kind, ScanKind::Passthrough));
-    assert_eq!(state_machine[1].raw, "\u{1F3FB}\u{200D}");
+    assert_eq!(items[0].raw, "#");
+    assert!(matches!(items[1].kind, ScanKind::Passthrough));
+    assert_eq!(items[1].raw, "\u{1F3FB}\u{200D}");
 }
 
 proptest! {
     #[test]
-    fn proptest_state_machine_matches_legacy_scanner(
+    fn proptest_crosscheck_matches_legacy_scanner(
         input in scannerish_input_strategy()
     ) {
-        let legacy = scan_legacy(&input);
-        let state_machine = scan_state_machine(&input);
+        let (legacy, state_machine) = scan_crosscheck(&input);
 
         prop_assert_eq!(&state_machine, &legacy);
         prop_assert_eq!(reconstruct(&state_machine), input.clone());
@@ -557,8 +551,8 @@ fn test_scan_does_not_treat_bare_zwj_as_component_base() {
         items[1].kind,
         ScanKind::Singleton {
             base: '#',
-            ref selectors
-        } if selectors.is_empty()
+            ref variation_selectors
+        } if variation_selectors.is_empty()
     ));
 }
 
@@ -573,8 +567,8 @@ fn test_scan_does_not_treat_keycap_cap_as_component_base() {
         items[1].kind,
         ScanKind::Singleton {
             base: '#',
-            ref selectors
-        } if selectors.is_empty()
+            ref variation_selectors
+        } if variation_selectors.is_empty()
     ));
 }
 

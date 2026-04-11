@@ -9,69 +9,45 @@ use std::ops::{
     BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Sub, SubAssign,
 };
 
-use crate::unicode::{self, DefaultSide};
+use crate::unicode::{self, has_variation_sequence};
 
 const WORD_BITS: usize = u64::BITS as usize;
 const CHARSET_WORDS: usize = unicode::VARIATION_ENTRIES.len().div_ceil(WORD_BITS);
+const ALL: CharSet = CharSet { bits: all_bits() };
 
-/// Identifier for a named charset.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NamedSetId {
-    /// ASCII characters (U+0000-U+007F).
+/// ASCII characters (U+0000-U+007F).
+pub const ASCII: CharSet = CharSet {
+    bits: named_bits(NamedSet::Ascii),
+};
+/// Variation-sequence characters whose Unicode default side is text.
+pub const TEXT_DEFAULTS: CharSet = CharSet {
+    bits: named_bits(NamedSet::TextDefaults),
+};
+/// Variation-sequence characters whose Unicode default side is emoji.
+pub const EMOJI_DEFAULTS: CharSet = CharSet {
+    bits: named_bits(NamedSet::EmojiDefaults),
+};
+/// ©️ (U+00A9), ®️ (U+00AE), ™️ (U+2122).
+pub const RIGHTS_MARKS: CharSet = CharSet {
+    bits: named_bits(NamedSet::RightsMarks),
+};
+/// Arrow characters used by the formatter policy docs.
+pub const ARROWS: CharSet = CharSet {
+    bits: named_bits(NamedSet::Arrows),
+};
+/// ♠️ (U+2660), ♣️ (U+2663), ♥️ (U+2665), ♦️ (U+2666).
+pub const CARD_SUITS: CharSet = CharSet {
+    bits: named_bits(NamedSet::CardSuits),
+};
+
+#[derive(Clone, Copy)]
+enum NamedSet {
     Ascii,
-    /// Variation-sequence characters whose Unicode default side is emoji.
+    TextDefaults,
     EmojiDefaults,
-    /// ©️ (U+00A9), ®️ (U+00AE), ™️ (U+2122).
     RightsMarks,
-    /// Arrow characters used by the formatter policy docs.
     Arrows,
-    /// ♠️ (U+2660), ♣️ (U+2663), ♥️ (U+2665), ♦️ (U+2666).
     CardSuits,
-}
-
-impl NamedSetId {
-    /// Check if a character belongs to this named set.
-    #[must_use]
-    pub fn matches(&self, ch: char) -> bool {
-        match self {
-            NamedSetId::Ascii => ch.is_ascii(),
-            NamedSetId::EmojiDefaults => unicode::variation_sequence_info(ch)
-                .is_some_and(|info| info.default_side == DefaultSide::Emoji),
-            NamedSetId::RightsMarks => matches!(ch, '\u{00A9}' | '\u{00AE}' | '\u{2122}'),
-            NamedSetId::Arrows => matches!(
-                ch,
-                '\u{2194}'
-                    | '\u{2195}'
-                    | '\u{2196}'
-                    | '\u{2197}'
-                    | '\u{2198}'
-                    | '\u{2199}'
-                    | '\u{21A9}'
-                    | '\u{21AA}'
-                    | '\u{27A1}'
-                    | '\u{2934}'
-                    | '\u{2935}'
-                    | '\u{2B05}'
-                    | '\u{2B06}'
-                    | '\u{2B07}'
-            ),
-            NamedSetId::CardSuits => {
-                matches!(ch, '\u{2660}' | '\u{2663}' | '\u{2665}' | '\u{2666}')
-            }
-        }
-    }
-}
-
-impl fmt::Display for NamedSetId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            NamedSetId::Ascii => write!(f, "ascii"),
-            NamedSetId::EmojiDefaults => write!(f, "emoji-defaults"),
-            NamedSetId::RightsMarks => write!(f, "rights-marks"),
-            NamedSetId::Arrows => write!(f, "arrows"),
-            NamedSetId::CardSuits => write!(f, "card-suits"),
-        }
-    }
 }
 
 /// A finite set of dual-presentation characters.
@@ -84,16 +60,21 @@ pub struct CharSet {
     bits: [u64; CHARSET_WORDS],
 }
 
+/// Return whether `ch` is an eligible variation-sequence base character.
+///
+/// This checks for a base code point in the crate's pinned
+/// `emoji-variation-sequences.txt` data, not for a complete base-plus-selector
+/// sequence.
+#[must_use]
+pub fn is_variation_sequence_character(ch: char) -> bool {
+    has_variation_sequence(ch)
+}
+
 impl CharSet {
     /// Construct the set containing every eligible character.
     #[must_use]
-    pub fn all() -> Self {
-        let mut bits = [u64::MAX; CHARSET_WORDS];
-        let used_bits = unicode::VARIATION_ENTRIES.len() % WORD_BITS;
-        if used_bits != 0 {
-            bits[CHARSET_WORDS - 1] = (1u64 << used_bits) - 1;
-        }
-        Self { bits }
+    pub const fn all() -> Self {
+        ALL
     }
 
     /// Construct the empty set.
@@ -104,19 +85,10 @@ impl CharSet {
         }
     }
 
-    /// Construct a named set.
-    #[must_use]
-    pub fn named(id: NamedSetId) -> Self {
-        let mut set = Self::none();
-        for (index, entry) in unicode::VARIATION_ENTRIES.iter().enumerate() {
-            if id.matches(entry.code_point) {
-                set.set_index(index);
-            }
-        }
-        set
-    }
-
-    /// Construct a singleton set containing one code point.
+    /// Construct a singleton set containing one eligible code point.
+    ///
+    /// Returns the empty set when `ch` is outside the variation-sequence
+    /// character universe checked by [`is_variation_sequence_character`].
     #[must_use]
     pub fn singleton(ch: char) -> Self {
         let mut set = Self::none();
@@ -141,6 +113,59 @@ impl CharSet {
         let word = index / WORD_BITS;
         let bit = index % WORD_BITS;
         self.bits[word] |= 1u64 << bit;
+    }
+}
+
+const fn all_bits() -> [u64; CHARSET_WORDS] {
+    let mut bits = [u64::MAX; CHARSET_WORDS];
+    let used_bits = unicode::VARIATION_ENTRIES.len() % WORD_BITS;
+    if used_bits != 0 {
+        bits[CHARSET_WORDS - 1] = (1u64 << used_bits) - 1;
+    }
+    bits
+}
+
+const fn named_bits(id: NamedSet) -> [u64; CHARSET_WORDS] {
+    let mut bits = [0; CHARSET_WORDS];
+    let mut index = 0;
+    while index < unicode::VARIATION_ENTRIES.len() {
+        let entry = unicode::VARIATION_ENTRIES[index];
+        if named_entry_matches(id, entry.code_point, entry.default_emoji) {
+            let word = index / WORD_BITS;
+            let bit = index % WORD_BITS;
+            bits[word] |= 1u64 << bit;
+        }
+        index += 1;
+    }
+    bits
+}
+
+const fn named_entry_matches(id: NamedSet, ch: char, default_emoji: bool) -> bool {
+    match id {
+        NamedSet::Ascii => ch.is_ascii(),
+        NamedSet::TextDefaults => !default_emoji,
+        NamedSet::EmojiDefaults => default_emoji,
+        NamedSet::RightsMarks => matches!(ch, '\u{00A9}' | '\u{00AE}' | '\u{2122}'),
+        NamedSet::Arrows => matches!(
+            ch,
+            '\u{2194}'
+                | '\u{2195}'
+                | '\u{2196}'
+                | '\u{2197}'
+                | '\u{2198}'
+                | '\u{2199}'
+                | '\u{21A9}'
+                | '\u{21AA}'
+                | '\u{27A1}'
+                | '\u{2934}'
+                | '\u{2935}'
+                | '\u{2B05}'
+                | '\u{2B06}'
+                | '\u{2B07}'
+        ),
+        NamedSet::CardSuits => {
+            matches!(ch, '\u{2660}' | '\u{2663}' | '\u{2665}' | '\u{2666}')
+        }
     }
 }
 

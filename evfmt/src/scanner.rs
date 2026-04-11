@@ -1,13 +1,17 @@
 //! Sequence-aware scanner for text/emoji variation sequences.
 //!
 //! Recognizes singletons, keycap sequences, ZWJ chains, and standalone
-//! selector runs.
+//! variation selector runs.
 //!
-//! Aside from coalescing arbitrary non-structural text into
-//! [`ScanKind::Passthrough`], this scanner is purely structural and lossless.
-//! Every non-passthrough [`ScanKind`] retains enough information to
-//! reconstruct its own raw slice bit-for-bit. Concatenating all
-//! [`ScanItem::raw`] values reconstructs the original input.
+//! The scanner preserves the input losslessly: structured items retain enough
+//! information to reconstruct their own raw slices bit-for-bit, and arbitrary
+//! non-structural text is coalesced into [`ScanKind::Passthrough`].
+//! Concatenating all [`ScanItem::raw`] values reconstructs the original input.
+//!
+//! The item model is also shaped for `evfmt`'s built-in review and formatting
+//! pipeline: callers can review the scanned items and build repaired output
+//! from the original items without rescanning after each valid replacement decision.
+//! This is a library API affordance, not a requirement of the formatting model.
 
 use std::ops::Range;
 
@@ -33,13 +37,45 @@ pub(crate) const KEYCAP_CAP: char = '\u{20E3}';
 
 /// Returns true if the character is a variation selector (VS15 or VS16).
 #[must_use]
-pub(crate) fn is_variation_selector(ch: char) -> bool {
+fn is_variation_selector(ch: char) -> bool {
     ch == VS_TEXT || ch == VS_EMOJI
+}
+
+/// A Unicode variation selector: text (U+FE0E) or emoji (U+FE0F).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VariationSelector {
+    /// Text presentation variation selector (U+FE0E).
+    Text,
+    /// Emoji presentation variation selector (U+FE0F).
+    Emoji,
+}
+
+impl VariationSelector {
+    /// Convert to the underlying Unicode character.
+    #[must_use]
+    pub const fn to_char(self) -> char {
+        match self {
+            Self::Text => VS_TEXT,
+            Self::Emoji => VS_EMOJI,
+        }
+    }
+
+    /// Try to convert a Unicode character to a variation selector.
+    ///
+    /// Returns `None` if the character is not `VS_TEXT` or `VS_EMOJI`.
+    #[must_use]
+    pub const fn from_char(ch: char) -> Option<Self> {
+        match ch {
+            VS_TEXT => Some(Self::Text),
+            VS_EMOJI => Some(Self::Emoji),
+            _ => None,
+        }
+    }
 }
 
 /// Returns true if the character is a valid keycap base (`#`, `*`, `0`–`9`).
 #[must_use]
-pub(crate) fn is_keycap_base(ch: char) -> bool {
+fn is_keycap_base(ch: char) -> bool {
     ch == '#' || ch == '*' || ch.is_ascii_digit()
 }
 
@@ -55,6 +91,7 @@ fn is_valid_zwj_component_base(ch: char) -> bool {
 
 /// A single item produced by the scanner.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ScanItem<'a> {
     /// The raw source text for this item.
     pub raw: &'a str,
@@ -66,57 +103,61 @@ pub struct ScanItem<'a> {
 
 /// The classification of a scanned item.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ScanKind {
     /// Non-emoji content (plain text, ineligible characters, standalone ZWJ, etc.).
     Passthrough,
     /// Standalone variation selectors not attached to a recognized logical unit.
-    StandaloneSelectors(Vec<char>),
+    StandaloneVariationSelectors(Vec<VariationSelector>),
     /// Single variation-sequence code point with trailing variation selectors.
     Singleton {
         /// The base character.
         base: char,
         /// Trailing variation selectors, in source order.
-        selectors: Vec<char>,
+        variation_selectors: Vec<VariationSelector>,
     },
     /// Keycap sequence: base, trailing variation selectors, then U+20E3.
     Keycap {
         /// The base character (`#`, `*`, or a digit).
         base: char,
         /// Trailing variation selectors before U+20E3, in source order.
-        selectors: Vec<char>,
+        variation_selectors: Vec<VariationSelector>,
     },
     /// ZWJ sequence: two or more components joined by U+200D.
     ///
-    /// The sequence structure is lossless: selectors after a joiner are stored
-    /// on the link itself rather than discarded or reassigned to a component.
+    /// The sequence structure is lossless: variation selectors after a joiner are stored
+    /// on the link itself.
     Zwj(ZwjSequence),
 }
 
 /// One component of a ZWJ sequence.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ZwjComponent {
     /// The base character of this component.
     pub base: char,
     /// Variation selectors immediately after the base and before any emoji
     /// modifier.
-    pub selectors_after_base: Vec<char>,
+    pub variation_selectors_after_base: Vec<VariationSelector>,
     /// Unicode emoji modifier, if present.
     pub emoji_modifier: Option<char>,
     /// Variation selectors after the base when no modifier is present, or after
     /// the emoji modifier when one is present.
-    pub selectors_after_modifier: Vec<char>,
+    pub variation_selectors_after_modifier: Vec<VariationSelector>,
 }
 
 /// One explicit U+200D join between two ZWJ components.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ZwjLink {
     /// Variation selectors immediately after the joiner and before the next
     /// component base.
-    pub selectors: Vec<char>,
+    pub variation_selectors: Vec<VariationSelector>,
 }
 
 /// A lossless recursive representation of a ZWJ sequence.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ZwjSequence {
     /// Final component in the sequence.
     Terminal(ZwjComponent),
@@ -131,31 +172,35 @@ pub enum ZwjSequence {
     },
 }
 
-/// Return the only selector that can directly affect the base character.
+/// Return the only variation selector that can directly affect the base character.
 ///
 /// Unicode variation sequences are a base character followed by a single
-/// variation selector. Any additional selectors in the same run trail the
-/// first selector rather than the base itself.
+/// variation selector. Any additional variation selectors in the same run trail the
+/// first variation selector rather than the base itself.
 #[must_use]
-pub(crate) fn effective_selector(selectors: &[char]) -> Option<char> {
-    selectors.first().copied()
+pub(crate) fn effective_selector(
+    variation_selectors: &[VariationSelector],
+) -> Option<VariationSelector> {
+    variation_selectors.first().copied()
 }
 
-/// Return the selector run at the terminal selector-bearing position of a ZWJ
+/// Return the variation selector run at the terminal variation-selector-bearing position of a ZWJ
 /// component.
 #[must_use]
-pub(crate) fn zwj_component_terminal_selectors(component: &ZwjComponent) -> &[char] {
+pub(crate) fn zwj_component_terminal_selectors(component: &ZwjComponent) -> &[VariationSelector] {
     if component.emoji_modifier.is_some() {
-        &component.selectors_after_modifier
+        &component.variation_selectors_after_modifier
     } else {
-        &component.selectors_after_base
+        &component.variation_selectors_after_base
     }
 }
 
-/// Return the only selector that can directly affect the terminal position of a
+/// Return the only variation selector that can directly affect the terminal position of a
 /// ZWJ component.
 #[must_use]
-pub(crate) fn zwj_component_effective_selector(component: &ZwjComponent) -> Option<char> {
+pub(crate) fn zwj_component_effective_selector(
+    component: &ZwjComponent,
+) -> Option<VariationSelector> {
     effective_selector(zwj_component_terminal_selectors(component))
 }
 
@@ -197,14 +242,14 @@ pub fn scan_crosscheck(input: &str) -> (Vec<ScanItem<'_>>, Vec<ScanItem<'_>>) {
 
 fn scan_state_machine(input: &str) -> Vec<ScanItem<'_>> {
     // AUDIT NOTE: scan priority order matters here:
-    // 1. Standalone selector run: VS not attached to a recognized logical unit
+    // 1. Standalone variation selector run: VS not attached to a recognized logical unit
     // 2. Keycap: base `[VS] U+20E3`
     // 3. ZWJ chain: two+ components joined by `U+200D`
     // 4. Singleton: variation-sequence character `[VS]`
     // 5. Passthrough: everything else, coalesced into runs
     //
     // Keycap must be checked before singleton so that `#️⃣` stays a keycap
-    // instead of splitting into `#` plus a stray selector run. ZWJ must also
+    // instead of splitting into `#` plus a stray variation selector run. ZWJ must also
     // precede singleton to avoid consuming the first component on its own.
     //
     // `pos` always advances by `ch.len_utf8()`, so all string slices stay on
@@ -219,12 +264,12 @@ fn scan_state_machine(input: &str) -> Vec<ScanItem<'_>> {
 
         if is_variation_selector(ch) {
             flush_passthrough(input, &mut items, &mut passthrough_start, pos);
-            let (end, selectors) = consume_selector_run(input, pos);
+            let (end, variation_selectors) = consume_selector_run(input, pos);
             items.push(make_item(
                 input,
                 pos,
                 end,
-                ScanKind::StandaloneSelectors(selectors),
+                ScanKind::StandaloneVariationSelectors(variation_selectors),
             ));
             pos = end;
             continue;
@@ -298,7 +343,7 @@ enum ZwjMachine {
 
 fn scan_structured_state_machine(input: &str, pos: usize, ch: char) -> StructuredScan {
     let ch_len = ch.len_utf8();
-    let (after_base_selectors, selectors_after_base) =
+    let (after_base_selectors, variation_selectors_after_base) =
         consume_optional_selector_run(input, pos + ch_len);
     debug_assert!(
         after_base_selectors >= pos + ch_len,
@@ -311,7 +356,7 @@ fn scan_structured_state_machine(input: &str, pos: usize, ch: char) -> Structure
             end,
             kind: ScanKind::Keycap {
                 base: ch,
-                selectors: selectors_after_base,
+                variation_selectors: variation_selectors_after_base,
             },
         };
     }
@@ -327,13 +372,13 @@ fn scan_structured_state_machine(input: &str, pos: usize, ch: char) -> Structure
             }
             _ => None,
         };
-        let (component_end, selectors_after_modifier) =
+        let (component_end, variation_selectors_after_modifier) =
             consume_optional_selector_run(input, cursor);
         let first_component = ZwjComponent {
             base: ch,
-            selectors_after_base: selectors_after_base.clone(),
+            variation_selectors_after_base: variation_selectors_after_base.clone(),
             emoji_modifier,
-            selectors_after_modifier,
+            variation_selectors_after_modifier,
         };
 
         if peek(input, component_end) == Some(ZWJ) {
@@ -354,7 +399,7 @@ fn scan_structured_state_machine(input: &str, pos: usize, ch: char) -> Structure
             end,
             kind: ScanKind::Singleton {
                 base: ch,
-                selectors: selectors_after_base,
+                variation_selectors: variation_selectors_after_base,
             },
         }
     } else {
@@ -372,7 +417,7 @@ fn scan_zwj_machine(input: &str, mut state: ZwjMachine) -> StructuredScan {
                 singleton_end,
             } => {
                 let zwj_end = component_end + ZWJ.len_utf8();
-                let (next_pos, selectors) = consume_optional_selector_run(input, zwj_end);
+                let (next_pos, variation_selectors) = consume_optional_selector_run(input, zwj_end);
                 let Some(next_base) = peek(input, next_pos) else {
                     return fallback_from_zwj_candidate(
                         input,
@@ -391,7 +436,9 @@ fn scan_zwj_machine(input: &str, mut state: ZwjMachine) -> StructuredScan {
                 }
 
                 let mut components = vec![first_component];
-                let links = vec![ZwjLink { selectors }];
+                let links = vec![ZwjLink {
+                    variation_selectors,
+                }];
                 let (next_component, cursor) = consume_component(input, next_pos, next_base);
                 components.push(next_component);
                 state = ZwjMachine::Confirmed {
@@ -414,7 +461,7 @@ fn scan_zwj_machine(input: &str, mut state: ZwjMachine) -> StructuredScan {
 
                 let zwj_end = cursor + ZWJ.len_utf8();
                 debug_assert!(zwj_end > cursor, "ZWJ scan must advance past the joiner");
-                let (next_pos, selectors) = consume_optional_selector_run(input, zwj_end);
+                let (next_pos, variation_selectors) = consume_optional_selector_run(input, zwj_end);
                 let Some(next_base) = peek(input, next_pos) else {
                     return StructuredScan::Emit {
                         end: cursor,
@@ -428,7 +475,9 @@ fn scan_zwj_machine(input: &str, mut state: ZwjMachine) -> StructuredScan {
                     };
                 }
 
-                links.push(ZwjLink { selectors });
+                links.push(ZwjLink {
+                    variation_selectors,
+                });
                 let (next_component, new_cursor) = consume_component(input, next_pos, next_base);
                 components.push(next_component);
                 state = ZwjMachine::Confirmed {
@@ -452,7 +501,7 @@ fn fallback_from_zwj_candidate(
             end,
             kind: ScanKind::Singleton {
                 base: first_component.base,
-                selectors: first_component.selectors_after_base,
+                variation_selectors: first_component.variation_selectors_after_base,
             },
         };
     }
@@ -482,7 +531,7 @@ fn make_item(input: &str, start: usize, end: usize, kind: ScanKind) -> ScanItem<
     }
 }
 
-pub(crate) fn peek(input: &str, pos: usize) -> Option<char> {
+fn peek(input: &str, pos: usize) -> Option<char> {
     #[allow(clippy::string_slice)]
     input[pos..].chars().next()
 }
@@ -507,9 +556,9 @@ fn try_zwj(input: &str, pos: usize, first_base: char) -> Option<(usize, ZwjSeque
     while peek(input, cursor) == Some(ZWJ) {
         let zwj_end = cursor + ZWJ.len_utf8();
         debug_assert!(zwj_end > cursor, "ZWJ scan must advance past the joiner");
-        let (next_pos, selectors) = consume_optional_selector_run(input, zwj_end);
+        let (next_pos, variation_selectors) = consume_optional_selector_run(input, zwj_end);
 
-        // Need a valid next-component base after ZWJ and any selectors. If
+        // Need a valid next-component base after ZWJ and any variation selectors. If
         // none exists, the trailing ZWJ is not part of the recognized chain.
         let Some(next_base) = peek(input, next_pos) else {
             break;
@@ -518,8 +567,10 @@ fn try_zwj(input: &str, pos: usize, first_base: char) -> Option<(usize, ZwjSeque
             break;
         }
 
-        links.push(ZwjLink { selectors });
-        cursor = next_pos; // commit: consume the ZWJ and its trailing selectors
+        links.push(ZwjLink {
+            variation_selectors,
+        });
+        cursor = next_pos; // commit: consume the ZWJ and its trailing variation selectors
         let (comp, new_cursor) = consume_component(input, cursor, next_base);
         components.push(comp);
         cursor = new_cursor;
@@ -556,12 +607,12 @@ fn build_zwj_sequence(mut components: Vec<ZwjComponent>, mut links: Vec<ZwjLink>
     sequence
 }
 
-/// Consume one ZWJ component: base selector* [emoji-modifier selector*].
+/// Consume one ZWJ component: base variation-selector* [emoji-modifier variation-selector*].
 fn consume_component(input: &str, pos: usize, base: char) -> (ZwjComponent, usize) {
     let mut cursor = pos + base.len_utf8();
     debug_assert!(cursor > pos, "component scan must advance past the base");
 
-    let (new_cursor, selectors_after_base) = consume_optional_selector_run(input, cursor);
+    let (new_cursor, variation_selectors_after_base) = consume_optional_selector_run(input, cursor);
     cursor = new_cursor;
 
     let emoji_modifier = match peek(input, cursor) {
@@ -576,21 +627,22 @@ fn consume_component(input: &str, pos: usize, base: char) -> (ZwjComponent, usiz
         _ => None,
     };
 
-    let (new_cursor, selectors_after_modifier) = consume_optional_selector_run(input, cursor);
+    let (new_cursor, variation_selectors_after_modifier) =
+        consume_optional_selector_run(input, cursor);
     cursor = new_cursor;
 
     (
         ZwjComponent {
             base,
-            selectors_after_base,
+            variation_selectors_after_base,
             emoji_modifier,
-            selectors_after_modifier,
+            variation_selectors_after_modifier,
         },
         cursor,
     )
 }
 
-fn consume_optional_selector_run(input: &str, pos: usize) -> (usize, Vec<char>) {
+fn consume_optional_selector_run(input: &str, pos: usize) -> (usize, Vec<VariationSelector>) {
     if peek(input, pos).is_some_and(is_variation_selector) {
         consume_selector_run(input, pos)
     } else {
@@ -598,20 +650,20 @@ fn consume_optional_selector_run(input: &str, pos: usize) -> (usize, Vec<char>) 
     }
 }
 
-fn consume_selector_run(input: &str, pos: usize) -> (usize, Vec<char>) {
+fn consume_selector_run(input: &str, pos: usize) -> (usize, Vec<VariationSelector>) {
     let mut cursor = pos;
-    let mut selectors = Vec::new();
+    let mut variation_selectors = Vec::new();
     while let Some(ch) = peek(input, cursor) {
-        if !is_variation_selector(ch) {
+        let Some(vs) = VariationSelector::from_char(ch) else {
             break;
-        }
-        selectors.push(ch);
+        };
+        variation_selectors.push(vs);
         let next_cursor = cursor + ch.len_utf8();
         debug_assert!(
             next_cursor > cursor,
-            "selector run must make forward progress"
+            "variation selector run must make forward progress"
         );
         cursor = next_cursor;
     }
-    (cursor, selectors)
+    (cursor, variation_selectors)
 }

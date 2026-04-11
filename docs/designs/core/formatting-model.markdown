@@ -17,6 +17,8 @@ Its job is to produce the most stable, least surprising source spelling under:
 
 `evfmt` is a formatter first, not a general Unicode emoji validator.
 
+This document specifies the final formatting result. That result is defined by the abstract algorithm below, which is intended to be precise but is not an implementation plan. Implementations may follow the algorithm directly, use it as an explanatory map for some internal steps, or use a completely different strategy, as long as the observable output is exactly the result defined here. Code comments may describe implementation details, but those details do not define this specification.
+
 ## Scope
 
 `evfmt` operates on Unicode text containing:
@@ -118,16 +120,16 @@ The following cases do not enter policy:
 
 - keycap context canonicalizes to `[0-9#*] FE0F 20E3`
 - modifier defect canonicalizes by removing legacy `FE0F` before a modifier
-- ZWJ generation follows fully-qualified discipline; unsupported `FE0E`/`FE0F` are not left on ZWJ components, and required `FE0F` is inserted where needed
+- ZWJ generation follows fully-qualified discipline: `FE0E` on components is replaced (departing from [UTS #51](https://www.unicode.org/reports/tr51/) to preserve the "only selectors change" invariant), required `FE0F` is inserted, and unsupported selectors are removed
 - unsanctioned or orphaned selectors are removed
 
 ### Step 4: Apply policy to ambiguous standalone slots
 
 When multiple reasonable states remain, policy resolves them using the preferred-bare set and the bare-as-text set.
 
-### Step 5: Iterate until stable
+### Step 5: Emit canonical replacements
 
-Removing selectors can expose new structure, so formatting may require multiple passes.
+Return the text produced by applying the fixed-rule repairs and policy resolutions above. The returned text is the canonical result under this model.
 
 The concrete slot families and per-family rules live in [sequence-handling.markdown](../features/sequence-handling.markdown).
 

@@ -13,12 +13,12 @@ pub(in crate::scanner) fn scan_legacy(input: &str) -> Vec<ScanItem<'_>> {
 
         // 1. Standalone variation selector run
         if is_variation_selector(ch) {
-            let (end, selectors) = consume_selector_run(input, pos);
+            let (end, variation_selectors) = consume_selector_run(input, pos);
             items.push(ScanItem {
                 #[allow(clippy::string_slice)]
                 raw: &input[pos..end],
                 span: pos..end,
-                kind: ScanKind::StandaloneSelectors(selectors),
+                kind: ScanKind::StandaloneVariationSelectors(variation_selectors),
             });
             pos = end;
             continue;
@@ -26,7 +26,7 @@ pub(in crate::scanner) fn scan_legacy(input: &str) -> Vec<ScanItem<'_>> {
 
         // 2. Keycap: base [VS] 20E3
         if is_keycap_base(ch)
-            && let Some((end, selectors)) = try_keycap(input, pos, ch_len)
+            && let Some((end, variation_selectors)) = try_keycap(input, pos, ch_len)
         {
             debug_assert!(end > pos, "keycap scan must make forward progress");
             debug_assert!(
@@ -39,7 +39,7 @@ pub(in crate::scanner) fn scan_legacy(input: &str) -> Vec<ScanItem<'_>> {
                 span: pos..end,
                 kind: ScanKind::Keycap {
                     base: ch,
-                    selectors,
+                    variation_selectors,
                 },
             });
             pos = end;
@@ -60,7 +60,7 @@ pub(in crate::scanner) fn scan_legacy(input: &str) -> Vec<ScanItem<'_>> {
 
         // 4. Singleton variation-sequence char [VS]
         if unicode::has_variation_sequence(ch) {
-            let (end, selectors) = consume_optional_selector_run(input, pos + ch_len);
+            let (end, variation_selectors) = consume_optional_selector_run(input, pos + ch_len);
             debug_assert!(end > pos, "singleton scan must make forward progress");
             items.push(ScanItem {
                 #[allow(clippy::string_slice)]
@@ -68,7 +68,7 @@ pub(in crate::scanner) fn scan_legacy(input: &str) -> Vec<ScanItem<'_>> {
                 span: pos..end,
                 kind: ScanKind::Singleton {
                     base: ch,
-                    selectors,
+                    variation_selectors,
                 },
             });
             pos = end;
@@ -90,14 +90,14 @@ pub(in crate::scanner) fn scan_legacy(input: &str) -> Vec<ScanItem<'_>> {
     items
 }
 
-/// Try to match keycap: base selector* 20E3. Returns (`end_byte`, selectors).
-fn try_keycap(input: &str, pos: usize, base_len: usize) -> Option<(usize, Vec<char>)> {
-    let (mut cursor, selectors) = consume_optional_selector_run(input, pos + base_len);
+/// Try to match keycap: base variation-selector* 20E3.
+fn try_keycap(input: &str, pos: usize, base_len: usize) -> Option<(usize, Vec<VariationSelector>)> {
+    let (mut cursor, variation_selectors) = consume_optional_selector_run(input, pos + base_len);
 
     match peek(input, cursor) {
         Some(KEYCAP_CAP) => {
             cursor += KEYCAP_CAP.len_utf8();
-            Some((cursor, selectors))
+            Some((cursor, variation_selectors))
         }
         _ => None,
     }

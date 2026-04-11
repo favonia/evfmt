@@ -1,9 +1,6 @@
 //! `evfmt` is both a command-line formatter and a Rust library for
 //! normalizing text/emoji variation selectors.
 //!
-//! The library surface is intended for tools that want to apply `evfmt`'s
-//! normalization rules directly, without invoking the CLI as a subprocess.
-//!
 //! Most callers will want [`format_text`] together with [`Policy`].
 //!
 //! # Examples
@@ -11,7 +8,7 @@
 //! Use [`format_text`] for whole-input canonicalization under one [`Policy`].
 //! In the example below, `#\u{FE0E}` is NUMBER SIGN followed by VS15, and
 //! `\u{00A9}` is a bare COPYRIGHT SIGN. Under the default policy,
-//! `#\u{FE0E}` loses the redundant selector, while bare `\u{00A9}` is
+//! `#\u{FE0E}` loses the redundant variation selector, while bare `\u{00A9}` is
 //! canonicalized to `\u{00A9}\u{FE0F}`.
 //!
 //! ```rust
@@ -29,49 +26,48 @@
 //! );
 //! ```
 //!
-//! For diagnostics or editor integrations, scan once and then work item-by-item.
-//! In the next example, `A\u{FE0F}` contains an illegal selector after `A`,
-//! `#\u{FE0E}` contains a redundant text selector after NUMBER SIGN, and bare
-//! `\u{00A9}` is a singleton that still needs presentation resolution.
+//! For interactive repair or editor integrations, scan the input and then work
+//! item-by-item. In the next example, `A\u{FE0F}` contains an illegal variation selector
+//! after `A`, and the caller chooses to apply the formatter's fixed repair.
+//! For the built-in `evfmt` decisions, callers can build repaired output from
+//! the original scanned items without rescanning after each replacement choice.
+//! Walk the original items in order, keeping `item.raw` for unchanged items and
+//! substituting the selected replacement for reviewed findings.
 //!
 //! ```rust
 //! use evfmt::{
-//!     Policy, ScanKind, ViolationKind, canonicalize_item, classify,
-//!     find_violations, scan,
+//!     Policy, ReplacementDecision, ScanKind, ViolationKind, review_item, scan,
 //! };
 //!
 //! let policy = Policy::default();
-//! let input = "A\u{FE0F} #\u{FE0E} \u{00A9}";
+//! let input = "A\u{FE0F}";
 //!
 //! let items = scan(input);
 //! assert!(matches!(items[0].kind, ScanKind::Passthrough));
-//! assert!(matches!(items[1].kind, ScanKind::StandaloneSelectors(_)));
-//! assert!(matches!(items[3].kind, ScanKind::Singleton { .. }));
+//! assert!(matches!(items[1].kind, ScanKind::StandaloneVariationSelectors(_)));
 //!
-//! let violations = find_violations(input, &policy);
-//! assert_eq!(violations.len(), 3);
-//! assert_eq!(violations[1].replacement, "#");
+//! let finding = review_item(&items[1], &policy).unwrap();
+//! assert_eq!(finding.violation(), ViolationKind::IllegalVariationSelector);
+//! assert_eq!(finding.choices(), &[ReplacementDecision::Fix]);
 //!
-//! let repaired = canonicalize_item(&items[1], &policy);
+//! let repaired = finding.replacement(ReplacementDecision::Fix).unwrap();
 //! assert_eq!(repaired, "");
-//! assert_eq!(
-//!     classify(&items[5], &policy),
-//!     Some(ViolationKind::BareNeedsResolution),
-//! );
 //! ```
 //!
-//! Use [`find_violations`] for a whole-input diagnostic report, or
-//! [`analyze_text`] for whole-input slot analysis.
+//! Use [`review_text`] for a whole-input diagnostic report.
 //!
-//! If the default policy is not suitable, build charsets from [`charset`] and
-//! construct a [`Policy`] explicitly. In this example, `rights-marks` contains
-//! `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to remain bare.
+//! The [`mod@review`] API is the usual entry point for interactive fixing. It
+//! applies the supplied [`Policy`] only where policy is relevant, and returns
+//! the valid replacement choices for each finding.
+//!
+//! Custom policies can be built from [`charset`] charsets. In this example,
+//! `rights-marks` contains `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to
+//! remain bare.
 //!
 //! ```rust
-//! use evfmt::{CharSet, NamedSetId, Policy, format_text};
+//! use evfmt::{charset, Policy, format_text};
 //!
-//! let ascii_and_rights_marks =
-//!     CharSet::named(NamedSetId::Ascii) | CharSet::named(NamedSetId::RightsMarks);
+//! let ascii_and_rights_marks = charset::ASCII | charset::RIGHTS_MARKS;
 //! let policy = Policy::default()
 //!     .with_prefer_bare(ascii_and_rights_marks)
 //!     .with_bare_as_text(ascii_and_rights_marks);
@@ -87,86 +83,25 @@
 //!
 //! - the crate root is the high-level API: whole-input formatting and
 //!   convenience analysis helpers
-//! - [`formatter`] is the repair-oriented item API: formatter policy and
-//!   per-item canonicalization
-//! - [`mod@classify`] is the diagnostics-oriented item API: ask why a scanned
-//!   item is non-canonical
+//! - [`policy`] defines formatter policy configuration
+//! - [`formatter`] owns whole-text formatting
+//! - [`mod@review`] is the policy-aware review API: ask why a scanned item is
+//!   non-canonical and which replacements are available; it is the normal API
+//!   for interactive fixing
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
-//!   chains, standalone selector runs, and passthrough slices
-//! - [`slot`] exposes the lower-level slot model for advanced tooling
+//!   chains, standalone variation selector runs, and passthrough slices
 //! - [`charset`] defines the typed character-set model used by the library
 //!   policy API
-//! - [`unicode`] provides Unicode emoji metadata used by scanning and
-//!   canonicalization
-
-mod canonical;
-
-use std::ops::Range;
 
 pub mod charset;
-pub mod classify;
 pub mod formatter;
+pub mod policy;
+pub mod review;
 pub mod scanner;
-pub mod slot;
-pub mod unicode;
+mod unicode;
 
-pub use charset::{CharSet, NamedSetId};
-pub use classify::{ViolationKind, classify};
-pub use formatter::{FormatResult, Policy, canonicalize_item, format_text};
-pub use scanner::{ScanItem, ScanKind, ZwjComponent, ZwjLink, ZwjSequence, scan};
-pub use slot::{
-    ReasonableSet, SelectorState, SlotAnalysis, SlotKind, analyze_scan_item, canonical_state,
-    resolve_singleton,
-};
-
-/// A single non-canonical scanned item together with its canonical replacement.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Finding {
-    /// Byte range of the offending item in the original input.
-    pub span: Range<usize>,
-    /// Original raw source slice for the item.
-    pub raw: String,
-    /// Why the item is non-canonical.
-    pub violation: ViolationKind,
-    /// Canonical replacement for the item under the given policy.
-    pub replacement: String,
-}
-
-/// Find all non-canonical items in an input string together with their
-/// canonical replacements.
-///
-/// # Examples
-///
-/// ```rust
-/// use evfmt::{Policy, ViolationKind, find_violations};
-///
-/// let policy = Policy::default();
-/// let findings = find_violations("A\u{FE0F} \u{00A9}", &policy);
-///
-/// assert_eq!(findings.len(), 2);
-/// assert_eq!(findings[0].violation, ViolationKind::IllegalSelector);
-/// assert_eq!(findings[0].replacement, "");
-/// assert_eq!(findings[1].replacement, "\u{00A9}\u{FE0F}");
-/// ```
-#[must_use]
-pub fn find_violations(input: &str, policy: &Policy) -> Vec<Finding> {
-    scan(input)
-        .into_iter()
-        .filter_map(|item| {
-            let violation = classify(&item, policy)?;
-            Some(Finding {
-                span: item.span.clone(),
-                raw: item.raw.to_owned(),
-                violation,
-                replacement: canonicalize_item(&item, policy),
-            })
-        })
-        .collect()
-}
-
-/// Analyze an entire input string into slot-level structures.
-#[must_use]
-pub fn analyze_text(input: &str) -> Vec<SlotAnalysis<'_>> {
-    let items = scan(input);
-    items.iter().map(analyze_scan_item).collect()
-}
+pub use charset::CharSet;
+pub use formatter::{FormatResult, format_text};
+pub use policy::Policy;
+pub use review::{ReplacementDecision, ReviewFinding, ViolationKind, review_item, review_text};
+pub use scanner::{ScanItem, ScanKind, scan};
