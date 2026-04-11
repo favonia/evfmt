@@ -1,6 +1,6 @@
-use super::*;
+use super::super::*;
 
-pub(super) fn scan_legacy(input: &str) -> Vec<ScanItem<'_>> {
+pub(in crate::scanner) fn scan_legacy(input: &str) -> Vec<ScanItem<'_>> {
     let mut items = Vec::new();
     let mut pos: usize = 0;
 
