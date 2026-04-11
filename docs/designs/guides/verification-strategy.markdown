@@ -23,8 +23,8 @@ A data-driven decision table where each row makes the semantic axes explicit:
 - slot kind
 - sanctioned selector set
 - no selector / `FE0E` / `FE0F`
-- `prefer-bare-for` true/false
-- `treat-bare-as-text-for` true/false
+- preferred-bare matches slot true/false
+- bare-as-text matches slot true/false
 
 ### 2. Unicode-data conformance evidence
 
@@ -86,6 +86,7 @@ Integration tests cover:
 - already-canonical no-op success
 - `evfmt check` / `--check` exit codes
 - stdin and stdout via `-`
+- ordered `set/add/remove` CLI behavior for policy and ignore filters
 - invalid UTF-8 exits `2`
 - partial failure exits `2` without rollback
 

@@ -614,9 +614,6 @@ fn consume_selector_run(input: &str, pos: usize) -> (usize, Vec<char>) {
 
 #[cfg(test)]
 mod tests {
-    // Tests use unwrap/panic for concise assertions — a panic IS the failure signal.
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
     use proptest::prelude::*;
     use proptest::sample::select;
 
@@ -942,6 +939,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::panic)]
     fn test_scan_zwj_basic() {
         // ❤️ (2764) ZWJ 🔥 (1F525)
         let input = "\u{2764}\u{200D}\u{1F525}";
@@ -964,6 +962,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::panic)]
     fn test_scan_zwj_with_fe0f() {
         // ❤️ FE0F ZWJ 🔥
         let input = "\u{2764}\u{FE0F}\u{200D}\u{1F525}";
@@ -983,6 +982,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::panic)]
     fn test_scan_zwj_with_emoji_modifier() {
         // 👨 🏻 ZWJ 👦
         let input = "\u{1F468}\u{1F3FB}\u{200D}\u{1F466}";
@@ -1006,6 +1006,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::panic)]
     fn test_scan_zwj_preserves_selector_run_after_joiner() {
         let input = "\u{1F525}\u{200D}\u{FE0F}\u{2764}";
         let items = scan(input);
@@ -1033,6 +1034,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::expect_used, clippy::panic)]
     fn test_try_zwj_stops_before_trailing_joiner_selector_joiner() {
         let input = "\u{2764}\u{200D}\u{1F525}\u{200D}\u{FE0F}\u{200D}";
         let (end, seq) = try_zwj(input, 0, '\u{2764}').expect("expected valid ZWJ prefix");
@@ -1070,6 +1072,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::panic)]
     fn test_scan_zwj_keeps_longest_valid_prefix_before_invalid_post_joiner_base() {
         let input = "\u{2764}\u{200D}\u{1F525}\u{200D}\u{1F44D}\u{200D}\u{FE0F}\u{200D}";
         let items = scan(input);
@@ -1210,43 +1213,62 @@ mod tests {
     //   - Only FE0F keycaps exist, no bare or FE0E forms (test_conformance_keycap_fe0f_only)
     //   - ZWJ sequences always contain ZWJ, never FE0E (test_conformance_zwj_structure)
     //   - Text-default ZWJ components have FE0F (test_conformance_zwj_text_default_has_fe0f)
-    //   - All official sequences scan as the expected kind (test_conformance_all_sequences_classifiable)
+    //   - All official sequences scan as the expected kind
+    //     (test_conformance_all_sequences_classifiable)
     //
     // If a future Unicode version violates any of these, these tests fail.
     // -------------------------------------------------------------------
 
     /// Parse a line from emoji-sequences.txt or emoji-zwj-sequences.txt.
     /// Returns (`code_points`, `type_field`) or `None` for comments/blanks.
+    // Malformed pinned Unicode data is a conformance-test fixture failure.
+    #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     fn parse_sequence_line(line: &str) -> Option<(Vec<u32>, String)> {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             return None;
         }
-        let parts: Vec<&str> = line.splitn(3, ';').collect();
-        if parts.len() < 2 {
-            return None;
-        }
-        let cp_part = parts[0].trim();
-        let type_field = parts[1].trim().to_owned();
+        let (cp_part, rest) = line
+            .split_once(';')
+            .unwrap_or_else(|| panic!("sequence line is missing type field: {line}"));
+        let type_field = rest
+            .split(';')
+            .next()
+            .expect("split always yields the first field")
+            .trim()
+            .to_owned();
+        assert!(
+            !type_field.is_empty(),
+            "sequence line has empty type field: {line}"
+        );
 
         // Handle ranges like "231A..231B"
-        if cp_part.contains("..") {
-            let range_parts: Vec<&str> = cp_part.split("..").collect();
-            let start = u32::from_str_radix(range_parts[0].trim(), 16).ok()?;
-            let end = u32::from_str_radix(range_parts[1].trim(), 16).ok()?;
+        if let Some((start, end)) = cp_part.split_once("..") {
+            assert!(
+                !end.contains(".."),
+                "sequence range has more than one separator: {line}"
+            );
+            let start = u32::from_str_radix(start.trim(), 16)
+                .unwrap_or_else(|_| panic!("invalid range start in sequence line: {line}"));
+            let end = u32::from_str_radix(end.trim(), 16)
+                .unwrap_or_else(|_| panic!("invalid range end in sequence line: {line}"));
             // Return range as individual entries — but for our purposes,
             // Basic_Emoji ranges are single code points, not sequences.
             // We'll handle them specially in the test.
             return Some((vec![start, end], type_field));
         }
 
-        let cps: Vec<u32> = cp_part
+        let cps = cp_part
             .split_whitespace()
-            .filter_map(|s| u32::from_str_radix(s, 16).ok())
-            .collect();
-        if cps.is_empty() {
-            return None;
-        }
+            .map(|cp| {
+                u32::from_str_radix(cp, 16)
+                    .unwrap_or_else(|_| panic!("invalid code point in sequence line: {line}"))
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            !cps.is_empty(),
+            "sequence line has empty code point list: {line}"
+        );
         Some((cps, type_field))
     }
 

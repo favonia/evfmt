@@ -6,15 +6,62 @@ Defines: the public policy surface, CLI modes, and exit codes.
 
 ## Policy predicates
 
-`evfmt` exposes two policy predicates. Both use the [expression language](expression-language.markdown).
+`evfmt` resolves standalone ambiguity through two policy predicates:
 
-### `--prefer-bare-for=<expr>`
+- the preferred-bare set
+- the bare-as-text set
+
+The CLI manages those predicates through ordered set operations, while the library can still construct them directly with the typed [charset API](charset-api.markdown).
+
+### Preferred-bare set
 
 Selects bases whose bare form is preferred when both bare and explicit forms remain reasonable.
 
-### `--treat-bare-as-text-for=<expr>`
+CLI flags:
+
+- `--set-prefer-bare=<charset[,charset]...>`
+- `--add-prefer-bare=<charset[,charset]...>`
+- `--remove-prefer-bare=<charset[,charset]...>`
+
+### Bare-as-text set
 
 Selects bases whose bare form is interpreted as text-like rather than emoji-like when policy must decide what bare means.
+
+CLI flags:
+
+- `--set-bare-as-text=<charset[,charset]...>`
+- `--add-bare-as-text=<charset[,charset]...>`
+- `--remove-bare-as-text=<charset[,charset]...>`
+
+## Ordered CLI model
+
+The CLI applies repeated set-operation flags strictly left to right within each domain.
+
+- `set-*` replaces the current set
+- `add-*` unions new items into the current set
+- `remove-*` subtracts items from the current set
+
+Character-set flags take comma-separated lists of:
+
+- named presets such as `ascii`, `rights-marks`, or `arrows`
+- `u(HEX)` code-point items
+- single-character charset literals, optionally followed by a variation selector, such as `#`, `*`, `©︎` (U+00A9 U+FE0E), or `©️` (U+00A9 U+FE0F)
+
+`all` selects every character `evfmt` can format and works with any policy set-operation flag. `none` clears a policy set and works only with `--set-*` policy flags. Unknown preset-like items are errors and should offer nearby suggestions when practical.
+
+Ignore filtering uses the same ordered model with these labels:
+
+- `git`
+- `evfmt`
+- `hidden`
+
+The ignore flags are:
+
+- `--set-ignore=<filter[,filter]...>`
+- `--add-ignore=<filter[,filter]...>`
+- `--remove-ignore=<filter[,filter]...>`
+
+`all` selects every ignore filter and works with any ignore set-operation flag. `none` disables all ignore filters and works only with `--set-ignore`.
 
 ## Policy decision model
 
@@ -27,14 +74,15 @@ For an ambiguous standalone slot, the two predicates determine the canonical res
 
 You can also derive the predicates from the actions you want:
 
-- `--treat-bare-as-text-for`: the union of "change text to bare" and "change bare to text"
-- `--prefer-bare-for`: the union of "change text to bare" and "change emoji to bare"
+- bare-as-text: the union of "change text to bare" and "change bare to text"
+- preferred-bare: the union of "change text to bare" and "change emoji to bare"
 
 ## Recommended defaults
 
 ```sh
---prefer-bare-for='ascii'
---treat-bare-as-text-for='ascii'
+--set-prefer-bare=ascii
+--set-bare-as-text=ascii
+--set-ignore=git,evfmt,hidden
 ```
 
 This means:
@@ -42,7 +90,7 @@ This means:
 - ASCII ambiguous bare forms stay bare
 - non-ASCII ambiguous bare forms default to emoji presentation
 
-With the default values `--treat-bare-as-text-for=ascii` and `--prefer-bare-for=ascii`, the resulting actions are:
+With the default sets `bare-as-text = ascii` and `preferred-bare = ascii`, the resulting actions are:
 
 |                                      | Treating bare as text (`ascii`) | Not treating bare as text (except `ascii`) |
 | ------------------------------------ | ------------------------------- | ------------------------------------------ |

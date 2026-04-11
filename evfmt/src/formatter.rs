@@ -20,7 +20,7 @@
 //    need a fixpoint loop and `format_once` is already stable.
 
 use crate::canonical;
-use crate::expr::{Expr, NamedSetId};
+use crate::charset::{CharSet, NamedSetId};
 use crate::scanner;
 use crate::slot::PolicyView;
 
@@ -28,33 +28,31 @@ use crate::slot::PolicyView;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Policy {
-    /// Expression for characters whose bare form is preferred (canonical).
-    pub prefer_bare_for: Expr,
-    /// Expression for characters whose bare form should be treated as text
-    /// presentation.
-    pub treat_bare_as_text_for: Expr,
+    /// Charset for characters whose bare form is preferred (canonical).
+    pub prefer_bare: CharSet,
+    /// Charset for characters whose bare form is treated as text presentation.
+    pub bare_as_text: CharSet,
 }
 
 impl Policy {
-    /// Return a copy of this policy with a new `prefer_bare_for` expression.
+    /// Return a copy of this policy with a new `prefer_bare` charset.
     #[must_use]
-    pub fn with_prefer_bare_for(mut self, prefer_bare_for: Expr) -> Self {
-        self.prefer_bare_for = prefer_bare_for;
+    pub fn with_prefer_bare(mut self, prefer_bare: CharSet) -> Self {
+        self.prefer_bare = prefer_bare;
         self
     }
 
-    /// Return a copy of this policy with a new `treat_bare_as_text_for`
-    /// expression.
+    /// Return a copy of this policy with a new `bare_as_text` charset.
     #[must_use]
-    pub fn with_treat_bare_as_text_for(mut self, treat_bare_as_text_for: Expr) -> Self {
-        self.treat_bare_as_text_for = treat_bare_as_text_for;
+    pub fn with_bare_as_text(mut self, bare_as_text: CharSet) -> Self {
+        self.bare_as_text = bare_as_text;
         self
     }
 
     pub(crate) const fn as_view(&self) -> PolicyView<'_> {
         PolicyView {
-            prefer_bare_for: &self.prefer_bare_for,
-            treat_bare_as_text_for: &self.treat_bare_as_text_for,
+            prefer_bare: &self.prefer_bare,
+            bare_as_text: &self.bare_as_text,
         }
     }
 }
@@ -62,8 +60,8 @@ impl Policy {
 impl Default for Policy {
     fn default() -> Self {
         Self {
-            prefer_bare_for: Expr::NamedSet(NamedSetId::Ascii),
-            treat_bare_as_text_for: Expr::NamedSet(NamedSetId::Ascii),
+            prefer_bare: CharSet::named(NamedSetId::Ascii),
+            bare_as_text: CharSet::named(NamedSetId::Ascii),
         }
     }
 }
@@ -134,7 +132,7 @@ pub fn canonicalize_item(item: &scanner::ScanItem<'_>, policy: &Policy) -> Strin
 //
 // 1. Unit tests (below): hand-written cases with the default policy.
 // 2. Decision table (test_decision_table): exhaustive enumeration of all
-//    (char_type × input_selector × prefer_bare_for × bare_is_text_for)
+//    (char_type × input_selector × prefer_bare × bare_as_text)
 //    combinations — human-auditable semantic matrix.
 // 3. Exhaustive per-entry (test_exhaustive_per_entry): every VARIATION_ENTRIES
 //    entry × 4 policies × 3 input forms, with independently computed expected
@@ -143,21 +141,26 @@ pub fn canonicalize_item(item: &scanner::ScanItem<'_>, policy: &Policy) -> Strin
 //    no violations, no orphans, singleton/keycap/ZWJ properties, losslessness.
 #[cfg(test)]
 mod tests {
-    // Tests use unwrap for concise assertions — a panic IS the failure signal.
-    #![allow(clippy::unwrap_used)]
-
     use super::*;
-    use crate::expr;
+    use crate::charset::{CharSet, NamedSetId};
     use crate::scanner::{VS_EMOJI, VS_TEXT};
     use crate::unicode::{self, DefaultSide};
 
     /// Create the default policy used by most tests.
-    /// prefer-bare-for='ascii': ASCII characters keep their bare form.
-    /// treat-bare-as-text-for='ascii': ASCII bare characters resolve to text; all others to emoji.
+    /// prefer-bare='ascii': ASCII characters keep their bare form.
+    /// bare-as-text='ascii': ASCII bare characters resolve to text; all others to emoji.
     fn default_policy() -> Policy {
         Policy {
-            prefer_bare_for: expr::parse_expr_only("ascii").unwrap(),
-            treat_bare_as_text_for: expr::parse_expr_only("ascii").unwrap(),
+            prefer_bare: CharSet::named(NamedSetId::Ascii),
+            bare_as_text: CharSet::named(NamedSetId::Ascii),
+        }
+    }
+
+    fn bool_charset(matches: bool) -> CharSet {
+        if matches {
+            CharSet::all()
+        } else {
+            CharSet::none()
         }
     }
 
@@ -181,7 +184,7 @@ mod tests {
     #[test]
     fn test_ascii_with_bare_side_selector_removed() {
         let policy = default_policy();
-        // '#' is ASCII, bare_is_text_for=ascii → bare side is text.
+        // '#' is ASCII, bare_as_text=ascii → bare side is text.
         // FE0E matches bare side → redundant → removed.
         assert_eq!(
             format_text("#\u{FE0E}", &policy),
@@ -192,7 +195,7 @@ mod tests {
     #[test]
     fn test_ascii_with_non_bare_side_selector_kept() {
         let policy = default_policy();
-        // '#' is ASCII, bare_is_text_for=ascii → bare side is text.
+        // '#' is ASCII, bare_as_text=ascii → bare side is text.
         // FE0F is the other side → meaningful → kept.
         assert_eq!(format_text("#\u{FE0F}", &policy), FormatResult::Unchanged);
     }
@@ -201,7 +204,7 @@ mod tests {
     fn test_non_ascii_text_default_bare_gets_emoji_selector() {
         let policy = default_policy();
         // U+00A9 COPYRIGHT SIGN is non-ASCII and has text-default variation-sequence data.
-        // With treat-bare-as-text-for='ascii', ©️ is not ASCII → bare resolves to emoji → add FE0F.
+        // With bare-as-text='ascii', ©️ is not ASCII → bare resolves to emoji → add FE0F.
         assert_eq!(
             format_text("\u{00A9}", &policy),
             FormatResult::Changed("\u{00A9}\u{FE0F}".to_owned())
@@ -475,14 +478,14 @@ mod tests {
     }
 
     #[test]
-    fn test_emoji_default_prefer_bare_for() {
+    fn test_emoji_default_prefer_bare() {
         // U+2728 SPARKLES is emoji-default.
-        // With prefer-bare-for='all' and treat-bare-as-text-for='all', bare side is text.
+        // With prefer-bare='all' and bare-as-text='all', bare side is text.
         // FE0E (text = bare side) is redundant → removed.
         // FE0F (emoji ≠ bare side) is meaningful → kept.
         let policy = Policy {
-            prefer_bare_for: expr::parse_expr_only("all").unwrap(),
-            treat_bare_as_text_for: expr::parse_expr_only("all").unwrap(),
+            prefer_bare: CharSet::all(),
+            bare_as_text: CharSet::all(),
         };
         assert_eq!(format_text("\u{2728}", &policy), FormatResult::Unchanged);
         assert_eq!(
@@ -497,11 +500,11 @@ mod tests {
 
     #[test]
     fn test_non_ascii_bare_as_text() {
-        // With treat-bare-as-text-for='all', bare non-bare-preferred characters resolve
+        // With bare-as-text='all', bare non-bare-preferred characters resolve
         // to the text side → add FE0E.
         let policy = Policy {
-            prefer_bare_for: expr::parse_expr_only("none").unwrap(),
-            treat_bare_as_text_for: expr::parse_expr_only("all").unwrap(),
+            prefer_bare: CharSet::none(),
+            bare_as_text: CharSet::all(),
         };
         assert_eq!(
             format_text("\u{00A9}", &policy),
@@ -534,11 +537,11 @@ mod tests {
     // Axes:
     //   1. Character eligibility: Ineligible / TextDefault / EmojiDefault
     //   2. Input selector: None / FE0E / FE0F
-    //   3. prefer_bare_for policy: true / false
-    //   4. bare_is_text_for policy: true / false
+    //   3. prefer_bare policy: true / false
+    //   4. bare_as_text policy: true / false
     //
     // Key design property: for characters with variation-sequence data (where both VS are
-    // sanctioned), the output depends ONLY on (prefer_bare_for, bare_is_text_for,
+    // sanctioned), the output depends ONLY on (prefer_bare, bare_as_text,
     // input_selector). The Unicode default side does not enter the
     // decision logic. We test with both text-default and emoji-default
     // representative characters to verify this independence.
@@ -574,15 +577,15 @@ mod tests {
         label: &'static str,
         char_type: CharType,
         input_selector: InputSelector,
-        prefer_bare_for: bool,
-        bare_is_text_for: bool,
+        prefer_bare: bool,
+        bare_as_text: bool,
         expected: ExpectedForm,
     }
 
     #[derive(Debug, Clone, Copy)]
     struct PolicyFlags {
-        prefer_bare_for: bool,
-        bare_is_text_for: bool,
+        prefer_bare: bool,
+        bare_as_text: bool,
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -629,24 +632,24 @@ mod tests {
                 label: "ineligible, bare",
                 char_type: Ineligible,
                 input_selector: None,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "ineligible, +FE0E (illegal)",
                 char_type: Ineligible,
                 input_selector: TextVS,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "ineligible, +FE0F (illegal)",
                 char_type: Ineligible,
                 input_selector: EmojiVS,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::Bare,
             },
         ]
@@ -660,96 +663,96 @@ mod tests {
                 label: "text-default, bare, kb=T, bat=T",
                 char_type: TextDefault,
                 input_selector: None,
-                prefer_bare_for: true,
-                bare_is_text_for: true,
+                prefer_bare: true,
+                bare_as_text: true,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "text-default, +FE0E (redundant), kb=T, bat=T",
                 char_type: TextDefault,
                 input_selector: TextVS,
-                prefer_bare_for: true,
-                bare_is_text_for: true,
+                prefer_bare: true,
+                bare_as_text: true,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "text-default, +FE0F (meaningful), kb=T, bat=T",
                 char_type: TextDefault,
                 input_selector: EmojiVS,
-                prefer_bare_for: true,
-                bare_is_text_for: true,
+                prefer_bare: true,
+                bare_as_text: true,
                 expected: ExpectedForm::WithEmojiVS,
             },
             DecisionRow {
                 label: "text-default, bare, kb=T, bat=F",
                 char_type: TextDefault,
                 input_selector: None,
-                prefer_bare_for: true,
-                bare_is_text_for: false,
+                prefer_bare: true,
+                bare_as_text: false,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "text-default, +FE0E (meaningful), kb=T, bat=F",
                 char_type: TextDefault,
                 input_selector: TextVS,
-                prefer_bare_for: true,
-                bare_is_text_for: false,
+                prefer_bare: true,
+                bare_as_text: false,
                 expected: ExpectedForm::WithTextVS,
             },
             DecisionRow {
                 label: "text-default, +FE0F (redundant), kb=T, bat=F",
                 char_type: TextDefault,
                 input_selector: EmojiVS,
-                prefer_bare_for: true,
-                bare_is_text_for: false,
+                prefer_bare: true,
+                bare_as_text: false,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "text-default, +FE0E (explicit), kb=F, bat=T",
                 char_type: TextDefault,
                 input_selector: TextVS,
-                prefer_bare_for: false,
-                bare_is_text_for: true,
+                prefer_bare: false,
+                bare_as_text: true,
                 expected: ExpectedForm::WithTextVS,
             },
             DecisionRow {
                 label: "text-default, +FE0F (explicit), kb=F, bat=T",
                 char_type: TextDefault,
                 input_selector: EmojiVS,
-                prefer_bare_for: false,
-                bare_is_text_for: true,
+                prefer_bare: false,
+                bare_as_text: true,
                 expected: ExpectedForm::WithEmojiVS,
             },
             DecisionRow {
                 label: "text-default, bare, kb=F, bat=T",
                 char_type: TextDefault,
                 input_selector: None,
-                prefer_bare_for: false,
-                bare_is_text_for: true,
+                prefer_bare: false,
+                bare_as_text: true,
                 expected: ExpectedForm::WithTextVS,
             },
             DecisionRow {
                 label: "text-default, +FE0E (explicit), kb=F, bat=F",
                 char_type: TextDefault,
                 input_selector: TextVS,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::WithTextVS,
             },
             DecisionRow {
                 label: "text-default, +FE0F (explicit), kb=F, bat=F",
                 char_type: TextDefault,
                 input_selector: EmojiVS,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::WithEmojiVS,
             },
             DecisionRow {
                 label: "text-default, bare, kb=F, bat=F",
                 char_type: TextDefault,
                 input_selector: None,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::WithEmojiVS,
             },
         ]
@@ -763,96 +766,96 @@ mod tests {
                 label: "emoji-default, bare, kb=T, bat=T",
                 char_type: EmojiDefault,
                 input_selector: None,
-                prefer_bare_for: true,
-                bare_is_text_for: true,
+                prefer_bare: true,
+                bare_as_text: true,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "emoji-default, +FE0E (redundant), kb=T, bat=T",
                 char_type: EmojiDefault,
                 input_selector: TextVS,
-                prefer_bare_for: true,
-                bare_is_text_for: true,
+                prefer_bare: true,
+                bare_as_text: true,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "emoji-default, +FE0F (meaningful), kb=T, bat=T",
                 char_type: EmojiDefault,
                 input_selector: EmojiVS,
-                prefer_bare_for: true,
-                bare_is_text_for: true,
+                prefer_bare: true,
+                bare_as_text: true,
                 expected: ExpectedForm::WithEmojiVS,
             },
             DecisionRow {
                 label: "emoji-default, bare, kb=T, bat=F",
                 char_type: EmojiDefault,
                 input_selector: None,
-                prefer_bare_for: true,
-                bare_is_text_for: false,
+                prefer_bare: true,
+                bare_as_text: false,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "emoji-default, +FE0E (meaningful), kb=T, bat=F",
                 char_type: EmojiDefault,
                 input_selector: TextVS,
-                prefer_bare_for: true,
-                bare_is_text_for: false,
+                prefer_bare: true,
+                bare_as_text: false,
                 expected: ExpectedForm::WithTextVS,
             },
             DecisionRow {
                 label: "emoji-default, +FE0F (redundant), kb=T, bat=F",
                 char_type: EmojiDefault,
                 input_selector: EmojiVS,
-                prefer_bare_for: true,
-                bare_is_text_for: false,
+                prefer_bare: true,
+                bare_as_text: false,
                 expected: ExpectedForm::Bare,
             },
             DecisionRow {
                 label: "emoji-default, +FE0E (explicit), kb=F, bat=T",
                 char_type: EmojiDefault,
                 input_selector: TextVS,
-                prefer_bare_for: false,
-                bare_is_text_for: true,
+                prefer_bare: false,
+                bare_as_text: true,
                 expected: ExpectedForm::WithTextVS,
             },
             DecisionRow {
                 label: "emoji-default, +FE0F (explicit), kb=F, bat=T",
                 char_type: EmojiDefault,
                 input_selector: EmojiVS,
-                prefer_bare_for: false,
-                bare_is_text_for: true,
+                prefer_bare: false,
+                bare_as_text: true,
                 expected: ExpectedForm::WithEmojiVS,
             },
             DecisionRow {
                 label: "emoji-default, bare, kb=F, bat=T",
                 char_type: EmojiDefault,
                 input_selector: None,
-                prefer_bare_for: false,
-                bare_is_text_for: true,
+                prefer_bare: false,
+                bare_as_text: true,
                 expected: ExpectedForm::WithTextVS,
             },
             DecisionRow {
                 label: "emoji-default, +FE0E (explicit), kb=F, bat=F",
                 char_type: EmojiDefault,
                 input_selector: TextVS,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::WithTextVS,
             },
             DecisionRow {
                 label: "emoji-default, +FE0F (explicit), kb=F, bat=F",
                 char_type: EmojiDefault,
                 input_selector: EmojiVS,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::WithEmojiVS,
             },
             DecisionRow {
                 label: "emoji-default, bare, kb=F, bat=F",
                 char_type: EmojiDefault,
                 input_selector: None,
-                prefer_bare_for: false,
-                bare_is_text_for: false,
+                prefer_bare: false,
+                bare_as_text: false,
                 expected: ExpectedForm::WithEmojiVS,
             },
         ]
@@ -869,11 +872,9 @@ mod tests {
                 let ch = representative_char(row.char_type);
 
                 // Build the policy using expressions that match exactly this character.
-                let prefer_bare_for_expr = if row.prefer_bare_for { "all" } else { "none" };
-                let bare_is_text_for_expr = if row.bare_is_text_for { "all" } else { "none" };
                 let policy = Policy {
-                    prefer_bare_for: expr::parse_expr_only(prefer_bare_for_expr).unwrap(),
-                    treat_bare_as_text_for: expr::parse_expr_only(bare_is_text_for_expr).unwrap(),
+                    prefer_bare: bool_charset(row.prefer_bare),
+                    bare_as_text: bool_charset(row.bare_as_text),
                 };
 
                 let input = build_input(ch, row.input_selector);
@@ -900,7 +901,7 @@ mod tests {
     // Verify formatter behavior for every entry in VARIATION_ENTRIES
     // under all 4 policy combinations × 3 input forms. The expected
     // output is computed independently from the formatter using a simple,
-    // flat match on (prefer_bare_for, bare_is_text_for, input_selector, has_text_vs,
+    // flat match on (prefer_bare, bare_as_text, input_selector, has_text_vs,
     // has_emoji_vs). If both this logic and the implementation agree on
     // all cases, either both are correct or both share the same bug.
     // -------------------------------------------------------------------
@@ -915,20 +916,10 @@ mod tests {
         for entry in VARIATION_ENTRIES {
             let ch = entry.code_point;
 
-            for &(prefer_bare_for, bare_is_text_for) in &policies {
+            for &(prefer_bare, bare_as_text) in &policies {
                 let policy = Policy {
-                    prefer_bare_for: expr::parse_expr_only(if prefer_bare_for {
-                        "all"
-                    } else {
-                        "none"
-                    })
-                    .unwrap(),
-                    treat_bare_as_text_for: expr::parse_expr_only(if bare_is_text_for {
-                        "all"
-                    } else {
-                        "none"
-                    })
-                    .unwrap(),
+                    prefer_bare: bool_charset(prefer_bare),
+                    bare_as_text: bool_charset(bare_as_text),
                 };
 
                 // 3 input forms: bare, +FE0E, +FE0F
@@ -950,8 +941,8 @@ mod tests {
                         ch,
                         form_label,
                         PolicyFlags {
-                            prefer_bare_for,
-                            bare_is_text_for,
+                            prefer_bare,
+                            bare_as_text,
                         },
                         EligibilityFlags {
                             has_text_vs: entry.has_text_vs,
@@ -961,7 +952,7 @@ mod tests {
 
                     assert_eq!(
                         actual, expected,
-                        "U+{:04X} {form_label} kb={prefer_bare_for} bat={bare_is_text_for}: \
+                        "U+{:04X} {form_label} kb={prefer_bare} bat={bare_as_text}: \
                          expected={expected:?}, got={actual:?}",
                         ch as u32
                     );
@@ -979,7 +970,7 @@ mod tests {
         policy: PolicyFlags,
         eligibility: EligibilityFlags,
     ) -> String {
-        let bare_side_is_emoji = !policy.bare_is_text_for;
+        let bare_side_is_emoji = !policy.bare_as_text;
 
         // Determine the sanctioned selector from the input form.
         let sanctioned_side: Option<bool> = match form {
@@ -1001,7 +992,7 @@ mod tests {
             _ => unreachable!(),
         };
 
-        if policy.prefer_bare_for {
+        if policy.prefer_bare {
             // Step 2: bare is canonical.
             match sanctioned_side {
                 None => {
@@ -1027,8 +1018,8 @@ mod tests {
                 Some(false) => format!("{ch}\u{FE0E}"), // explicit text
                 Some(true) => format!("{ch}\u{FE0F}"),  // explicit emoji
                 None => {
-                    // Bare → resolve via bare_is_text_for.
-                    if policy.bare_is_text_for {
+                    // Bare -> resolve via bare_as_text.
+                    if policy.bare_as_text {
                         format!("{ch}\u{FE0E}")
                     } else {
                         format!("{ch}\u{FE0F}")
@@ -1086,9 +1077,8 @@ mod tests {
     /// Strategy for policy combinations.
     fn policy_strategy() -> impl Strategy<Value = Policy> {
         (prop::bool::ANY, prop::bool::ANY).prop_map(|(kb, bat)| Policy {
-            prefer_bare_for: expr::parse_expr_only(if kb { "all" } else { "none" }).unwrap(),
-            treat_bare_as_text_for: expr::parse_expr_only(if bat { "all" } else { "none" })
-                .unwrap(),
+            prefer_bare: bool_charset(kb),
+            bare_as_text: bool_charset(bat),
         })
     }
 
@@ -1232,11 +1222,10 @@ mod tests {
                 if let ScanKind::Singleton { base, selectors } = &item.kind {
                     let selector = scanner::effective_selector(selectors);
                     if unicode::has_variation_sequence(*base) {
-                        if policy.prefer_bare_for.matches(*base) {
+                        if policy.prefer_bare.contains(*base) {
                             // No redundant selectors.
                             if let Some(sel) = selector {
-                                let bare_is_emoji =
-                                    !policy.treat_bare_as_text_for.matches(*base);
+                                let bare_is_emoji = !policy.bare_as_text.contains(*base);
                                 let sel_is_emoji = sel == VS_EMOJI;
                                 prop_assert!(
                                     sel_is_emoji != bare_is_emoji,

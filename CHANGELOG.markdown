@@ -8,6 +8,8 @@ Changes:
 - Reduced visibility of internal scanner and slot helpers.
 - Tightened and clarified module documentation.
 - Preserve file permissions and metadata during in-place formatting.
+- Replaced the old one-shot CLI policy flags with ordered `set/add/remove` operations for policy and ignore filters.
+- Replaced the library's old string expression parser with typed `evfmt::charset` smart constructors.
 
 ## 0.1.0 (2026-04-09)
 
