@@ -685,10 +685,8 @@ fn read_stdin() -> Result<String, io::Error> {
 // ownership and extended attributes.
 fn atomic_write(path: &Path, content: &str) -> Result<Vec<String>, String> {
     let dir = path.parent().unwrap_or(path);
-    let mut temp_file = match create_temp_file(dir) {
-        Ok(file) => file,
-        Err(error) => return Err(format!("temp-file create error: {error}")),
-    };
+    let mut temp_file =
+        create_temp_file(dir).map_err(|error| format!("temp-file create error: {error}"))?;
 
     if let Err(error) = temp_file.as_file_mut().write_all(content.as_bytes()) {
         return Err(format!("write error: {error}"));

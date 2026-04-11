@@ -25,6 +25,19 @@ fn evfmt() -> Command {
     Command::cargo_bin("evfmt").unwrap()
 }
 
+#[cfg(unix)]
+struct RestoreMode {
+    path: std::path::PathBuf,
+    mode: u32,
+}
+
+#[cfg(unix)]
+impl Drop for RestoreMode {
+    fn drop(&mut self) {
+        let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(self.mode));
+    }
+}
+
 // --- Help output ---
 
 #[test]
@@ -148,6 +161,39 @@ fn format_preserves_extended_attributes_when_supported() {
     assert_eq!(value.as_deref(), Some(b"kept".as_slice()));
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn format_warns_when_extended_attributes_cannot_be_preserved() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+
+    let probe = tmp.child("probe.txt");
+    probe.write_str("probe").unwrap();
+    if let Err(error) = xattr::set(probe.path(), "user.evfmt-probe", b"kept") {
+        assert!(
+            matches!(error.kind(), std::io::ErrorKind::Unsupported),
+            "failed to set test xattr: {error}"
+        );
+        return;
+    }
+    std::fs::set_permissions(probe.path(), std::fs::Permissions::from_mode(0o444)).unwrap();
+    if xattr::set(probe.path(), "user.evfmt-probe-writable", b"probe").is_ok() {
+        return;
+    }
+
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+    xattr::set(file.path(), "user.evfmt-test", b"kept").unwrap();
+    std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    evfmt()
+        .arg(file.path())
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("warning: xattr preserve error"));
+
+    file.assert("\u{00A9}\u{FE0F}");
+}
+
 // --- Check mode ---
 
 #[test]
@@ -229,6 +275,22 @@ fn check_stdin_canonical_does_not_echo_stdout() {
         .assert()
         .success()
         .stdout("");
+}
+
+#[cfg(unix)]
+#[test]
+fn stdin_read_error_exits_2() {
+    use assert_cmd::prelude::{CommandCargoExt as _, OutputAssertExt as _};
+
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let stdin = std::fs::File::open(tmp.path()).unwrap();
+    let mut command = std::process::Command::cargo_bin("evfmt").unwrap();
+    command.arg("-").stdin(stdin);
+
+    command
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("<stdin>"));
 }
 
 // --- Error cases ---
@@ -338,6 +400,31 @@ fn partial_failure_exits_2() {
         .arg(tmp.child("nonexistent.txt").path())
         .assert()
         .code(2);
+}
+
+#[cfg(unix)]
+#[test]
+fn rewrite_reports_temp_file_create_error_when_directory_unwritable() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let dir = tmp.child("locked");
+    std::fs::create_dir(dir.path()).unwrap();
+    let file = dir.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    let mode = std::fs::metadata(dir.path()).unwrap().permissions().mode() & 0o777;
+    let _restore = RestoreMode {
+        path: dir.path().to_owned(),
+        mode,
+    };
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    evfmt()
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("temp-file create error"));
+
+    file.assert("\u{00A9}");
 }
 
 // --- Ordered set operations ---
@@ -462,6 +549,24 @@ fn ineligible_character_items_are_rejected() {
 
     evfmt()
         .arg("--add-prefer-bare=u(0041)")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains(
+            "not eligible for emoji variation selectors",
+        ));
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn ineligible_bare_as_text_items_are_rejected() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--set-bare-as-text=u(0041)")
         .arg(file.path())
         .assert()
         .code(2)

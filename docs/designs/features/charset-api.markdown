@@ -35,13 +35,13 @@ The public typed surface is built from:
 
 ## Combinators
 
-| Constructor       | Meaning                                    |
-| ----------------- | ------------------------------------------ |
-| `!charset`        | Eligible characters not in `charset`       |
-| `charset | other` | Characters matched by either set           |
-| `charset & other` | Characters matched by both sets            |
-| `charset ^ other` | Characters matched by exactly one set      |
-| `charset - other` | Characters in `charset` but not in `other` |
+| Constructor        | Meaning                                    |
+| ------------------ | ------------------------------------------ |
+| `!charset`         | Eligible characters not in `charset`       |
+| `charset \| other` | Characters matched by either set           |
+| `charset & other`  | Characters matched by both sets            |
+| `charset ^ other`  | Characters matched by exactly one set      |
+| `charset - other`  | Characters in `charset` but not in `other` |
 
 The assignment operators `|=`, `&=`, `^=`, and `-=` have the corresponding
 in-place meanings.
