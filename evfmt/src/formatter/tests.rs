@@ -1,16 +1,14 @@
 use super::*;
-use crate::charset::{CharSet, NamedSetId};
-use crate::scanner::{VS_EMOJI, VS_TEXT};
+use crate::charset::CharSet;
+use crate::policy::SingletonRule;
+use crate::scanner::{VariationSelector, ZwjSequence};
 use crate::unicode::{self, DefaultSide};
 
 /// Create the default policy used by most tests.
 /// prefer-bare='ascii': ASCII characters keep their bare form.
 /// bare-as-text='ascii': ASCII bare characters resolve to text; all others to emoji.
 fn default_policy() -> Policy {
-    Policy {
-        prefer_bare: CharSet::named(NamedSetId::Ascii),
-        bare_as_text: CharSet::named(NamedSetId::Ascii),
-    }
+    Policy::default()
 }
 
 fn bool_charset(matches: bool) -> CharSet {
@@ -72,7 +70,7 @@ fn test_non_ascii_text_default_bare_gets_emoji_selector() {
 fn test_non_ascii_with_explicit_text_selector_preserved() {
     let policy = default_policy();
     // U+00A9 with explicit FE0E → preserved.
-    // Explicit selectors are always respected (Step 3).
+    // Explicit variation selectors are always respected (Step 3).
     assert_eq!(
         format_text("\u{00A9}\u{FE0E}", &policy),
         FormatResult::Unchanged
@@ -100,24 +98,6 @@ fn test_illegal_selector_removed() {
 }
 
 #[test]
-fn canonicalize_item_matches_format_once_behavior() {
-    let policy = default_policy();
-    let input = "#\u{FE0E}\u{20E3}\u{2764}\u{200D}\u{1F525}A\u{FE0F}";
-    let items = scanner::scan(input);
-    let rebuilt: String = items
-        .iter()
-        .map(|item| canonicalize_item(item, &policy))
-        .collect();
-
-    let expected = match format_text(input, &policy) {
-        FormatResult::Changed(output) => output,
-        FormatResult::Unchanged => input.to_owned(),
-    };
-
-    assert_eq!(rebuilt, expected);
-}
-
-#[test]
 fn test_standalone_selector_removed() {
     let policy = default_policy();
     // Standalone FE0F at the start of the string → removed.
@@ -131,7 +111,7 @@ fn test_standalone_selector_removed() {
 fn test_double_selector_after_eligible() {
     let policy = default_policy();
     // '#' followed by FE0F then FE0E → keep the first (non-default),
-    // remove the second (extra consecutive selector).
+    // remove the second (extra consecutive variation selector).
     assert_eq!(
         format_text("#\u{FE0F}\u{FE0E}", &policy),
         FormatResult::Changed("#\u{FE0F}".to_owned())
@@ -139,7 +119,7 @@ fn test_double_selector_after_eligible() {
 }
 
 #[test]
-fn test_orphan_selector_after_zwj_is_resolved_in_one_pass() {
+fn test_orphan_selector_after_zwj_is_resolved_canonically() {
     let policy = default_policy();
     let input = "\u{1F525}\u{200D}\u{FE0F}\u{2764}";
     let expected = "\u{1F525}\u{200D}\u{2764}\u{FE0F}";
@@ -257,7 +237,7 @@ fn test_zwj_text_default_wrong_vs_fixed() {
 fn test_zwj_non_eligible_selector_removed() {
     let policy = default_policy();
     // 😀 (1F600) has no variation sequence here (fully emoji, not dual-presentation).
-    // Unsupported selectors on ZWJ components without variation-sequence data are removed.
+    // Unsupported variation selectors on ZWJ components without variation-sequence data are removed.
     assert_eq!(
         format_text("\u{1F600}\u{FE0F}\u{200D}\u{1F525}", &policy),
         FormatResult::Changed("\u{1F600}\u{200D}\u{1F525}".to_owned())
@@ -340,10 +320,9 @@ fn test_emoji_default_prefer_bare() {
     // With prefer-bare='all' and bare-as-text='all', bare side is text.
     // FE0E (text = bare side) is redundant → removed.
     // FE0F (emoji ≠ bare side) is meaningful → kept.
-    let policy = Policy {
-        prefer_bare: CharSet::all(),
-        bare_as_text: CharSet::all(),
-    };
+    let policy = Policy::default()
+        .with_prefer_bare(CharSet::all())
+        .with_bare_as_text(CharSet::all());
     assert_eq!(format_text("\u{2728}", &policy), FormatResult::Unchanged);
     assert_eq!(
         format_text("\u{2728}\u{FE0E}", &policy),
@@ -359,10 +338,9 @@ fn test_emoji_default_prefer_bare() {
 fn test_non_ascii_bare_as_text() {
     // With bare-as-text='all', bare non-bare-preferred characters resolve
     // to the text side → add FE0E.
-    let policy = Policy {
-        prefer_bare: CharSet::none(),
-        bare_as_text: CharSet::all(),
-    };
+    let policy = Policy::default()
+        .with_prefer_bare(CharSet::none())
+        .with_bare_as_text(CharSet::all());
     assert_eq!(
         format_text("\u{00A9}", &policy),
         FormatResult::Changed("\u{00A9}\u{FE0E}".to_owned())
@@ -393,7 +371,7 @@ fn test_mixed_content() {
 //
 // Axes:
 //   1. Character eligibility: Ineligible / TextDefault / EmojiDefault
-//   2. Input selector: None / FE0E / FE0F
+//   2. Input variation selector: None / FE0E / FE0F
 //   3. prefer_bare policy: true / false
 //   4. bare_as_text policy: true / false
 //
@@ -405,8 +383,8 @@ fn test_mixed_content() {
 //
 // Representative characters:
 //   Ineligible:    'A' (U+0041) — no variation sequence
-//   Text-default:  '©️' (U+00A9) — has_text_vs=true, has_emoji_vs=true, default=Text
-//   Emoji-default: '✨️' (U+2728) — has_text_vs=true, has_emoji_vs=true, default=Emoji
+//   Text-default:  '©️' (U+00A9) — default=Text
+//   Emoji-default: '✨️' (U+2728) — default=Emoji
 // -----------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
@@ -445,12 +423,6 @@ struct PolicyFlags {
     bare_as_text: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct EligibilityFlags {
-    has_text_vs: bool,
-    has_emoji_vs: bool,
-}
-
 fn representative_char(ct: CharType) -> char {
     match ct {
         CharType::Ineligible => 'A',
@@ -464,8 +436,8 @@ fn build_input(ch: char, sel: InputSelector) -> String {
     s.push(ch);
     match sel {
         InputSelector::None => {}
-        InputSelector::TextVS => s.push(VS_TEXT),
-        InputSelector::EmojiVS => s.push(VS_EMOJI),
+        InputSelector::TextVS => s.push(VariationSelector::Text.to_char()),
+        InputSelector::EmojiVS => s.push(VariationSelector::Emoji.to_char()),
     }
     s
 }
@@ -475,8 +447,8 @@ fn build_expected(ch: char, form: ExpectedForm) -> String {
     s.push(ch);
     match form {
         ExpectedForm::Bare => {}
-        ExpectedForm::WithTextVS => s.push(VS_TEXT),
-        ExpectedForm::WithEmojiVS => s.push(VS_EMOJI),
+        ExpectedForm::WithTextVS => s.push(VariationSelector::Text.to_char()),
+        ExpectedForm::WithEmojiVS => s.push(VariationSelector::Emoji.to_char()),
     }
     s
 }
@@ -729,10 +701,9 @@ fn test_decision_table() {
             let ch = representative_char(row.char_type);
 
             // Build the policy using expressions that match exactly this character.
-            let policy = Policy {
-                prefer_bare: bool_charset(row.prefer_bare),
-                bare_as_text: bool_charset(row.bare_as_text),
-            };
+            let policy = Policy::default()
+                .with_prefer_bare(bool_charset(row.prefer_bare))
+                .with_bare_as_text(bool_charset(row.bare_as_text));
 
             let input = build_input(ch, row.input_selector);
             let expected = build_expected(ch, row.expected);
@@ -758,9 +729,9 @@ fn test_decision_table() {
 // Verify formatter behavior for every entry in VARIATION_ENTRIES
 // under all 4 policy combinations × 3 input forms. The expected
 // output is computed independently from the formatter using a simple,
-// flat match on (prefer_bare, bare_as_text, input_selector, has_text_vs,
-// has_emoji_vs). If both this logic and the implementation agree on
-// all cases, either both are correct or both share the same bug.
+// flat match on (prefer_bare, bare_as_text, input_selector). If both
+// this logic and the implementation agree on all cases, either both are
+// correct or both share the same bug.
 // -------------------------------------------------------------------
 
 #[test]
@@ -773,10 +744,9 @@ fn test_exhaustive_per_entry() {
         let ch = entry.code_point;
 
         for &(prefer_bare, bare_as_text) in &policies {
-            let policy = Policy {
-                prefer_bare: bool_charset(prefer_bare),
-                bare_as_text: bool_charset(bare_as_text),
-            };
+            let policy = Policy::default()
+                .with_prefer_bare(bool_charset(prefer_bare))
+                .with_bare_as_text(bool_charset(bare_as_text));
 
             // 3 input forms: bare, +FE0E, +FE0F
             let inputs: [(&str, String); 3] = [
@@ -800,10 +770,6 @@ fn test_exhaustive_per_entry() {
                         prefer_bare,
                         bare_as_text,
                     },
-                    EligibilityFlags {
-                        has_text_vs: entry.has_text_vs,
-                        has_emoji_vs: entry.has_emoji_vs,
-                    },
                 );
 
                 assert_eq!(
@@ -820,59 +786,47 @@ fn test_exhaustive_per_entry() {
 /// Independent expected-output computation for the exhaustive test.
 /// Written as a simple, flat function with no shared code with the
 /// formatter implementation.
-fn compute_expected(
-    ch: char,
-    form: &str,
-    policy: PolicyFlags,
-    eligibility: EligibilityFlags,
-) -> String {
+fn compute_expected(ch: char, form: &str, policy: PolicyFlags) -> String {
     let bare_side_is_emoji = !policy.bare_as_text;
 
-    // Determine the sanctioned selector from the input form.
-    let sanctioned_side: Option<bool> = match form {
+    // Every entry in VARIATION_ENTRIES has both text and emoji variation
+    // sequences (asserted by build.rs), so every selector is sanctioned.
+    let selector: Option<VariationSelector> = match form {
         "bare" => None,
-        "+FE0E" => {
-            if eligibility.has_text_vs {
-                Some(false)
-            } else {
-                None
-            }
-        } // false = text
-        "+FE0F" => {
-            if eligibility.has_emoji_vs {
-                Some(true)
-            } else {
-                None
-            }
-        } // true = emoji
+        "+FE0E" => Some(VariationSelector::Text),
+        "+FE0F" => Some(VariationSelector::Emoji),
         _ => unreachable!(),
     };
 
     if policy.prefer_bare {
         // Step 2: bare is canonical.
-        match sanctioned_side {
+        match selector {
             None => {
-                // No sanctioned selector → bare.
+                // No variation selector -> bare.
                 format!("{ch}")
             }
-            Some(is_emoji) if is_emoji == bare_side_is_emoji => {
-                // Selector matches bare side → redundant → bare.
+            Some(VariationSelector::Emoji) if bare_side_is_emoji => {
+                // Variation selector matches bare side -> redundant -> bare.
                 format!("{ch}")
             }
-            Some(false) => {
-                // Text selector, bare side is emoji → meaningful.
+            Some(VariationSelector::Text) if !bare_side_is_emoji => {
+                // Variation selector matches bare side -> redundant -> bare.
+                format!("{ch}")
+            }
+            Some(VariationSelector::Text) => {
+                // Text variation selector, bare side is emoji -> meaningful.
                 format!("{ch}\u{FE0E}")
             }
-            Some(true) => {
-                // Emoji selector, bare side is text → meaningful.
+            Some(VariationSelector::Emoji) => {
+                // Emoji variation selector, bare side is text -> meaningful.
                 format!("{ch}\u{FE0F}")
             }
         }
     } else {
         // Step 3: bare is not canonical.
-        match sanctioned_side {
-            Some(false) => format!("{ch}\u{FE0E}"), // explicit text
-            Some(true) => format!("{ch}\u{FE0F}"),  // explicit emoji
+        match selector {
+            Some(VariationSelector::Text) => format!("{ch}\u{FE0E}"),
+            Some(VariationSelector::Emoji) => format!("{ch}\u{FE0F}"),
             None => {
                 // Bare -> resolve via bare_as_text.
                 if policy.bare_as_text {
@@ -932,9 +886,10 @@ fn interesting_string_strategy() -> impl Strategy<Value = String> {
 
 /// Strategy for policy combinations.
 fn policy_strategy() -> impl Strategy<Value = Policy> {
-    (prop::bool::ANY, prop::bool::ANY).prop_map(|(kb, bat)| Policy {
-        prefer_bare: bool_charset(kb),
-        bare_as_text: bool_charset(bat),
+    (prop::bool::ANY, prop::bool::ANY).prop_map(|(kb, bat)| {
+        Policy::default()
+            .with_prefer_bare(bool_charset(kb))
+            .with_bare_as_text(bool_charset(bat))
     })
 }
 
@@ -946,13 +901,13 @@ fn strip_selectors(s: &str) -> String {
 }
 
 fn assert_zwj_component_selectors_are_canonical(
-    sequence: &scanner::ZwjSequence,
+    sequence: &ZwjSequence,
 ) -> Result<(), TestCaseError> {
     match sequence {
-        scanner::ZwjSequence::Terminal(component) => {
+        ZwjSequence::Terminal(component) => {
             let expected = if let Some(info) = unicode::variation_sequence_info(component.base) {
                 if info.default_side == DefaultSide::Text && component.emoji_modifier.is_none() {
-                    Some(VS_EMOJI)
+                    Some(VariationSelector::Emoji)
                 } else {
                     None
                 }
@@ -962,15 +917,15 @@ fn assert_zwj_component_selectors_are_canonical(
             prop_assert_eq!(
                 scanner::zwj_component_effective_selector(component),
                 expected,
-                "non-canonical ZWJ selector state on U+{:04X}",
+                "non-canonical ZWJ variation selector state on U+{:04X}",
                 component.base as u32
             );
             Ok(())
         }
-        scanner::ZwjSequence::Joined { head, link, tail } => {
+        ZwjSequence::Joined { head, link, tail } => {
             let expected = if let Some(info) = unicode::variation_sequence_info(head.base) {
                 if info.default_side == DefaultSide::Text && head.emoji_modifier.is_none() {
-                    Some(VS_EMOJI)
+                    Some(VariationSelector::Emoji)
                 } else {
                     None
                 }
@@ -978,14 +933,14 @@ fn assert_zwj_component_selectors_are_canonical(
                 None
             };
             prop_assert!(
-                link.selectors.is_empty(),
-                "non-canonical selectors after ZWJ: {:?}",
-                link.selectors
+                link.variation_selectors.is_empty(),
+                "non-canonical variation selectors after ZWJ: {:?}",
+                link.variation_selectors
             );
             prop_assert_eq!(
                 scanner::zwj_component_effective_selector(head),
                 expected,
-                "non-canonical ZWJ selector state on U+{:04X}",
+                "non-canonical ZWJ variation selector state on U+{:04X}",
                 head.base as u32
             );
             assert_zwj_component_selectors_are_canonical(tail)
@@ -1018,7 +973,7 @@ proptest! {
         input in interesting_string_strategy(),
         policy in policy_strategy(),
     ) {
-        use crate::classify::classify;
+        use crate::review::review_item;
         use crate::scanner::scan;
 
         let output = match format_text(&input, &policy) {
@@ -1027,7 +982,7 @@ proptest! {
         };
         let items = scan(&output);
         for item in &items {
-            let violation = classify(item, &policy);
+            let violation = review_item(item, &policy).map(|finding| finding.violation());
             prop_assert_eq!(
                 violation, None,
                 "violation in output: {:?} for item {:?}", violation, item
@@ -1035,7 +990,7 @@ proptest! {
         }
     }
 
-    /// 3c. No standalone selector runs in output.
+    /// 3c. No standalone variation selector runs in output.
     #[test]
     fn prop_no_standalone_selectors(
         input in interesting_string_strategy(),
@@ -1050,16 +1005,16 @@ proptest! {
         let items = scan(&output);
         for item in &items {
             prop_assert!(
-                !matches!(item.kind, ScanKind::StandaloneSelectors(_)),
-                "standalone selector run in output: {:?}", item.raw
+                !matches!(item.kind, ScanKind::StandaloneVariationSelectors(_)),
+                "standalone variation selector run in output: {:?}", item.raw
             );
         }
     }
 
     /// 3d. Singleton properties: for singleton items in output,
-    /// Bare-preferred chars have no redundant selectors and other
+    /// Bare-preferred chars have no redundant variation selectors and other
     /// variation-sequence chars
-    /// chars always have a selector.
+    /// chars always have a variation selector.
     #[test]
     fn prop_singleton_properties(
         input in interesting_string_strategy(),
@@ -1073,25 +1028,31 @@ proptest! {
         };
         let items = scan(&output);
         for item in &items {
-            if let ScanKind::Singleton { base, selectors } = &item.kind {
-                let selector = scanner::effective_selector(selectors);
+            if let ScanKind::Singleton { base, variation_selectors } = &item.kind {
+                let variation_selector = scanner::effective_selector(variation_selectors);
                 if unicode::has_variation_sequence(*base) {
-                    if policy.prefer_bare.contains(*base) {
-                        // No redundant selectors.
-                        if let Some(sel) = selector {
-                            let bare_is_emoji = !policy.bare_as_text.contains(*base);
-                            let sel_is_emoji = sel == VS_EMOJI;
+                    match policy.singleton_rule(*base) {
+                        SingletonRule::BareToEmoji
+                        | SingletonRule::BareToText => {
                             prop_assert!(
-                                sel_is_emoji != bare_is_emoji,
-                                "redundant selector on bare-preferred U+{:04X}", *base as u32
+                                variation_selector.is_some(),
+                                "unresolved bare non-bare-preferred U+{:04X}", *base as u32
                             );
                         }
-                    } else {
-                        // Must have a selector.
-                        prop_assert!(
-                            selector.is_some(),
-                            "unresolved bare non-bare-preferred U+{:04X}", *base as u32
-                        );
+                        SingletonRule::TextToBare => {
+                            prop_assert_ne!(
+                                variation_selector,
+                                Some(VariationSelector::Text),
+                                "redundant text variation selector on bare-preferred U+{:04X}", *base as u32
+                            );
+                        }
+                        SingletonRule::EmojiToBare => {
+                            prop_assert_ne!(
+                                variation_selector,
+                                Some(VariationSelector::Emoji),
+                                "redundant emoji variation selector on bare-preferred U+{:04X}", *base as u32
+                            );
+                        }
                     }
                 }
             }
@@ -1112,16 +1073,16 @@ proptest! {
         };
         let items = scan(&output);
         for item in &items {
-            if let ScanKind::Keycap { base, selectors } = &item.kind {
+            if let ScanKind::Keycap { base, variation_selectors } = &item.kind {
                 prop_assert_eq!(
-                    selectors.as_slice(), &[VS_EMOJI],
+                    variation_selectors.as_slice(), &[VariationSelector::Emoji],
                     "keycap base {:?} missing FE0F", base
                 );
             }
         }
     }
 
-    /// 3f. ZWJ components carry selectors only where the sequence discipline
+    /// 3f. ZWJ components carry variation selectors only where the sequence discipline
     /// requires them.
     #[test]
     fn prop_zwj_component_selectors_are_canonical(
@@ -1143,7 +1104,7 @@ proptest! {
     }
 
     /// 3g. Formatting only inserts/removes FE0E and FE0F.
-    /// Strip all selectors from both input and output → must be equal.
+    /// Strip all variation selectors from both input and output -> must be equal.
     #[test]
     fn prop_only_modifies_selectors(
         input in interesting_string_strategy(),
@@ -1157,7 +1118,7 @@ proptest! {
         let stripped_output = strip_selectors(&output);
         prop_assert_eq!(
             stripped_input, stripped_output,
-            "non-selector content differs"
+            "non-variation-selector content differs"
         );
     }
 }

@@ -6,8 +6,11 @@ use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use tempfile::NamedTempFile;
 
-use evfmt::charset::{CharSet, NamedSetId};
-use evfmt::formatter::{self, FormatResult, Policy};
+use evfmt::Policy;
+use evfmt::charset;
+use evfmt::charset::CharSet;
+use evfmt::charset::is_variation_sequence_character;
+use evfmt::formatter::{self, FormatResult};
 
 use crate::cli_args::{
     OperationId, OrderedOperation, ParsedCommand, RESERVED_COMMANDS, SharedArgs,
@@ -64,23 +67,21 @@ pub(crate) fn run(command: &ParsedCommand) -> ExitStatus {
     }
 
     let mut had_error = false;
-    let Ok(ignore_settings) = build_ignore_settings(&command.ordered_operations) else {
+    let Ok(settings) = build_runtime_settings(&command.ordered_operations) else {
         return ExitStatus::UsageOrIoError;
     };
-    let files = expand_paths(&args.files, ignore_settings, &mut had_error);
-
-    let Ok(policy) = build_policy(&command.ordered_operations) else {
-        return ExitStatus::UsageOrIoError;
-    };
+    let files = expand_paths(&args.files, settings.ignore, &mut had_error);
 
     let mut any_changed = false;
 
-    if has_stdin && let Some(changed) = process_stdin(&policy, command.check, &mut had_error) {
+    if has_stdin
+        && let Some(changed) = process_stdin(&settings.policy, command.check, &mut had_error)
+    {
         any_changed |= changed;
     }
 
     for path in &files {
-        any_changed |= process_file(path, &policy, command.check, &mut had_error);
+        any_changed |= process_file(path, &settings.policy, command.check, &mut had_error);
     }
 
     if had_error {
@@ -109,9 +110,10 @@ fn validate_reserved_names(args: &SharedArgs, allow_reserved_files: bool) -> Res
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CharacterTarget {
-    PreferBare,
-    BareAsText,
+enum RuntimeOperation {
+    PreferBare(UpdateKind),
+    BareAsText(UpdateKind),
+    Ignore(UpdateKind),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,62 +123,62 @@ enum UpdateKind {
     Remove,
 }
 
-fn build_policy(operations: &[OrderedOperation]) -> Result<Policy, ()> {
-    let prefer_bare = apply_character_operations(
-        CharSet::named(NamedSetId::Ascii),
-        operations.iter(),
-        CharacterTarget::PreferBare,
-    )?;
-    let bare_as_text = apply_character_operations(
-        CharSet::named(NamedSetId::Ascii),
-        operations.iter(),
-        CharacterTarget::BareAsText,
-    )?;
-
-    Ok(Policy::default()
-        .with_prefer_bare(prefer_bare)
-        .with_bare_as_text(bare_as_text))
+struct RuntimeSettings {
+    policy: Policy,
+    ignore: IgnoreSettings,
 }
 
-fn build_ignore_settings(operations: &[OrderedOperation]) -> Result<IgnoreSettings, ()> {
-    let mut settings = IgnoreSettings::default();
+fn build_runtime_settings(operations: &[OrderedOperation]) -> Result<RuntimeSettings, ()> {
+    let mut prefer_bare = charset::ASCII;
+    let mut bare_as_text = charset::ASCII;
+    let mut ignore = IgnoreSettings::default();
+
     for operation in operations {
-        let Some(kind) = ignore_update_kind(operation.id) else {
-            continue;
-        };
-        let parsed = parse_ignore_list(kind, &operation.value)
-            .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
-        match kind {
-            UpdateKind::Set => settings = IgnoreSettings::from_labels(&parsed),
-            UpdateKind::Add => settings.enable(&parsed),
-            UpdateKind::Remove => settings.disable(&parsed),
+        match operation.id.runtime_operation() {
+            RuntimeOperation::PreferBare(kind) => {
+                let parsed = parse_charset_list(kind, &operation.value)
+                    .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
+                prefer_bare = apply_charset_update(prefer_bare, kind, parsed);
+            }
+            RuntimeOperation::BareAsText(kind) => {
+                let parsed = parse_charset_list(kind, &operation.value)
+                    .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
+                bare_as_text = apply_charset_update(bare_as_text, kind, parsed);
+            }
+            RuntimeOperation::Ignore(kind) => {
+                let parsed = parse_ignore_list(kind, &operation.value)
+                    .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
+                apply_ignore_filter_update(&mut ignore, kind, &parsed);
+            }
         }
     }
-    Ok(settings)
+
+    Ok(RuntimeSettings {
+        policy: Policy::default()
+            .with_prefer_bare(prefer_bare)
+            .with_bare_as_text(bare_as_text),
+        ignore,
+    })
 }
 
-fn apply_character_operations<'a, I>(
-    mut current: CharSet,
-    operations: I,
-    target: CharacterTarget,
-) -> Result<CharSet, ()>
-where
-    I: Iterator<Item = &'a OrderedOperation>,
-{
-    for operation in operations {
-        let Some(kind) = character_update_kind(operation.id, target) else {
-            continue;
-        };
-        let parsed = parse_character_list(kind, &operation.value)
-            .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
-        current = match kind {
-            UpdateKind::Set => parsed,
-            UpdateKind::Add => current | parsed,
-            UpdateKind::Remove => current - parsed,
-        };
+fn apply_charset_update(current: CharSet, kind: UpdateKind, parsed: CharSet) -> CharSet {
+    match kind {
+        UpdateKind::Set => parsed,
+        UpdateKind::Add => current | parsed,
+        UpdateKind::Remove => current - parsed,
     }
+}
 
-    Ok(current)
+fn apply_ignore_filter_update(
+    settings: &mut IgnoreSettings,
+    kind: UpdateKind,
+    parsed: &[IgnoreLabel],
+) {
+    match kind {
+        UpdateKind::Set => *settings = IgnoreSettings::from_labels(parsed),
+        UpdateKind::Add => settings.enable(parsed),
+        UpdateKind::Remove => settings.disable(parsed),
+    }
 }
 
 fn report_usage_error(flag: &str, error: &CliParseError) {
@@ -250,7 +252,7 @@ impl IgnoreSettings {
     }
 }
 
-fn parse_character_list(kind: UpdateKind, input: &str) -> Result<CharSet, CliParseError> {
+fn parse_charset_list(kind: UpdateKind, input: &str) -> Result<CharSet, CliParseError> {
     let items = split_list_items(input)?;
     if items.len() == 1 {
         match items[0] {
@@ -273,7 +275,7 @@ fn parse_character_list(kind: UpdateKind, input: &str) -> Result<CharSet, CliPar
 
     let mut set = CharSet::none();
     for item in items {
-        set |= parse_character_item(item)?;
+        set |= parse_charset_item(item)?;
     }
 
     Ok(set)
@@ -300,9 +302,9 @@ fn split_list_items(input: &str) -> Result<Vec<&str>, CliParseError> {
     Ok(items)
 }
 
-fn parse_character_item(item: &str) -> Result<CharSet, CliParseError> {
+fn parse_charset_item(item: &str) -> Result<CharSet, CliParseError> {
     if let Some(named_set) = parse_named_set(item) {
-        return Ok(CharSet::named(named_set));
+        return Ok(named_set);
     }
 
     if item.starts_with("u(") {
@@ -314,7 +316,7 @@ fn parse_character_item(item: &str) -> Result<CharSet, CliParseError> {
     }
 
     if looks_like_identifier(item) {
-        let mut message = format!("unknown preset `{item}`");
+        let mut message = format!("unknown charset preset `{item}`");
         if let Some(suggestion) = suggest_name(item, &named_set_names()) {
             let _ = write!(message, "; did you mean `{suggestion}`?");
         }
@@ -322,7 +324,7 @@ fn parse_character_item(item: &str) -> Result<CharSet, CliParseError> {
     }
 
     Err(CliParseError {
-        message: format!("invalid selector item `{item}`"),
+        message: format!("invalid charset item `{item}`"),
     })
 }
 
@@ -366,13 +368,14 @@ fn parse_ignore_list(kind: UpdateKind, input: &str) -> Result<Vec<IgnoreLabel>, 
     Ok(labels)
 }
 
-fn parse_named_set(item: &str) -> Option<NamedSetId> {
+fn parse_named_set(item: &str) -> Option<CharSet> {
     match item {
-        "ascii" => Some(NamedSetId::Ascii),
-        "emoji-defaults" => Some(NamedSetId::EmojiDefaults),
-        "rights-marks" => Some(NamedSetId::RightsMarks),
-        "arrows" => Some(NamedSetId::Arrows),
-        "card-suits" => Some(NamedSetId::CardSuits),
+        "ascii" => Some(charset::ASCII),
+        "text-defaults" => Some(charset::TEXT_DEFAULTS),
+        "emoji-defaults" => Some(charset::EMOJI_DEFAULTS),
+        "rights-marks" => Some(charset::RIGHTS_MARKS),
+        "arrows" => Some(charset::ARROWS),
+        "card-suits" => Some(charset::CARD_SUITS),
         _ => None,
     }
 }
@@ -403,20 +406,18 @@ fn parse_code_point_item(item: &str) -> Result<CharSet, CliParseError> {
 }
 
 fn parse_singleton_item(item: &str, ch: char) -> Result<CharSet, CliParseError> {
-    let set = CharSet::singleton(ch);
-    if set == CharSet::none() {
+    if !is_variation_sequence_character(ch) {
         return Err(CliParseError {
-            message: format!(
-                "character item `{item}` is not eligible for emoji variation selectors"
-            ),
+            message: format!("character `{item}` is not eligible for emoji variation selectors"),
         });
     }
-    Ok(set)
+    Ok(CharSet::singleton(ch))
 }
 
-fn named_set_names() -> [&'static str; 5] {
+fn named_set_names() -> [&'static str; 6] {
     [
         "ascii",
+        "text-defaults",
         "emoji-defaults",
         "rights-marks",
         "arrows",
@@ -456,6 +457,7 @@ fn suggest_name<'a>(input: &str, choices: &'a [&str]) -> Option<&'a str> {
     if best_distance <= 3 { best } else { None }
 }
 
+/// Note: swapping counts as distance 2
 fn edit_distance(left: &str, right: &str) -> usize {
     let left: Vec<char> = left.chars().collect();
     let right: Vec<char> = right.chars().collect();
@@ -476,48 +478,21 @@ fn edit_distance(left: &str, right: &str) -> usize {
     prev[right.len()]
 }
 
-fn character_update_kind(id: OperationId, target: CharacterTarget) -> Option<UpdateKind> {
-    match target {
-        CharacterTarget::PreferBare => match id {
-            OperationId::SetPreferBare => Some(UpdateKind::Set),
-            OperationId::AddPreferBare => Some(UpdateKind::Add),
-            OperationId::RemovePreferBare => Some(UpdateKind::Remove),
-            OperationId::SetBareAsText
-            | OperationId::AddBareAsText
-            | OperationId::RemoveBareAsText
-            | OperationId::SetIgnore
-            | OperationId::AddIgnore
-            | OperationId::RemoveIgnore => None,
-        },
-        CharacterTarget::BareAsText => match id {
-            OperationId::SetBareAsText => Some(UpdateKind::Set),
-            OperationId::AddBareAsText => Some(UpdateKind::Add),
-            OperationId::RemoveBareAsText => Some(UpdateKind::Remove),
-            OperationId::SetPreferBare
-            | OperationId::AddPreferBare
-            | OperationId::RemovePreferBare
-            | OperationId::SetIgnore
-            | OperationId::AddIgnore
-            | OperationId::RemoveIgnore => None,
-        },
-    }
-}
-
-fn ignore_update_kind(id: OperationId) -> Option<UpdateKind> {
-    match id {
-        OperationId::SetIgnore => Some(UpdateKind::Set),
-        OperationId::AddIgnore => Some(UpdateKind::Add),
-        OperationId::RemoveIgnore => Some(UpdateKind::Remove),
-        OperationId::SetPreferBare
-        | OperationId::AddPreferBare
-        | OperationId::RemovePreferBare
-        | OperationId::SetBareAsText
-        | OperationId::AddBareAsText
-        | OperationId::RemoveBareAsText => None,
-    }
-}
-
 impl OperationId {
+    const fn runtime_operation(self) -> RuntimeOperation {
+        match self {
+            Self::SetPreferBare => RuntimeOperation::PreferBare(UpdateKind::Set),
+            Self::AddPreferBare => RuntimeOperation::PreferBare(UpdateKind::Add),
+            Self::RemovePreferBare => RuntimeOperation::PreferBare(UpdateKind::Remove),
+            Self::SetBareAsText => RuntimeOperation::BareAsText(UpdateKind::Set),
+            Self::AddBareAsText => RuntimeOperation::BareAsText(UpdateKind::Add),
+            Self::RemoveBareAsText => RuntimeOperation::BareAsText(UpdateKind::Remove),
+            Self::SetIgnore => RuntimeOperation::Ignore(UpdateKind::Set),
+            Self::AddIgnore => RuntimeOperation::Ignore(UpdateKind::Add),
+            Self::RemoveIgnore => RuntimeOperation::Ignore(UpdateKind::Remove),
+        }
+    }
+
     const fn flag_name(self) -> &'static str {
         match self {
             Self::SetPreferBare => "--set-prefer-bare",

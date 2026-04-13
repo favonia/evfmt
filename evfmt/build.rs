@@ -18,8 +18,6 @@ use std::path::{Path, PathBuf};
 
 struct Entry {
     cp: u32,
-    has_text_vs: bool,
-    has_emoji_vs: bool,
     default_emoji: bool,
 }
 
@@ -43,16 +41,20 @@ fn main() {
     // AUDIT NOTE: BTreeMap ensures entries are sorted by code_point in the
     // generated output, which is required for binary_search_by_key in lookup().
 
-    let all_vs_cps: BTreeSet<u32> = has_text_vs.union(&has_emoji_vs).copied().collect();
+    // Every character in emoji-variation-sequences.txt has both a text (FE0E)
+    // and an emoji (FE0F) variation sequence. Assert this so downstream code
+    // can treat table membership as "both selectors are sanctioned."
+    assert_eq!(
+        has_text_vs, has_emoji_vs,
+        "expected every variation-sequence character to have both text and emoji entries"
+    );
 
     let mut entries: BTreeMap<u32, Entry> = BTreeMap::new();
-    for &cp in &all_vs_cps {
+    for &cp in &has_text_vs {
         entries.insert(
             cp,
             Entry {
                 cp,
-                has_text_vs: has_text_vs.contains(&cp),
-                has_emoji_vs: has_emoji_vs.contains(&cp),
                 default_emoji: emoji_presentation.contains(&cp),
             },
         );
@@ -159,7 +161,7 @@ fn write_generated_table(
     writeln!(f).unwrap();
     writeln!(f, "/// The Unicode version this data was generated from.").unwrap();
     writeln!(f, "#[allow(dead_code)]").unwrap();
-    writeln!(f, "pub const UNICODE_VERSION: &str = \"16.0\";").unwrap();
+    writeln!(f, "pub(crate) const UNICODE_VERSION: &str = \"16.0\";").unwrap();
     writeln!(f).unwrap();
     writeln!(f, "/// A single entry in the variation sequence table.").unwrap();
     writeln!(
@@ -169,27 +171,15 @@ fn write_generated_table(
     .unwrap();
     writeln!(f, "#[allow(clippy::module_name_repetitions)]").unwrap();
     writeln!(f, "#[derive(Debug, Clone, Copy)]").unwrap();
-    writeln!(f, "pub struct VariationEntry {{").unwrap();
+    writeln!(f, "pub(crate) struct VariationEntry {{").unwrap();
     writeln!(f, "    /// The Unicode code point.").unwrap();
-    writeln!(f, "    pub code_point: char,").unwrap();
-    writeln!(
-        f,
-        "    /// Whether this code point has a text variation sequence (+ FE0E)."
-    )
-    .unwrap();
-    writeln!(f, "    pub has_text_vs: bool,").unwrap();
-    writeln!(
-        f,
-        "    /// Whether this code point has an emoji variation sequence (+ FE0F)."
-    )
-    .unwrap();
-    writeln!(f, "    pub has_emoji_vs: bool,").unwrap();
+    writeln!(f, "    pub(crate) code_point: char,").unwrap();
     writeln!(
         f,
         "    /// Whether the Unicode default presentation is emoji."
     )
     .unwrap();
-    writeln!(f, "    pub default_emoji: bool,").unwrap();
+    writeln!(f, "    pub(crate) default_emoji: bool,").unwrap();
     writeln!(f, "}}").unwrap();
     writeln!(f).unwrap();
     writeln!(
@@ -197,15 +187,21 @@ fn write_generated_table(
         "/// Sorted table of all eligible variation sequence entries."
     )
     .unwrap();
-    writeln!(f, "pub static VARIATION_ENTRIES: &[VariationEntry] = &[").unwrap();
+    writeln!(
+        f,
+        "pub(crate) const VARIATION_ENTRIES: [VariationEntry; {}] = [",
+        entries.len()
+    )
+    .unwrap();
 
     for entry in entries.values() {
         let ch = char::from_u32(entry.cp).expect("invalid code point");
         writeln!(
             f,
-            "    VariationEntry {{ code_point: '\\u{{{:04X}}}', has_text_vs: {}, has_emoji_vs: {}, default_emoji: {} }},",
-            ch as u32, entry.has_text_vs, entry.has_emoji_vs, entry.default_emoji
-        ).unwrap();
+            "    VariationEntry {{ code_point: '\\u{{{:04X}}}', default_emoji: {} }},",
+            ch as u32, entry.default_emoji
+        )
+        .unwrap();
     }
 
     writeln!(f, "];").unwrap();
@@ -215,7 +211,7 @@ fn write_generated_table(
         "/// Sorted table of code points with the `Emoji_Modifier` property."
     )
     .unwrap();
-    writeln!(f, "pub static EMOJI_MODIFIERS: &[char] = &[").unwrap();
+    writeln!(f, "pub(crate) static EMOJI_MODIFIERS: &[char] = &[").unwrap();
     for &cp in emoji_modifiers {
         let ch = char::from_u32(cp).expect("invalid code point");
         writeln!(f, "    '\\u{{{:04X}}}',", ch as u32).unwrap();

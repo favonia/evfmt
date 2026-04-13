@@ -6,13 +6,18 @@ Defines: the typed charset model used by `evfmt::charset` and `evfmt::Policy`. T
 
 Does not define: the CLI list grammar. The CLI uses ordered `set/add/remove` flags with comma-separated list items; see [formatter-policy.markdown](formatter-policy.markdown) for that surface.
 
-## Constructors
+## Public Surface
 
 The public typed surface is built from:
 
 - `CharSet::all()`
 - `CharSet::none()`
-- `CharSet::named(NamedSetId::...)`
+- `charset::ASCII`
+- `charset::EMOJI_DEFAULTS`
+- `charset::RIGHTS_MARKS`
+- `charset::ARROWS`
+- `charset::CARD_SUITS`
+- `charset::is_variation_sequence_character(c)`
 - `CharSet::singleton(c)`
 - `!charset`
 - `charset | other`
@@ -22,16 +27,16 @@ The public typed surface is built from:
 
 ## Atoms
 
-| Constructor                                 | Meaning                                                                            |
-| ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `CharSet::all()`                            | Every eligible dual-presentation character                                         |
-| `CharSet::none()`                           | No character                                                                       |
-| `CharSet::named(NamedSetId::Ascii)`         | ASCII characters (U+0000-U+007F) that are in the eligible charset universe         |
-| `CharSet::named(NamedSetId::EmojiDefaults)` | Variation-sequence code points whose Unicode default side is emoji                 |
-| `CharSet::named(NamedSetId::RightsMarks)`   | The rights marks currently listed in Unicode's `emoji-variation-sequences.txt`     |
-| `CharSet::named(NamedSetId::Arrows)`        | The arrow characters currently listed in Unicode's `emoji-variation-sequences.txt` |
-| `CharSet::named(NamedSetId::CardSuits)`     | The card suits currently listed in Unicode's `emoji-variation-sequences.txt`       |
-| `CharSet::singleton(c)`                     | A single eligible code point, or empty if `c` is outside the policy universe       |
+| Constructor               | Meaning                                                                            |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `CharSet::all()`          | Every eligible dual-presentation character                                         |
+| `CharSet::none()`         | No character                                                                       |
+| `charset::ASCII`          | ASCII characters (U+0000-U+007F) that are in the eligible charset universe         |
+| `charset::EMOJI_DEFAULTS` | Variation-sequence code points whose Unicode default side is emoji                 |
+| `charset::RIGHTS_MARKS`   | The rights marks currently listed in Unicode's `emoji-variation-sequences.txt`     |
+| `charset::ARROWS`         | The arrow characters currently listed in Unicode's `emoji-variation-sequences.txt` |
+| `charset::CARD_SUITS`     | The card suits currently listed in Unicode's `emoji-variation-sequences.txt`       |
+| `CharSet::singleton(c)`   | A single eligible code point, or empty if `c` is outside the policy universe       |
 
 ## Combinators
 
@@ -45,6 +50,12 @@ The public typed surface is built from:
 
 The assignment operators `|=`, `&=`, `^=`, and `-=` have the corresponding
 in-place meanings.
+
+## Queries
+
+| Query                                         | Meaning                                             |
+| --------------------------------------------- | --------------------------------------------------- |
+| `charset::is_variation_sequence_character(c)` | Whether `c` is inside the eligible charset universe |
 
 ## Named sets
 
@@ -77,10 +88,8 @@ This is a project-defined set tied to the repository's pinned Unicode version, n
 ## Examples
 
 ```rust
-use evfmt::charset::{CharSet, NamedSetId};
+use evfmt::charset;
 
-let prefer_bare = CharSet::named(NamedSetId::Ascii)
-    | CharSet::named(NamedSetId::RightsMarks);
-let treat_bare_as_text = CharSet::named(NamedSetId::Ascii)
-    | CharSet::named(NamedSetId::RightsMarks);
+let prefer_bare = charset::ASCII | charset::RIGHTS_MARKS;
+let treat_bare_as_text = charset::ASCII | charset::RIGHTS_MARKS;
 ```

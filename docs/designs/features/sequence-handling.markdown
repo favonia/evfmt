@@ -18,7 +18,7 @@ It is not a general emoji validator. Sequence recognition exists to support sele
 
 ## Core decision boundary
 
-Policy is only for genuinely ambiguous standalone variation-selector slots.
+Policy is only for genuinely ambiguous standalone variation-sequence slots.
 
 Sequence-specific cleanup rules must resolve before policy.
 
@@ -52,7 +52,7 @@ ZWJ-related selector handling follows fully-qualified generation discipline.
 
 In canonical output:
 
-- `FE0E` is not kept where it breaks the generated ZWJ emoji form
+- `FE0E` on a ZWJ component is replaced with `FE0F` where needed for fully-qualified form — this departs from [UTS #51](https://www.unicode.org/reports/tr51/), which treats `FE0E` as breaking the sequence, but honoring that would require removing ZWJ joiners, violating the "only selectors change" invariant
 - selectors required for the fully-qualified form are preserved or inserted
 - selectors that are redundant or unsupported under that discipline are removed
 
@@ -66,14 +66,14 @@ Selectors that are not part of a sanctioned local selector-bearing context are r
 
 The durable slot distinction is:
 
-- standalone EVS slot
+- standalone variation-sequence slot
 - fixed-cleanup sequence slot
 - not-a-slot
 
 Each real slot records:
 
-- current selector state
-- whether extra selectors were present
+- current variation selector state
+- whether extra variation selectors were present
 - which of `none`, `FE0E`, and `FE0F` remain reasonable after context-aware reduction
 
 ## Violation model
@@ -82,19 +82,21 @@ The important split is:
 
 - unsanctioned or structurally broken selector usage
 - fixed-cleanup sequence defects
-- standalone selector-state mismatches that are already non-canonical under the current policy
+- standalone variation-selector state mismatches that are already non-canonical under the current policy
 - genuinely ambiguous standalone slots that need policy
 
-`Redundant selector` belongs to the third class, not the first. A redundant selector is still sanctioned Unicode structure; it is simply non-canonical under the active formatter policy because the same slot canonically stays bare.
+A redundant variation selector belongs to the third class, not the first. It is still sanctioned Unicode structure; it is simply non-canonical under the active formatter policy because the same slot canonically stays bare.
 
 This split matters because only the last class is a real policy choice. The other three classes already have a canonical repair.
 
+Implementation APIs may surface these categories as review findings with valid decisions. That API shape does not change the sequence-family contracts here.
+
 ## Relation to policy
 
-| Context                  | Policy applies?                           | Behavior                                             |
-| ------------------------ | ----------------------------------------- | ---------------------------------------------------- |
-| Standalone EVS           | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets |
-| Keycap                   | No                                        | Fixed canonical form: `base FE0F 20E3`               |
-| Modifier sequence defect | No                                        | Remove legacy `FE0F` before the modifier             |
-| ZWJ-related sequence     | No                                        | Apply fixed fully-qualified sequence discipline      |
-| Not-a-slot               | No                                        | Remove illegal selector usage                        |
+| Context                       | Policy applies?                           | Behavior                                             |
+| ----------------------------- | ----------------------------------------- | ---------------------------------------------------- |
+| Standalone variation sequence | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets |
+| Keycap                        | No                                        | Fixed canonical form: `base FE0F 20E3`               |
+| Modifier sequence defect      | No                                        | Remove legacy `FE0F` before the modifier             |
+| ZWJ-related sequence          | No                                        | Apply fixed fully-qualified sequence discipline      |
+| Not-a-slot                    | No                                        | Remove illegal selector usage                        |

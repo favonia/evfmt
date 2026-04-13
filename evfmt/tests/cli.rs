@@ -58,7 +58,7 @@ fn help_describes_stateful_options() {
             "--set-ignore <FILTER[,FILTER]...>",
         ))
         .stdout(predicates::str::contains(
-            "CHARSET: ascii, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), or a single character.",
+            "CHARSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), or a single character.",
         ))
         .stdout(predicates::str::contains(
             "FILTER: git, evfmt, or hidden.",
@@ -86,7 +86,7 @@ fn check_help_describes_stateful_options() {
             "--set-ignore <FILTER[,FILTER]...>",
         ))
         .stdout(predicates::str::contains(
-            "CHARSET: ascii, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), or a single character.",
+            "CHARSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), or a single character.",
         ))
         .stdout(predicates::str::contains(
             "FILTER: git, evfmt, or hidden.",
@@ -694,6 +694,23 @@ fn unknown_ignore_label_reports_suggestion() {
         .assert()
         .code(2)
         .stderr(predicates::str::contains("did you mean `hidden`?"));
+}
+
+#[test]
+fn usage_errors_are_reported_in_cli_order() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    evfmt()
+        .arg("--set-prefer-bare=arowws")
+        .arg("--set-ignore=hdden")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("--set-prefer-bare"))
+        .stderr(predicates::str::contains("did you mean `arrows`?"))
+        .stderr(predicates::str::contains("--set-ignore").not());
 }
 
 #[test]

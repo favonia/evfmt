@@ -10,7 +10,7 @@ Policy:
   prefer-bare: characters to keep bare when that preserves the chosen presentation.
 
 Values:
-  CHARSET: ascii, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), \
+  CHARSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), \
 or a single character.
   FILTER: git, evfmt, or hidden.
   Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.
@@ -26,7 +26,7 @@ Policy:
   prefer-bare: characters to keep bare when that preserves the chosen presentation.
 
 Values:
-  CHARSET: ascii, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), \
+  CHARSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), \
 or a single character.
   FILTER: git, evfmt, or hidden.
   Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.
@@ -98,7 +98,7 @@ const SET_ADD_REMOVE_OPERATIONS_PREFER_BARE: [StatefulOperation; 3] = [
         operation: OperationId::RemovePreferBare,
         arg_id: "remove_prefer_bare",
         long: "remove-prefer-bare",
-        help: "Require explicit selectors for these bare characters",
+        help: "Require explicit variation selectors for these bare characters",
     },
 ];
 
@@ -277,9 +277,10 @@ fn collect_operations(
     let Some(indices) = matches.indices_of(operation.arg_id) else {
         return;
     };
-    let Some(values) = matches.get_many::<String>(operation.arg_id) else {
-        return;
-    };
+    #[allow(clippy::expect_used)]
+    let values = matches
+        .get_many::<String>(operation.arg_id)
+        .expect("clap returned indices without values for an append-valued argument");
 
     for (index, value) in indices.zip(values) {
         out.push((
