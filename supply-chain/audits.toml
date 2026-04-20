@@ -1,6 +1,11 @@
 
 # cargo-vet audits file
 
+[[audits.clap]]
+who = "favonia <favonia@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "4.6.0 -> 4.6.1"
+
 [[audits.fastrand]]
 who = "favonia <favonia@gmail.com>"
 criteria = "safe-to-run"
