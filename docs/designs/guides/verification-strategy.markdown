@@ -39,7 +39,7 @@ An independent test parses the pinned Unicode source files committed to the repo
 Independent tests parse `emoji-sequences.txt`, `emoji-zwj-sequences.txt`, `emoji-test.txt`, and related pinned repository inputs to verify the structural assumptions the formatter depends on:
 
 - keycap bases are exactly `#`, `*`, `0`-`9`
-- keycap context canonicalizes through `FE0F`
+- standalone keycap cleanup and multi-component ZWJ keycap cleanup remain distinct
 - modifier-sequence cleanup remains compatible with pinned Unicode data
 - ZWJ-related rules remain compatible with fully-qualified generation discipline
 - non-emoji or otherwise unsupported ZWJ-component selectors are removed
@@ -64,10 +64,13 @@ Use a two-tier budget when needed: a quick randomized smoke run for every PR/pus
 ### 6. Scanner and slot invariants
 
 - losslessness: `reconstruct(scan(input)) == input`
+- idempotent recognition: selector-only repairs must not reveal newly recognized emoji-related structure that needs a second formatting pass
+- cluster coherence for recognized emoji-related structure, including the `evfmt` broadening needed to keep valid flags and keycaps inside ZWJ-related scan items
+- recognized leading or malformed ZWJ-related clusters remain visible to findings analysis instead of disappearing into passthrough
 - scanner and formatter agreement on singleton inputs
-- keycap slot invariant: keycap context leaves exactly one reasonable state, `FE0F`
+- keycap slot invariant: standalone keycaps follow keycap sequence rules, while keycap components inside multi-component ZWJ sequences follow ZWJ forced-emoji cleanup
 - modifier-defect invariant: modifier defect leaves exactly one reasonable state, `none`
-- standalone keycap-base invariant: outside keycap context, `#`, `*`, and digits may retain three reasonable standalone states
+- standalone keycap-base invariant: as standalone variation-sequence bases, `#`, `*`, and digits may retain three reasonable states
 
 ### 7. Derived invariants for Unicode upgrades
 
@@ -75,7 +78,7 @@ These guard the product assumptions:
 
 - modifier context must not re-enter policy ambiguity
 - ZWJ terminal handling must not re-enter policy ambiguity
-- keycap context accepts only `FE0F`, while standalone keycap bases keep standalone ambiguity
+- keycap cleanup must not re-enter policy ambiguity; standalone keycaps and ZWJ-component keycaps keep distinct fixed-cleanup behavior
 - after fixed rules, ambiguous policy slots must still collapse to base-indexed policy keys
 
 ### 8. CLI contract evidence

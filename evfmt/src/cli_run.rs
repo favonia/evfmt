@@ -109,14 +109,14 @@ fn validate_reserved_names(args: &SharedArgs, allow_reserved_files: bool) -> Res
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 enum RuntimeOperation {
     PreferBare(UpdateKind),
     BareAsText(UpdateKind),
     Ignore(UpdateKind),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum UpdateKind {
     Set,
     Add,
@@ -185,7 +185,7 @@ fn report_usage_error(flag: &str, error: &CliParseError) {
     eprintln!("{PROG}: {flag}: {error}");
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 struct CliParseError {
     message: String,
 }
@@ -196,14 +196,14 @@ impl std::fmt::Display for CliParseError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 enum IgnoreLabel {
     Git,
     Evfmt,
     Hidden,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 struct IgnoreSettings {
     git: bool,
     evfmt: bool,

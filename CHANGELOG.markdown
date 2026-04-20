@@ -10,6 +10,11 @@ Changes:
 - Preserve file permissions and metadata during in-place formatting.
 - Replaced the old one-shot CLI policy flags with ordered `set/add/remove` operations for policy and ignore filters.
 - Replaced the library's old string expression parser with typed `evfmt::charset` smart constructors.
+- Replaced the public `review` API with `findings` analysis APIs for scanned items.
+- Changed `scan` to return an iterator and exposed the `Scanner` type.
+- Reworked scanner recognition around emoji-like state-machine structure, including malformed ZWJ-related structures and unsanctioned presentation-selector runs.
+- Updated Unicode-derived classification to use emoji property ranges, regional indicators, and `Emoji_Presentation` data.
+- Refined fixed cleanup for keycap, modifier, tag, flag, and ZWJ-related structures while keeping formatting limited to presentation-selector changes.
 
 ## 0.1.0 (2026-04-09)
 

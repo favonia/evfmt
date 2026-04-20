@@ -11,8 +11,8 @@ fn test_contains_all() {
 #[test]
 fn test_all_matches_singleton_union_for_full_universe() {
     let mut set = CharSet::none();
-    for entry in unicode::VARIATION_ENTRIES {
-        set |= CharSet::singleton(entry.code_point);
+    for index in 0..unicode::VARIATION_ENTRY_COUNT {
+        set |= CharSet::singleton(unicode::variation_entry(index));
     }
 
     assert_eq!(set, CharSet::all());
@@ -226,7 +226,7 @@ fn test_all_bits_matches_public_all_set() {
 
     assert_eq!(bits, CharSet::all().bits);
 
-    let used_bits = unicode::VARIATION_ENTRIES.len() % WORD_BITS;
+    let used_bits = unicode::VARIATION_ENTRY_COUNT % WORD_BITS;
     let expected_last_word = if used_bits == 0 {
         u64::MAX
     } else {
@@ -247,47 +247,23 @@ fn test_named_bits_matches_public_named_sets() {
 
 #[test]
 fn test_named_entry_matches_each_named_set() {
-    assert!(named_entry_matches(NamedSet::Ascii, '#', false));
-    assert!(!named_entry_matches(NamedSet::Ascii, '\u{00A9}', false));
+    assert!(named_entry_matches(NamedSet::Ascii, '#'));
+    assert!(!named_entry_matches(NamedSet::Ascii, '\u{00A9}'));
 
-    assert!(named_entry_matches(
-        NamedSet::TextDefaults,
-        '\u{00A9}',
-        false
-    ));
-    assert!(!named_entry_matches(
-        NamedSet::TextDefaults,
-        '\u{2728}',
-        true
-    ));
+    assert!(named_entry_matches(NamedSet::TextDefaults, '\u{00A9}'));
+    assert!(!named_entry_matches(NamedSet::TextDefaults, '\u{2728}'));
 
-    assert!(named_entry_matches(
-        NamedSet::EmojiDefaults,
-        '\u{2728}',
-        true
-    ));
-    assert!(!named_entry_matches(
-        NamedSet::EmojiDefaults,
-        '\u{00A9}',
-        false
-    ));
+    assert!(named_entry_matches(NamedSet::EmojiDefaults, '\u{2728}'));
+    assert!(!named_entry_matches(NamedSet::EmojiDefaults, '\u{00A9}'));
 
-    assert!(named_entry_matches(
-        NamedSet::RightsMarks,
-        '\u{00A9}',
-        false
-    ));
-    assert!(!named_entry_matches(
-        NamedSet::RightsMarks,
-        '\u{2660}',
-        false
-    ));
+    assert!(named_entry_matches(NamedSet::RightsMarks, '\u{00A9}'));
+    assert!(!named_entry_matches(NamedSet::RightsMarks, '\u{2660}'));
 
-    assert!(named_entry_matches(NamedSet::Arrows, '\u{2194}', false));
-    assert!(!named_entry_matches(NamedSet::Arrows, '\u{2660}', false));
+    assert!(named_entry_matches(NamedSet::Arrows, '\u{2194}'));
+    assert!(!named_entry_matches(NamedSet::Arrows, '\u{2660}'));
 
-    assert!(named_entry_matches(NamedSet::CardSuits, '\u{2660}', false));
-    assert!(!named_entry_matches(NamedSet::CardSuits, '\u{00A9}', false));
+    assert!(named_entry_matches(NamedSet::CardSuits, '\u{2660}'));
+    assert!(!named_entry_matches(NamedSet::CardSuits, '\u{00A9}'));
 }
 
 #[test]

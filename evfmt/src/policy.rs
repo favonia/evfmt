@@ -156,7 +156,6 @@ impl Default for Policy {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum SingletonRule {
     BareToEmoji,
     BareToText,
