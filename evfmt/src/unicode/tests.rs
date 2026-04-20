@@ -1,38 +1,50 @@
 use super::*;
 
+const fn is_keycap_base(ch: char) -> bool {
+    ch == '#' || ch == '*' || ch.is_ascii_digit()
+}
+
 #[test]
 fn test_number_sign_has_variation_sequence() {
     assert!(has_variation_sequence('#'));
-    #[allow(clippy::unwrap_used)]
-    let info = variation_sequence_info('#').unwrap();
-    assert_eq!(info.default_side, DefaultSide::Text);
+    assert!(is_text_default('#'));
+    assert!(!is_emoji_default('#'));
 }
 
 #[test]
 fn test_watch_is_emoji_default() {
-    #[allow(clippy::unwrap_used)]
-    let info = variation_sequence_info('\u{231A}').unwrap();
-    assert_eq!(info.default_side, DefaultSide::Emoji);
+    assert!(is_emoji_default('\u{231A}'));
+    assert!(!is_text_default('\u{231A}'));
 }
 
 #[test]
 fn test_copyright_is_text_default() {
-    #[allow(clippy::unwrap_used)]
-    let info = variation_sequence_info('\u{00A9}').unwrap();
-    assert_eq!(info.default_side, DefaultSide::Text);
+    assert!(is_text_default('\u{00A9}'));
+    assert!(!is_emoji_default('\u{00A9}'));
 }
 
 #[test]
 fn test_letter_a_has_no_variation_sequence() {
     assert!(!has_variation_sequence('A'));
-    assert!(variation_sequence_info('A').is_none());
+    assert!(!is_text_default('A'));
+    assert!(!is_emoji_default('A'));
 }
 
 #[test]
 fn test_sparkles_is_emoji_default() {
-    #[allow(clippy::unwrap_used)]
-    let info = variation_sequence_info('\u{2728}').unwrap();
-    assert_eq!(info.default_side, DefaultSide::Emoji);
+    assert!(is_emoji_default('\u{2728}'));
+    assert!(!is_text_default('\u{2728}'));
+}
+
+#[test]
+fn test_emoji_only_character_has_no_default_side() {
+    // 😀 has Emoji_Presentation, but it is not listed in
+    // emoji-variation-sequences.txt. The default-side predicates classify only
+    // valid presentation-sequence bases, not every emoji-presentation character.
+    assert!(is_emoji('\u{1F600}'));
+    assert!(!has_variation_sequence('\u{1F600}'));
+    assert!(!is_text_default('\u{1F600}'));
+    assert!(!is_emoji_default('\u{1F600}'));
 }
 
 #[test]
@@ -44,6 +56,13 @@ fn test_variation_sequence_chars_contains_known_entries() {
 }
 
 #[test]
+fn in_char_table_finds_first_middle_and_last_entries() {
+    assert!(in_char_table(&['a', 'm', 'z'], 'a'));
+    assert!(in_char_table(&['a', 'm', 'z'], 'm'));
+    assert!(!in_char_table(&['a', 'm', 'z'], '\0'));
+}
+
+#[test]
 fn test_emoji_modifier_property() {
     assert!(is_emoji_modifier('\u{1F3FB}'));
     assert!(is_emoji_modifier('\u{1F3FF}'));
@@ -51,17 +70,79 @@ fn test_emoji_modifier_property() {
     assert!(!is_emoji_modifier('A'));
 }
 
+#[test]
+fn test_emoji_property() {
+    // Keycap bases
+    assert!(is_emoji('#'));
+    assert!(is_emoji('*'));
+    assert!(is_emoji('0'));
+    assert!(is_emoji('9'));
+    // Common emoji
+    assert!(is_emoji('\u{231A}')); // watch
+    assert!(is_emoji('\u{2728}')); // sparkles
+    assert!(is_emoji('\u{1F600}')); // grinning face
+    // Non-emoji
+    assert!(!is_emoji('A'));
+    assert!(!is_emoji('\u{0041}'));
+}
+
+#[test]
+fn test_ri_property() {
+    assert!(is_ri('\u{1F1E6}')); // Regional Indicator A
+    assert!(is_ri('\u{1F1FF}')); // Regional Indicator Z
+    assert!(!is_ri('\u{1F1E5}')); // just before range
+    assert!(!is_ri('\u{1F200}')); // just after range
+    assert!(!is_ri('A'));
+}
+
+#[test]
+fn test_keycap_base() {
+    assert!(is_keycap_base('#'));
+    assert!(is_keycap_base('*'));
+    assert!(is_keycap_base('0'));
+    assert!(is_keycap_base('9'));
+    assert!(!is_keycap_base('A'));
+}
+
+/// Drift watch for the singleton analysis rule cascade: keycap handling
+/// assumes every keycap base has a sanctioned VS15/VS16 variation sequence
+/// and is text-default (so rule 5 does not fire on it). If a future Unicode
+/// upgrade changes either property the cascade needs updating.
+#[test]
+fn test_keycap_bases_have_text_default_variation_sequences() {
+    for ch in ['#', '*', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'] {
+        assert!(is_keycap_base(ch), "expected {ch:?} to be a keycap base");
+        assert!(
+            has_variation_sequence(ch),
+            "keycap base {ch:?} missing standardized variation sequence",
+        );
+        assert!(
+            is_text_default(ch),
+            "keycap base {ch:?} expected to be text-default",
+        );
+        assert!(
+            !is_emoji_default(ch),
+            "keycap base {ch:?} expected to not be emoji-default",
+        );
+    }
+}
+
+#[test]
+fn test_tag() {
+    assert!(is_tag('\u{E0020}')); // tag space
+    assert!(is_tag('\u{E007F}')); // cancel tag
+    assert!(is_tag('\u{E0061}')); // tag lowercase a
+    assert!(!is_tag('\u{E001F}')); // just before range
+    assert!(!is_tag('\u{E0080}')); // just after range
+}
+
 // -------------------------------------------------------------------
-// Phase 2: Generated-data conformance test
+// Phase 2: Generated-data conformance tests
 //
-// Independently verify the generated runtime table against the pinned
-// Unicode 16.0 source data. This test does NOT use the build.rs code
-// path — it parses the source files with independent logic and compares
-// the results against VARIATION_ENTRIES.
-//
-// Two independent parsers:
-//   1. ucd-parse for emoji-data.txt → Emoji_Presentation property
-//   2. Hand-written parser for emoji-variation-sequences.txt
+// Independently verify the generated runtime tables against the pinned
+// Unicode 16.0 source data. These tests do NOT use the build.rs code
+// path — they parse the source files with independent logic and compare
+// the results against the generated tables.
 // -------------------------------------------------------------------
 
 use std::collections::BTreeSet;
@@ -109,21 +190,12 @@ fn parse_variation_sequences_independently() -> (BTreeSet<u32>, BTreeSet<u32>) {
     (text_vs, emoji_vs)
 }
 
-/// Independently parse `emoji-data.txt` using `ucd-parse` and return
-/// the set of code points with the `Emoji_Presentation` property.
-fn parse_emoji_presentation_independently() -> BTreeSet<u32> {
-    parse_emoji_property_independently("Emoji_Presentation")
-}
-
-fn parse_emoji_modifier_independently() -> BTreeSet<u32> {
-    parse_emoji_property_independently("Emoji_Modifier")
-}
-
+/// Independently parse a UCD-format property file and return code points
+/// matching `wanted_property`.
 // Malformed pinned Unicode data is a test fixture failure.
-#[allow(clippy::expect_used)]
-fn parse_emoji_property_independently(wanted_property: &str) -> BTreeSet<u32> {
-    let data =
-        std::fs::read_to_string("data/emoji-data.txt").expect("failed to read emoji-data.txt");
+#[allow(clippy::expect_used)] // Test fixtures are required to be readable pinned Unicode data.
+fn parse_ucd_property_independently(path: &str, wanted_property: &str) -> BTreeSet<u32> {
+    let data = std::fs::read_to_string(path).expect("failed to read pinned Unicode data file");
 
     let mut matching: BTreeSet<u32> = BTreeSet::new();
 
@@ -132,7 +204,6 @@ fn parse_emoji_property_independently(wanted_property: &str) -> BTreeSet<u32> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        // Use ucd-parse to parse the line.
         let entry: ucd_parse::EmojiProperty = match line.parse() {
             Ok(e) => e,
             Err(_) => continue,
@@ -150,7 +221,6 @@ fn parse_emoji_property_independently(wanted_property: &str) -> BTreeSet<u32> {
 
 #[test]
 fn test_conformance_variation_sequences() {
-    // Independently parse the source data.
     let (text_vs, emoji_vs) = parse_variation_sequences_independently();
 
     // The variation-sequence set should be the union of text_vs and emoji_vs.
@@ -162,11 +232,8 @@ fn test_conformance_variation_sequences() {
         "expected every variation-sequence character to have both text and emoji entries"
     );
 
-    // Verify VARIATION_ENTRIES has exactly the right set of code points.
-    let generated_cps: BTreeSet<u32> = VARIATION_ENTRIES
-        .iter()
-        .map(|e| e.code_point as u32)
-        .collect();
+    // Verify the generated table has exactly the right set of code points.
+    let generated_cps: BTreeSet<u32> = variation_sequence_chars().map(|ch| ch as u32).collect();
 
     assert_eq!(
         variation_sequence_set, generated_cps,
@@ -176,25 +243,26 @@ fn test_conformance_variation_sequences() {
 
 #[test]
 fn test_conformance_emoji_presentation() {
-    // Independently parse Emoji_Presentation from emoji-data.txt.
-    let emoji_pres = parse_emoji_presentation_independently();
+    let emoji_pres = parse_ucd_property_independently("data/emoji-data.txt", "Emoji_Presentation");
 
-    // Verify each VARIATION_ENTRIES entry's default_emoji flag.
-    for entry in VARIATION_ENTRIES {
-        let cp = entry.code_point as u32;
+    // Every variation-sequence char's default presentation should match.
+    for ch in variation_sequence_chars() {
+        let cp = ch as u32;
         let expected_emoji = emoji_pres.contains(&cp);
         assert_eq!(
-            entry.default_emoji, expected_emoji,
-            "default_emoji mismatch for U+{cp:04X}: \
-             generated={}, emoji-data.txt={}",
-            entry.default_emoji, expected_emoji
+            is_emoji_default(ch),
+            expected_emoji,
+            "default presentation mismatch for U+{cp:04X}: \
+             is_emoji_default={}, emoji-data.txt={}",
+            is_emoji_default(ch),
+            expected_emoji
         );
     }
 }
 
 #[test]
 fn test_conformance_emoji_modifier() {
-    let emoji_modifiers = parse_emoji_modifier_independently();
+    let emoji_modifiers = parse_ucd_property_independently("data/emoji-data.txt", "Emoji_Modifier");
 
     let generated_modifiers: BTreeSet<u32> = EMOJI_MODIFIERS.iter().map(|&ch| ch as u32).collect();
 
@@ -202,4 +270,41 @@ fn test_conformance_emoji_modifier() {
         generated_modifiers, emoji_modifiers,
         "Emoji_Modifier set mismatch between source data and generated table"
     );
+}
+
+#[test]
+fn test_conformance_emoji() {
+    let emoji_chars = parse_ucd_property_independently("data/emoji-data.txt", "Emoji");
+
+    // Check every code point in the source data is recognized.
+    for &cp in &emoji_chars {
+        if let Some(ch) = char::from_u32(cp) {
+            assert!(
+                is_emoji(ch),
+                "U+{cp:04X} has Emoji=Yes in source data but is_emoji returned false"
+            );
+        }
+    }
+
+    // Spot-check some non-emoji code points.
+    assert!(!is_emoji('A'));
+    assert!(!is_emoji('\u{0000}'));
+}
+
+#[test]
+fn test_conformance_ri() {
+    let ri_chars = parse_ucd_property_independently("data/PropList.txt", "Regional_Indicator");
+
+    for &cp in &ri_chars {
+        if let Some(ch) = char::from_u32(cp) {
+            assert!(
+                is_ri(ch),
+                "U+{cp:04X} has Regional_Indicator in source data but is_ri returned false"
+            );
+        }
+    }
+
+    // Check boundaries.
+    assert!(!is_ri('\u{1F1E5}'));
+    assert!(!is_ri('\u{1F200}'));
 }

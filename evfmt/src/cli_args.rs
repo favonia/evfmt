@@ -35,13 +35,13 @@ Use `evfmt -- check` when `check` is a file name.";
 
 pub(crate) const RESERVED_COMMANDS: [&str; 1] = ["check"];
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct OrderedOperation {
     pub(crate) id: OperationId,
     pub(crate) value: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum OperationId {
     SetPreferBare,
     AddPreferBare,
@@ -54,7 +54,6 @@ pub(crate) enum OperationId {
     RemoveIgnore,
 }
 
-#[derive(Debug, Default)]
 pub(crate) struct SharedArgs {
     pub files: Vec<PathBuf>,
 }
@@ -66,14 +65,14 @@ pub(crate) struct ParsedCommand {
     pub(crate) ordered_operations: Vec<OrderedOperation>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 struct StatefulArg {
     help_heading: &'static str,
     value_name: &'static str,
     operations: &'static [StatefulOperation],
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 struct StatefulOperation {
     operation: OperationId,
     arg_id: &'static str,

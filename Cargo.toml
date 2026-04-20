@@ -15,7 +15,7 @@ single_use_lifetimes = "warn"
 trivial_casts = "warn"
 trivial_numeric_casts = "warn"
 unused_qualifications = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+unexpected_cfgs = "warn"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -12,8 +12,8 @@ libfuzzer-sys = "0.4"
 evfmt = { path = "../evfmt", features = [] }
 
 [[bin]]
-name = "scanner_crosscheck"
-path = "fuzz_targets/scanner_crosscheck.rs"
+name = "scanner_properties"
+path = "fuzz_targets/scanner_properties.rs"
 test = false
 doc = false
 bench = false

@@ -12,7 +12,7 @@ use std::ops::{
 use crate::unicode::{self, has_variation_sequence};
 
 const WORD_BITS: usize = u64::BITS as usize;
-const CHARSET_WORDS: usize = unicode::VARIATION_ENTRIES.len().div_ceil(WORD_BITS);
+const CHARSET_WORDS: usize = unicode::VARIATION_ENTRY_COUNT.div_ceil(WORD_BITS);
 const ALL: CharSet = CharSet { bits: all_bits() };
 
 /// ASCII characters (U+0000-U+007F).
@@ -92,7 +92,7 @@ impl CharSet {
     #[must_use]
     pub fn singleton(ch: char) -> Self {
         let mut set = Self::none();
-        if let Some(index) = index_of(ch) {
+        if let Some(index) = unicode::variation_sequence_index(ch) {
             set.set_index(index);
         }
         set
@@ -101,7 +101,7 @@ impl CharSet {
     /// Return whether the set contains the given character.
     #[must_use]
     pub fn contains(&self, ch: char) -> bool {
-        let Some(index) = index_of(ch) else {
+        let Some(index) = unicode::variation_sequence_index(ch) else {
             return false;
         };
         let word = index / WORD_BITS;
@@ -118,7 +118,7 @@ impl CharSet {
 
 const fn all_bits() -> [u64; CHARSET_WORDS] {
     let mut bits = [u64::MAX; CHARSET_WORDS];
-    let used_bits = unicode::VARIATION_ENTRIES.len() % WORD_BITS;
+    let used_bits = unicode::VARIATION_ENTRY_COUNT % WORD_BITS;
     if used_bits != 0 {
         bits[CHARSET_WORDS - 1] = (1u64 << used_bits) - 1;
     }
@@ -128,9 +128,9 @@ const fn all_bits() -> [u64; CHARSET_WORDS] {
 const fn named_bits(id: NamedSet) -> [u64; CHARSET_WORDS] {
     let mut bits = [0; CHARSET_WORDS];
     let mut index = 0;
-    while index < unicode::VARIATION_ENTRIES.len() {
-        let entry = unicode::VARIATION_ENTRIES[index];
-        if named_entry_matches(id, entry.code_point, entry.default_emoji) {
+    while index < unicode::VARIATION_ENTRY_COUNT {
+        let ch = unicode::variation_entry(index);
+        if named_entry_matches(id, ch) {
             let word = index / WORD_BITS;
             let bit = index % WORD_BITS;
             bits[word] |= 1u64 << bit;
@@ -140,11 +140,11 @@ const fn named_bits(id: NamedSet) -> [u64; CHARSET_WORDS] {
     bits
 }
 
-const fn named_entry_matches(id: NamedSet, ch: char, default_emoji: bool) -> bool {
+const fn named_entry_matches(id: NamedSet, ch: char) -> bool {
     match id {
         NamedSet::Ascii => ch.is_ascii(),
-        NamedSet::TextDefaults => !default_emoji,
-        NamedSet::EmojiDefaults => default_emoji,
+        NamedSet::TextDefaults => unicode::is_text_default(ch),
+        NamedSet::EmojiDefaults => unicode::is_emoji_default(ch),
         NamedSet::RightsMarks => matches!(ch, '\u{00A9}' | '\u{00AE}' | '\u{2122}'),
         NamedSet::Arrows => matches!(
             ch,
@@ -167,12 +167,6 @@ const fn named_entry_matches(id: NamedSet, ch: char, default_emoji: bool) -> boo
             matches!(ch, '\u{2660}' | '\u{2663}' | '\u{2665}' | '\u{2666}')
         }
     }
-}
-
-fn index_of(ch: char) -> Option<usize> {
-    unicode::VARIATION_ENTRIES
-        .binary_search_by_key(&ch, |entry| entry.code_point)
-        .ok()
 }
 
 impl Default for CharSet {
@@ -267,12 +261,12 @@ impl fmt::Display for CharSet {
         }
 
         let mut first = true;
-        for entry in unicode::VARIATION_ENTRIES {
-            if self.contains(entry.code_point) {
+        for index in 0..unicode::VARIATION_ENTRY_COUNT {
+            if self.contains(unicode::variation_entry(index)) {
                 if !first {
                     write!(f, ",")?;
                 }
-                write!(f, "u({:04X})", entry.code_point as u32)?;
+                write!(f, "u({:04X})", unicode::variation_entry(index) as u32)?;
                 first = false;
             }
         }

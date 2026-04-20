@@ -17,7 +17,7 @@ Its job is to produce the most stable, least surprising source spelling under:
 
 `evfmt` is a formatter first, not a general Unicode emoji validator.
 
-This document specifies the final formatting result. That result is defined by the abstract algorithm below, which is intended to be precise but is not an implementation plan. Implementations may follow the algorithm directly, use it as an explanatory map for some internal steps, or use a completely different strategy, as long as the observable output is exactly the result defined here. Code comments may describe implementation details, but those details do not define this specification.
+This document specifies the final formatting model. The sections below define principles, layers, and invariants from which the expected output follows. They are not an implementation plan: implementations may use different internal state machines, scanners, or repair passes as long as the observable output satisfies this model. Code comments may describe implementation details, but those details do not define this specification.
 
 ## Scope
 
@@ -39,17 +39,19 @@ The formatter guarantees source-level canonicalization under its own policy. It 
 - a renderer simulator
 - a semantic Markdown or programming-language parser
 
-## Three layers
+## Model Layers
 
 ### Validator and parser layer
 
-This layer is data-driven and sequence-aware. It answers:
+This layer is data-driven and sequence-aware. It identifies:
 
 - what family a sequence belongs to
 - whether a selector pair is sanctioned
 - whether the slot is standalone, keycap-related, modifier-related, ZWJ-related, or not a slot
 
 This layer is about Unicode-defined structure, not formatter preference.
+
+The layer must be permissive enough to preserve malformed selector and ZWJ-related structure for later diagnosis. Recognition does not imply validity.
 
 ### Slot and reasonableness layer
 
@@ -59,7 +61,7 @@ This layer converts parsed structure into local slots. For each slot it computes
 - `FE0E`
 - `FE0F`
 
-This is the key reduction step. Fixed-cleanup cases such as keycap, modifier-defect, and ZWJ discipline should collapse to one reasonable state before policy runs.
+This is the key reduction step. Fixed-cleanup cases such as keycap, modifier-defect, and ZWJ discipline must resolve before policy runs.
 
 ### Policy layer
 
@@ -104,30 +106,30 @@ A selector state that `evfmt` accepts as a valid formatter output in a given slo
 
 The single state that `evfmt` will emit after fixed cleanup and policy resolution.
 
-## Canonicalization flow
+## Canonicalization Model
 
-### Step 1: Parse and classify
+### Structural recognition
 
-Use a sequence-aware scanner and slot classifier.
+Use sequence-aware recognition to classify selector-bearing contexts and nearby emoji-related structure. Scanner boundaries are an implementation concern, but the recognized structure must preserve the distinctions required by [sequence-handling.markdown](../features/sequence-handling.markdown).
 
-### Step 2: Compute reasonable states
+### Reasonable states
 
 For each slot, compute which of `none`, `FE0E`, and `FE0F` are reasonable formatter outputs.
 
-### Step 3: Apply fixed rules
+### Fixed rules
 
 The following cases do not enter policy:
 
-- keycap context canonicalizes to `[0-9#*] FE0F 20E3`
+- keycap handling is fixed cleanup rather than policy: standalone keycaps follow the keycap sequence rules, while keycap components inside multi-component ZWJ sequences follow ZWJ fully-qualified discipline
 - modifier defect canonicalizes by removing legacy `FE0F` before a modifier
-- ZWJ generation follows fully-qualified discipline: `FE0E` on components is replaced (departing from [UTS #51](https://www.unicode.org/reports/tr51/) to preserve the "only selectors change" invariant), required `FE0F` is inserted, and unsupported selectors are removed
+- ZWJ generation follows fully-qualified discipline: `FE0E` on components is replaced (departing from [UTS #51](https://www.unicode.org/reports/tr51/tr51-27.html) to preserve the "only selectors change" invariant), required `FE0F` is inserted, and unsupported selectors are removed
 - unsanctioned or orphaned selectors are removed
 
-### Step 4: Apply policy to ambiguous standalone slots
+### Policy resolution
 
 When multiple reasonable states remain, policy resolves them using the preferred-bare set and the bare-as-text set.
 
-### Step 5: Emit canonical replacements
+### Canonical replacements
 
 Return the text produced by applying the fixed-rule repairs and policy resolutions above. The returned text is the canonical result under this model.
 
