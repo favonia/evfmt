@@ -5,6 +5,9 @@ use clap::{Arg, ArgAction, ArgMatches, Command, builder::ValueParser};
 
 const PROG: &str = env!("CARGO_BIN_NAME");
 const ROOT_HELP_FOOTER: &str = "\
+Use `--` after a subcommand before file operands that would otherwise parse as options, for example: \
+`evfmt format -- --set-ignore`.";
+const FORMAT_HELP_FOOTER: &str = "\
 Policy:
   bare-as-text: characters your reference platform renders as text when bare.
   prefer-bare: characters to keep bare when that preserves the chosen presentation.
@@ -15,11 +18,8 @@ or a single character.
   FILTER: git, evfmt, or hidden.
   Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.
 
-Commands:
-  check           Check whether formatting changes are needed
-
-Reserved command names are ambiguous as file operands. Use `--` before files \
-when needed, for example: `evfmt -- check`.";
+Use `--` before file operands that would otherwise parse as options, for example: \
+`evfmt format -- --set-ignore`.";
 const CHECK_HELP_FOOTER: &str = "\
 Policy:
   bare-as-text: characters your reference platform renders as text when bare.
@@ -31,9 +31,8 @@ or a single character.
   FILTER: git, evfmt, or hidden.
   Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.
 
-Use `evfmt -- check` when `check` is a file name.";
-
-pub(crate) const RESERVED_COMMANDS: [&str; 1] = ["check"];
+Use `--` before file operands that would otherwise parse as options, for example: \
+`evfmt check -- --set-ignore`.";
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct OrderedOperation {
@@ -61,7 +60,6 @@ pub(crate) struct SharedArgs {
 pub(crate) struct ParsedCommand {
     pub(crate) args: SharedArgs,
     pub(crate) check: bool,
-    pub(crate) allow_reserved_files: bool,
     pub(crate) ordered_operations: Vec<OrderedOperation>,
 }
 
@@ -167,8 +165,17 @@ const STATEFUL_ARGS: [StatefulArg; 3] = [BARE_AS_TEXT_ARG, PREFER_BARE_ARG, IGNO
 pub(crate) fn parse_command() -> ParsedCommand {
     let raw_args: Vec<OsString> = std::env::args_os().collect();
 
-    if let Some("check") = raw_args.get(1).and_then(|arg| arg.to_str()) {
-        let allow_reserved_files = raw_args.iter().skip(2).any(|arg| arg == "--");
+    if let Some("format") = raw_args.get(1).and_then(|arg| arg.to_str()) {
+        let adjusted_args = std::iter::once(OsString::from(format!("{PROG} format")))
+            .chain(raw_args.into_iter().skip(2))
+            .collect::<Vec<_>>();
+        let matches = build_format_command().get_matches_from(adjusted_args);
+        ParsedCommand {
+            args: parse_shared_args(&matches),
+            check: false,
+            ordered_operations: extract_ordered_operations(&matches),
+        }
+    } else if let Some("check") = raw_args.get(1).and_then(|arg| arg.to_str()) {
         let adjusted_args = std::iter::once(OsString::from(format!("{PROG} check")))
             .chain(raw_args.into_iter().skip(2))
             .collect::<Vec<_>>();
@@ -176,34 +183,37 @@ pub(crate) fn parse_command() -> ParsedCommand {
         ParsedCommand {
             args: parse_shared_args(&matches),
             check: true,
-            allow_reserved_files,
             ordered_operations: extract_ordered_operations(&matches),
         }
     } else {
-        let allow_reserved_files = raw_args.iter().skip(1).any(|arg| arg == "--");
-        let matches = build_root_command().get_matches_from(raw_args);
-        ParsedCommand {
-            args: parse_shared_args(&matches),
-            check: matches.get_flag("check"),
-            allow_reserved_files,
-            ordered_operations: extract_ordered_operations(&matches),
-        }
+        let _ = build_root_command().get_matches_from(raw_args);
+        unreachable!("root command exits via clap after rendering help, version, or usage errors")
     }
 }
 
 fn build_root_command() -> Command {
-    let command = Command::new(PROG)
+    Command::new(PROG)
         .about("Emoji Variation Formatter")
         .version(env!("CARGO_PKG_VERSION"))
+        .subcommand_required(true)
+        .arg_required_else_help(true)
+        .subcommand(
+            Command::new("format").about("Format files in place"),
+        )
+        .subcommand(
+            Command::new("check").about("Check whether formatting changes would be required"),
+        )
         .after_help(ROOT_HELP_FOOTER)
-        .arg(
-            Arg::new("check")
-                .long("check")
-                .help("Check whether formatting changes would be required")
-                .action(ArgAction::SetTrue),
-        );
+}
 
-    add_shared_args(command)
+fn build_format_command() -> Command {
+    add_shared_args(
+        Command::new("evfmt format")
+            .about("Format files in place")
+            .version(env!("CARGO_PKG_VERSION"))
+            .after_help(FORMAT_HELP_FOOTER),
+        "Files to format (use `-` for stdin/stdout)",
+    )
 }
 
 fn build_check_command() -> Command {
@@ -212,10 +222,11 @@ fn build_check_command() -> Command {
             .about("Check whether formatting changes would be required")
             .version(env!("CARGO_PKG_VERSION"))
             .after_help(CHECK_HELP_FOOTER),
+        "Files to check (use `-` for stdin)",
     )
 }
 
-fn add_shared_args(mut command: Command) -> Command {
+fn add_shared_args(mut command: Command, file_help: &'static str) -> Command {
     for spec in STATEFUL_ARGS {
         command = add_stateful_arg(command, spec);
     }
@@ -223,7 +234,7 @@ fn add_shared_args(mut command: Command) -> Command {
     command.next_help_heading("Input").arg(
         Arg::new("files")
             .value_name("FILES")
-            .help("Files to format (use `-` for stdin/stdout)")
+            .help(file_help)
             .value_parser(ValueParser::path_buf())
             .action(ArgAction::Append),
     )

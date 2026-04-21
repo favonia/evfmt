@@ -12,9 +12,7 @@ use evfmt::charset::CharSet;
 use evfmt::charset::is_variation_sequence_character;
 use evfmt::formatter::{self, FormatResult};
 
-use crate::cli_args::{
-    OperationId, OrderedOperation, ParsedCommand, RESERVED_COMMANDS, SharedArgs,
-};
+use crate::cli_args::{OperationId, OrderedOperation, ParsedCommand};
 
 #[cfg(unix)]
 use std::os::unix::fs as unix_fs;
@@ -42,27 +40,23 @@ impl ExitStatus {
 pub(crate) fn run(command: &ParsedCommand) -> ExitStatus {
     let args = &command.args;
 
-    if let Err(message) = validate_reserved_names(args, command.allow_reserved_files) {
-        eprintln!("{PROG}: {message}");
-        return ExitStatus::UsageOrIoError;
-    }
-
-    let stdin_count = args.files.iter().filter(|f| f.as_os_str() == "-").count();
-    if stdin_count > 1 {
-        eprintln!("{PROG}: at most one `-` operand is allowed");
-        return ExitStatus::UsageOrIoError;
-    }
-    let has_stdin = stdin_count == 1;
-
-    if args.files.is_empty() && !has_stdin {
-        if command.check && !command.allow_reserved_files {
-            eprintln!(
-                "{PROG}: no files specified \
-                 (if you meant a file named `check`, use `evfmt -- check`)"
-            );
+    let mut paths = Vec::new();
+    let mut has_stdin = false;
+    for operand in &args.files {
+        if operand.as_os_str() == "-" {
+            if has_stdin {
+                eprintln!("{PROG}: at most one `-` operand is allowed");
+                return ExitStatus::UsageOrIoError;
+            }
+            has_stdin = true;
         } else {
-            eprintln!("{PROG}: no files specified");
+            paths.push(operand.clone());
         }
+    }
+
+    // From here on, `paths` contains only filesystem operands; `-` is represented by `has_stdin`.
+    if paths.is_empty() && !has_stdin {
+        eprintln!("{PROG}: no files specified");
         return ExitStatus::UsageOrIoError;
     }
 
@@ -70,7 +64,7 @@ pub(crate) fn run(command: &ParsedCommand) -> ExitStatus {
     let Ok(settings) = build_runtime_settings(&command.ordered_operations) else {
         return ExitStatus::UsageOrIoError;
     };
-    let files = expand_paths(&args.files, settings.ignore, &mut had_error);
+    let files = expand_paths(&paths, settings.ignore, &mut had_error);
 
     let mut any_changed = false;
 
@@ -91,22 +85,6 @@ pub(crate) fn run(command: &ParsedCommand) -> ExitStatus {
     } else {
         ExitStatus::Success
     }
-}
-
-fn validate_reserved_names(args: &SharedArgs, allow_reserved_files: bool) -> Result<(), String> {
-    if !allow_reserved_files
-        && let Some(reserved) = args
-            .files
-            .iter()
-            .filter_map(|path| path.to_str())
-            .find(|path| RESERVED_COMMANDS.contains(path))
-    {
-        return Err(format!(
-            "`{reserved}` is reserved as a subcommand; use `--` before file operands, \
-             for example `evfmt -- {reserved}`"
-        ));
-    }
-    Ok(())
 }
 
 #[derive(Debug, PartialEq)]
@@ -586,14 +564,12 @@ fn expand_paths(
     ignore_settings: IgnoreSettings,
     had_error: &mut bool,
 ) -> Vec<PathBuf> {
-    let fs_operands: Vec<&PathBuf> = operands.iter().filter(|f| f.as_os_str() != "-").collect();
-
-    if fs_operands.is_empty() {
+    if operands.is_empty() {
         return Vec::new();
     }
 
-    let mut builder = WalkBuilder::new(fs_operands[0]);
-    for operand in &fs_operands[1..] {
+    let mut builder = WalkBuilder::new(&operands[0]);
+    for operand in &operands[1..] {
         builder.add(operand);
     }
 

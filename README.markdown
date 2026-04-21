@@ -62,27 +62,27 @@ cargo install --path evfmt
 
 ## 🚀 Quick Start
 
-### 🛠️ Fixing Mode
+### 🛠️ Formatting Mode
 
 ```sh
 # Format one file.
-evfmt README.md
+evfmt format README.md
 ```
 
 ```sh
 # Format a group of files.
-evfmt docs/*.md
+evfmt format docs/*.md
 ```
 
 ```sh
 # Format the current project.
-evfmt .
+evfmt format .
 ```
 
 ```sh
 # A bare heart (U+2764) becomes the emoji-form heart by default.
 # The first command prints the same string as the second command: Love ❤️
-printf '%b' 'Love \u2764' | evfmt -
+printf '%b' 'Love \u2764' | evfmt format -
 printf '%b' 'Love \u2764\ufe0f'
 ```
 
@@ -94,9 +94,9 @@ evfmt check .
 ```
 
 ```sh
-# If a file name is ambiguous with a command, add `--` or use `./`
-evfmt -- check
-evfmt ./check
+# If a file name looks like an option, add `--` before file operands.
+evfmt format -- --set-ignore
+evfmt check -- --set-ignore
 ```
 
 ### 🚪 Exit Codes
@@ -128,7 +128,7 @@ Use `all` by itself to select every ignore filter. For example, `--remove-ignore
 Use this when you want to format hidden files while still honoring Git ignore rules and `.evfmtignore`:
 
 ```sh
-evfmt --remove-ignore=hidden .
+evfmt format --remove-ignore=hidden .
 ```
 
 <a id="singleton-character"></a>
@@ -152,7 +152,7 @@ Use these recipes when the default policy is close to what you want, but a small
 Use this when copyright, registered, and trademark-style marks should render as text-style symbols, but you still want explicit selectors for portability:
 
 ```sh
-evfmt \
+evfmt format \
   --add-bare-as-text=rights-marks \
   README.markdown
 ```
@@ -164,7 +164,7 @@ With that option, bare rights marks normalize to explicit text forms such as `©
 Use this when copyright and trademark-style marks already look like text on your reference platform, and you want their text presentation to stay bare in your files:
 
 ```sh
-evfmt \
+evfmt format \
   --add-bare-as-text=rights-marks \
   --add-prefer-bare=rights-marks \
   README.markdown
@@ -177,7 +177,7 @@ With those options, bare or text-form copyright-style marks normalize to bare co
 Use this when arrows and card suits should stay text-style symbols in a technical document, log, or README:
 
 ```sh
-evfmt \
+evfmt format \
   --add-bare-as-text=arrows,card-suits \
   README.markdown
 ```

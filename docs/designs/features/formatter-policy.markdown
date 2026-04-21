@@ -102,11 +102,11 @@ With the default sets `bare-as-text = ascii` and `preferred-bare = ascii`, the r
 ### Format in place
 
 ```sh
-evfmt README.md
-evfmt docs/*.md
+evfmt format README.md
+evfmt format docs/*.md
 ```
 
-Default behavior rewrites files in place via atomic writes.
+The `format` subcommand rewrites files in place via atomic writes.
 
 ### Check mode
 
@@ -120,8 +120,10 @@ No files are modified. Exit nonzero if any file would change.
 
 `-` as a file operand means read from stdin and write to stdout. At most one `-` operand is allowed.
 
+Use `--` only to end option parsing before file operands that look like options, such as `evfmt format -- --set-ignore`. Subcommand names are not file-name ambiguities once `format` or `check` has been selected; for example, `evfmt format check` formats a file named `check`.
+
 ## Exit codes
 
 - `0`: success, and in check mode no file would change
-- `1`: `evfmt check` (or `--check`) found at least one file that would change
+- `1`: `evfmt check` found at least one file that would change
 - `2`: usage error, decoding failure, I/O failure, or mixed success/failure across multiple file operands

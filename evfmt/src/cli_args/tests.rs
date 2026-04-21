@@ -1,10 +1,9 @@
 use super::*;
 
 #[test]
-fn root_command_parses_check_flag_and_files() {
-    let matches = build_root_command().get_matches_from(["evfmt", "--check", "one.txt", "two.txt"]);
+fn format_command_parses_files() {
+    let matches = build_format_command().get_matches_from(["evfmt format", "one.txt", "two.txt"]);
 
-    assert!(matches.get_flag("check"));
     assert_eq!(
         parse_shared_args(&matches).files,
         [PathBuf::from("one.txt"), PathBuf::from("two.txt")]
@@ -12,12 +11,10 @@ fn root_command_parses_check_flag_and_files() {
 }
 
 #[test]
-fn root_command_defaults_to_format_mode_without_files() {
-    let matches = build_root_command().get_matches_from(["evfmt"]);
+fn root_command_lists_subcommands() {
+    let matches = build_root_command().get_matches_from(["evfmt", "format"]);
 
-    assert!(!matches.get_flag("check"));
-    assert!(parse_shared_args(&matches).files.is_empty());
-    assert!(extract_ordered_operations(&matches).is_empty());
+    assert_eq!(matches.subcommand_name(), Some("format"));
 }
 
 #[test]
@@ -31,16 +28,16 @@ fn check_command_parses_shared_files_without_check_flag() {
 }
 
 #[test]
-fn separator_allows_reserved_command_name_as_file() {
-    let matches = build_root_command().get_matches_from(["evfmt", "--", "check"]);
+fn format_command_accepts_check_as_a_file_name() {
+    let matches = build_format_command().get_matches_from(["evfmt format", "check"]);
 
     assert_eq!(parse_shared_args(&matches).files, [PathBuf::from("check")]);
 }
 
 #[test]
 fn operations_are_extracted_in_cli_order_across_option_groups() {
-    let matches = build_root_command().get_matches_from([
-        "evfmt",
+    let matches = build_format_command().get_matches_from([
+        "evfmt format",
         "--add-prefer-bare",
         "rights-marks",
         "--set-ignore",
@@ -77,8 +74,8 @@ fn operations_are_extracted_in_cli_order_across_option_groups() {
 
 #[test]
 fn repeated_operations_keep_repetition_order() {
-    let matches = build_root_command().get_matches_from([
-        "evfmt",
+    let matches = build_format_command().get_matches_from([
+        "evfmt format",
         "--add-ignore",
         "git",
         "--add-ignore",

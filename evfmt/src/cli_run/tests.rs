@@ -26,18 +26,6 @@ fn exit_status_codes_match_cli_contract() {
 }
 
 #[test]
-fn reserved_file_names_require_explicit_separator() {
-    let args = SharedArgs {
-        files: vec![PathBuf::from("plain.txt"), PathBuf::from("check")],
-    };
-
-    assert!(validate_reserved_names(&args, true).is_ok());
-    #[allow(clippy::expect_used)]
-    let error = validate_reserved_names(&args, false).expect_err("check is reserved");
-    assert!(error.contains("reserved as a subcommand"));
-}
-
-#[test]
 fn ignore_settings_apply_label_updates() {
     let mut settings = IgnoreSettings::from_labels(&[IgnoreLabel::Git]);
 

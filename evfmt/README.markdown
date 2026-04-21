@@ -32,9 +32,9 @@ cargo install --path evfmt
 Quick start:
 
 ```sh
-evfmt README.markdown docs/*.markdown
+evfmt format README.markdown docs/*.markdown
 evfmt check README.markdown
-printf '%b' 'Love \u2764' | evfmt -
+printf '%b' 'Love \u2764' | evfmt format -
 ```
 
 For full documentation, see the [repository README](https://github.com/favonia/evfmt).

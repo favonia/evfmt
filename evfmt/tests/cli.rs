@@ -2,7 +2,7 @@
 //
 // These tests exercise the evfmt binary end-to-end using assert_cmd
 // and assert_fs. They cover the full public CLI contract:
-//   - Format mode (in-place rewrite), check mode (exit 1 if changes needed)
+//   - `format` mode (in-place rewrite), `check` mode (exit 1 if changes needed)
 //   - stdin/stdout via `-`
 //   - Error cases: multiple dashes, invalid UTF-8, no files, partial failure
 //   - Ordered set operations for policy and ignore filters
@@ -25,6 +25,18 @@ fn evfmt() -> Command {
     Command::cargo_bin("evfmt").unwrap()
 }
 
+fn format_command() -> Command {
+    let mut command = evfmt();
+    command.arg("format");
+    command
+}
+
+fn check_command() -> Command {
+    let mut command = evfmt();
+    command.arg("check");
+    command
+}
+
 #[cfg(unix)]
 struct RestoreMode {
     path: std::path::PathBuf,
@@ -41,8 +53,19 @@ impl Drop for RestoreMode {
 // --- Help output ---
 
 #[test]
-fn help_describes_stateful_options() {
+fn root_help_lists_subcommands() {
     evfmt()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("format"))
+        .stdout(predicates::str::contains("check"))
+        .stdout(predicates::str::contains("--set-prefer-bare").not());
+}
+
+#[test]
+fn format_help_describes_stateful_options() {
+    format_command()
         .arg("--help")
         .assert()
         .success()
@@ -72,8 +95,7 @@ fn help_describes_stateful_options() {
 
 #[test]
 fn check_help_describes_stateful_options() {
-    evfmt()
-        .arg("check")
+    check_command()
         .arg("--help")
         .assert()
         .success()
@@ -98,7 +120,7 @@ fn check_help_describes_stateful_options() {
         .stdout(predicates::str::contains("--help-expression").not());
 }
 
-// --- Format mode ---
+// --- `format` mode ---
 
 #[test]
 fn format_rewrites_file() {
@@ -108,7 +130,7 @@ fn format_rewrites_file() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt().arg(file.path()).assert().success().code(0);
+    format_command().arg(file.path()).assert().success().code(0);
 
     file.assert("\u{00A9}\u{FE0F}");
 }
@@ -119,7 +141,7 @@ fn format_already_canonical_unchanged() {
     let file = tmp.child("test.txt");
     file.write_str("Hello, world!").unwrap();
 
-    evfmt().arg(file.path()).assert().success().code(0);
+    format_command().arg(file.path()).assert().success().code(0);
 
     file.assert("Hello, world!");
 }
@@ -132,7 +154,7 @@ fn format_preserves_mode_bits() {
     file.write_str("\u{00A9}").unwrap();
     std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o751)).unwrap();
 
-    evfmt().arg(file.path()).assert().success().code(0);
+    format_command().arg(file.path()).assert().success().code(0);
 
     file.assert("\u{00A9}\u{FE0F}");
     let mode = std::fs::metadata(file.path()).unwrap().permissions().mode() & 0o777;
@@ -154,7 +176,7 @@ fn format_preserves_extended_attributes_when_supported() {
         return;
     }
 
-    evfmt().arg(file.path()).assert().success().code(0);
+    format_command().arg(file.path()).assert().success().code(0);
 
     file.assert("\u{00A9}\u{FE0F}");
     let value = xattr::get(file.path(), "user.evfmt-test").unwrap();
@@ -185,7 +207,7 @@ fn format_warns_when_extended_attributes_cannot_be_preserved() {
     xattr::set(file.path(), "user.evfmt-test", b"kept").unwrap();
     std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o444)).unwrap();
 
-    evfmt()
+    format_command()
         .arg(file.path())
         .assert()
         .success()
@@ -202,7 +224,7 @@ fn check_non_canonical_exits_1() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt().arg("--check").arg(file.path()).assert().code(1);
+    check_command().arg(file.path()).assert().code(1);
 
     // File should not be modified in check mode.
     file.assert("\u{00A9}");
@@ -214,30 +236,14 @@ fn check_canonical_exits_0() {
     let file = tmp.child("test.txt");
     file.write_str("Hello, world!").unwrap();
 
-    evfmt()
-        .arg("--check")
-        .arg(file.path())
-        .assert()
-        .success()
-        .code(0);
-}
-
-#[test]
-fn check_subcommand_non_canonical_exits_1() {
-    let tmp = assert_fs::TempDir::new().unwrap();
-    let file = tmp.child("test.txt");
-    file.write_str("\u{00A9}").unwrap();
-
-    evfmt().arg("check").arg(file.path()).assert().code(1);
-
-    file.assert("\u{00A9}");
+    check_command().arg(file.path()).assert().success().code(0);
 }
 
 // --- stdin/stdout mode ---
 
 #[test]
 fn stdin_stdout_via_dash() {
-    evfmt()
+    format_command()
         .arg("-")
         .write_stdin("\u{00A9}")
         .assert()
@@ -247,7 +253,7 @@ fn stdin_stdout_via_dash() {
 
 #[test]
 fn stdin_stdout_canonical_passthrough() {
-    evfmt()
+    format_command()
         .arg("-")
         .write_stdin("Hello, world!")
         .assert()
@@ -257,8 +263,7 @@ fn stdin_stdout_canonical_passthrough() {
 
 #[test]
 fn check_stdin_non_canonical_exits_1_without_stdout() {
-    evfmt()
-        .arg("--check")
+    check_command()
         .arg("-")
         .write_stdin("\u{00A9}")
         .assert()
@@ -268,8 +273,7 @@ fn check_stdin_non_canonical_exits_1_without_stdout() {
 
 #[test]
 fn check_stdin_canonical_does_not_echo_stdout() {
-    evfmt()
-        .arg("--check")
+    check_command()
         .arg("-")
         .write_stdin("Hello, world!")
         .assert()
@@ -285,7 +289,7 @@ fn stdin_read_error_exits_2() {
     let tmp = assert_fs::TempDir::new().unwrap();
     let stdin = std::fs::File::open(tmp.path()).unwrap();
     let mut command = std::process::Command::cargo_bin("evfmt").unwrap();
-    command.arg("-").stdin(stdin);
+    command.arg("format").arg("-").stdin(stdin);
 
     command
         .assert()
@@ -297,7 +301,7 @@ fn stdin_read_error_exits_2() {
 
 #[test]
 fn multiple_dash_rejected() {
-    evfmt()
+    format_command()
         .arg("-")
         .arg("-")
         .write_stdin("")
@@ -313,73 +317,82 @@ fn invalid_utf8_exits_2() {
     // Write invalid UTF-8 bytes.
     file.write_binary(&[0xFF, 0xFE, 0x80]).unwrap();
 
-    evfmt().arg(file.path()).assert().code(2);
+    format_command().arg(file.path()).assert().code(2);
 }
 
 #[test]
-fn no_files_exits_2() {
+fn root_without_subcommand_exits_2() {
     evfmt()
         .assert()
         .code(2)
-        .stderr(predicates::str::contains("no files"))
-        .stderr(predicates::str::contains("if you meant").not());
+        .stderr(predicates::str::contains("format"))
+        .stderr(predicates::str::contains("check"));
 }
 
 #[test]
-fn reserved_command_name_requires_separator() {
+fn format_without_files_exits_2() {
+    format_command()
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("no files"));
+}
+
+#[test]
+fn format_subcommand_accepts_check_as_file_name() {
     let tmp = assert_fs::TempDir::new().unwrap();
     let file = tmp.child("check");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .current_dir(tmp.path())
         .arg("check")
         .assert()
-        .code(2)
-        .stderr(predicates::str::contains("use `evfmt -- check`"));
+        .success()
+        .code(0);
+
+    file.assert("\u{00A9}\u{FE0F}");
 }
 
 #[test]
-fn reserved_file_operand_in_format_mode_requires_separator() {
-    let tmp = assert_fs::TempDir::new().unwrap();
-    tmp.child("plain.txt").write_str("Hello").unwrap();
-    tmp.child("check").write_str("\u{00A9}").unwrap();
-
-    evfmt()
-        .current_dir(tmp.path())
-        .arg("plain.txt")
-        .arg("check")
-        .assert()
-        .code(2)
-        .stderr(predicates::str::contains("for example `evfmt -- check`"));
-}
-
-#[test]
-fn reserved_file_operand_in_check_subcommand_requires_separator() {
-    let tmp = assert_fs::TempDir::new().unwrap();
-    tmp.child("plain.txt").write_str("Hello").unwrap();
-    tmp.child("check").write_str("\u{00A9}").unwrap();
-
-    evfmt()
-        .current_dir(tmp.path())
-        .arg("check")
-        .arg("plain.txt")
-        .arg("check")
-        .assert()
-        .code(2)
-        .stderr(predicates::str::contains("for example `evfmt -- check`"));
-}
-
-#[test]
-fn reserved_command_name_allowed_after_separator() {
+fn check_subcommand_accepts_check_as_file_name() {
     let tmp = assert_fs::TempDir::new().unwrap();
     let file = tmp.child("check");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    check_command()
+        .current_dir(tmp.path())
+        .arg("check")
+        .assert()
+        .code(1);
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn option_like_file_requires_separator_in_format_mode() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("--set-ignore");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .current_dir(tmp.path())
+        .arg("--set-ignore")
+        .assert()
+        .code(2);
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn option_like_file_allowed_after_separator_in_format_mode() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("--set-ignore");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
         .current_dir(tmp.path())
         .arg("--")
-        .arg("check")
+        .arg("--set-ignore")
         .assert()
         .success()
         .code(0);
@@ -395,7 +408,7 @@ fn partial_failure_exits_2() {
     let good = tmp.child("good.txt");
     good.write_str("hello").unwrap();
 
-    evfmt()
+    format_command()
         .arg(good.path())
         .arg(tmp.child("nonexistent.txt").path())
         .assert()
@@ -418,7 +431,7 @@ fn rewrite_reports_temp_file_create_error_when_directory_unwritable() {
     };
     std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
 
-    evfmt()
+    format_command()
         .arg(file.path())
         .assert()
         .code(2)
@@ -435,7 +448,7 @@ fn set_prefer_bare_keeps_rights_mark_bare() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--set-prefer-bare=ascii,rights-marks")
         .arg("--set-bare-as-text=ascii,rights-marks")
         .arg(file.path())
@@ -451,7 +464,7 @@ fn left_to_right_prefer_bare_operations_are_respected() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}\u{FE0F}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--add-prefer-bare=rights-marks")
         .arg("--remove-prefer-bare=rights-marks")
         .arg("--add-bare-as-text=rights-marks")
@@ -468,7 +481,7 @@ fn remove_prefer_bare_can_force_ascii_to_text() {
     let file = tmp.child("test.txt");
     file.write_str("#").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--remove-prefer-bare=ascii")
         .arg(file.path())
         .assert()
@@ -483,7 +496,7 @@ fn clearing_bare_as_text_and_prefer_bare_force_ascii_to_emoji() {
     let file = tmp.child("test.txt");
     file.write_str("#").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--set-prefer-bare=none")
         .arg("--set-bare-as-text=none")
         .arg(file.path())
@@ -499,7 +512,7 @@ fn add_prefer_bare_accepts_naked_single_with_selector() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--add-prefer-bare=\u{00A9}\u{FE0F}")
         .arg("--add-bare-as-text=\u{00A9}")
         .arg(file.path())
@@ -515,7 +528,7 @@ fn unknown_preset_reports_suggestion() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--set-prefer-bare=arowws")
         .arg(file.path())
         .assert()
@@ -531,7 +544,7 @@ fn none_is_rejected_for_add_operations() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--add-prefer-bare=none")
         .arg(file.path())
         .assert()
@@ -547,7 +560,7 @@ fn ineligible_character_items_are_rejected() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--add-prefer-bare=u(0041)")
         .arg(file.path())
         .assert()
@@ -565,7 +578,7 @@ fn ineligible_bare_as_text_items_are_rejected() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--set-bare-as-text=u(0041)")
         .arg(file.path())
         .assert()
@@ -589,7 +602,7 @@ fn directory_walk_formats_recursively() {
         .write_str("\u{00A9}")
         .unwrap();
 
-    evfmt().arg(tmp.path()).assert().success().code(0);
+    format_command().arg(tmp.path()).assert().success().code(0);
 
     a.assert("\u{00A9}\u{FE0F}");
     tmp.child("sub").child("b.txt").assert("\u{00A9}\u{FE0F}");
@@ -602,7 +615,7 @@ fn evfmtignore_skips_matched_files() {
     tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
     tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
 
-    evfmt().arg(tmp.path()).assert().success();
+    format_command().arg(tmp.path()).assert().success();
 
     tmp.child("skip.txt").assert("\u{00A9}");
     tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
@@ -615,7 +628,7 @@ fn remove_ignore_evfmt_overrides_evfmtignore() {
     tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
     tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--remove-ignore=evfmt")
         .arg(tmp.path())
         .assert()
@@ -633,7 +646,7 @@ fn all_shortcut_applies_to_add_and_remove_ignore() {
     tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
     tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--remove-ignore=all")
         .arg("--add-ignore=git")
         .arg(tmp.path())
@@ -653,7 +666,7 @@ fn set_ignore_none_then_add_hidden_reenables_only_hidden_filtering() {
     tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
     tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--set-ignore=none")
         .arg("--add-ignore=hidden")
         .arg(tmp.path())
@@ -671,7 +684,7 @@ fn ignore_labels_apply_left_to_right() {
     tmp.child(".hidden.txt").write_str("\u{00A9}").unwrap();
     tmp.child("visible.txt").write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--remove-ignore=hidden")
         .arg("--add-ignore=hidden")
         .arg(tmp.path())
@@ -688,7 +701,7 @@ fn unknown_ignore_label_reports_suggestion() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--set-ignore=hdden")
         .arg(file.path())
         .assert()
@@ -702,7 +715,7 @@ fn usage_errors_are_reported_in_cli_order() {
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
-    evfmt()
+    format_command()
         .arg("--set-prefer-bare=arowws")
         .arg("--set-ignore=hdden")
         .arg(file.path())
@@ -719,7 +732,7 @@ fn hidden_files_skipped() {
     tmp.child("visible.txt").write_str("\u{00A9}").unwrap();
     tmp.child(".hidden.txt").write_str("\u{00A9}").unwrap();
 
-    evfmt().arg(tmp.path()).assert().success();
+    format_command().arg(tmp.path()).assert().success();
 
     tmp.child("visible.txt").assert("\u{00A9}\u{FE0F}");
     tmp.child(".hidden.txt").assert("\u{00A9}");
@@ -733,7 +746,11 @@ fn mixed_file_and_directory_operands() {
     let dir = tmp.child("dir");
     dir.child("a.txt").write_str("\u{00A9}").unwrap();
 
-    evfmt().arg(solo.path()).arg(dir.path()).assert().success();
+    format_command()
+        .arg(solo.path())
+        .arg(dir.path())
+        .assert()
+        .success();
 
     solo.assert("\u{00A9}\u{FE0F}");
     dir.child("a.txt").assert("\u{00A9}\u{FE0F}");
@@ -744,7 +761,7 @@ fn check_mode_with_directory() {
     let tmp = assert_fs::TempDir::new().unwrap();
     tmp.child("a.txt").write_str("\u{00A9}").unwrap();
 
-    evfmt().arg("--check").arg(tmp.path()).assert().code(1);
+    check_command().arg(tmp.path()).assert().code(1);
 
     // File should not be modified in check mode.
     tmp.child("a.txt").assert("\u{00A9}");
@@ -756,5 +773,5 @@ fn empty_directory_succeeds() {
     let dir = tmp.child("empty");
     std::fs::create_dir(dir.path()).unwrap();
 
-    evfmt().arg(dir.path()).assert().success().code(0);
+    format_command().arg(dir.path()).assert().success().code(0);
 }
