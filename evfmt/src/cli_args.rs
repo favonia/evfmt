@@ -1,4 +1,3 @@
-use std::ffi::OsString;
 use std::path::PathBuf;
 
 use clap::{Arg, ArgAction, ArgMatches, Command, builder::ValueParser};
@@ -163,31 +162,19 @@ const STATEFUL_ARGS: [StatefulArg; 3] = [BARE_AS_TEXT_ARG, PREFER_BARE_ARG, IGNO
 
 #[must_use]
 pub(crate) fn parse_command() -> ParsedCommand {
-    let raw_args: Vec<OsString> = std::env::args_os().collect();
+    let matches = build_root_command().get_matches();
 
-    if let Some("format") = raw_args.get(1).and_then(|arg| arg.to_str()) {
-        let adjusted_args = std::iter::once(OsString::from(format!("{PROG} format")))
-            .chain(raw_args.into_iter().skip(2))
-            .collect::<Vec<_>>();
-        let matches = build_format_command().get_matches_from(adjusted_args);
-        ParsedCommand {
-            args: parse_shared_args(&matches),
-            check: false,
-            ordered_operations: extract_ordered_operations(&matches),
-        }
-    } else if let Some("check") = raw_args.get(1).and_then(|arg| arg.to_str()) {
-        let adjusted_args = std::iter::once(OsString::from(format!("{PROG} check")))
-            .chain(raw_args.into_iter().skip(2))
-            .collect::<Vec<_>>();
-        let matches = build_check_command().get_matches_from(adjusted_args);
-        ParsedCommand {
-            args: parse_shared_args(&matches),
-            check: true,
-            ordered_operations: extract_ordered_operations(&matches),
-        }
-    } else {
-        let _ = build_root_command().get_matches_from(raw_args);
-        unreachable!("root command exits via clap after rendering help, version, or usage errors")
+    let (check, matches) = match matches.subcommand() {
+        Some(("format", matches)) => (false, matches),
+        Some(("check", matches)) => (true, matches),
+        Some((name, _)) => unreachable!("unexpected clap subcommand: {name}"),
+        None => unreachable!("root command requires a subcommand"),
+    };
+
+    ParsedCommand {
+        args: parse_shared_args(matches),
+        check,
+        ordered_operations: extract_ordered_operations(matches),
     }
 }
 
@@ -197,18 +184,16 @@ fn build_root_command() -> Command {
         .version(env!("CARGO_PKG_VERSION"))
         .subcommand_required(true)
         .arg_required_else_help(true)
-        .subcommand(
-            Command::new("format").about("Format files in place"),
-        )
-        .subcommand(
-            Command::new("check").about("Check whether formatting changes would be required"),
-        )
+        .subcommand(build_format_command())
+        .subcommand(build_check_command())
         .after_help(ROOT_HELP_FOOTER)
 }
 
 fn build_format_command() -> Command {
     add_shared_args(
-        Command::new("evfmt format")
+        Command::new("format")
+            .bin_name(format!("{PROG} format"))
+            .display_name(format!("{PROG} format"))
             .about("Format files in place")
             .version(env!("CARGO_PKG_VERSION"))
             .after_help(FORMAT_HELP_FOOTER),
@@ -218,7 +203,9 @@ fn build_format_command() -> Command {
 
 fn build_check_command() -> Command {
     add_shared_args(
-        Command::new("evfmt check")
+        Command::new("check")
+            .bin_name(format!("{PROG} check"))
+            .display_name(format!("{PROG} check"))
             .about("Check whether formatting changes would be required")
             .version(env!("CARGO_PKG_VERSION"))
             .after_help(CHECK_HELP_FOOTER),
