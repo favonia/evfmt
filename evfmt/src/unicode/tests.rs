@@ -140,7 +140,7 @@ fn test_tag() {
 // Phase 2: Generated-data conformance tests
 //
 // Independently verify the generated runtime tables against the pinned
-// Unicode 16.0 source data. These tests do NOT use the build.rs code
+// Unicode 17.0 source data. These tests do NOT use the build.rs code
 // path — they parse the source files with independent logic and compare
 // the results against the generated tables.
 // -------------------------------------------------------------------
