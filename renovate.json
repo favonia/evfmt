@@ -23,21 +23,6 @@
   "vulnerabilityAlerts": {
     "enabled": true
   },
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^evfmt/data/emoji-data\\.txt$/"
-      ],
-      "matchStrings": [
-        "# Version: (?<currentValue>\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "unicode-org/unicodetools",
-      "datasourceTemplate": "github-tags",
-      "extractVersionTemplate": "^final-(?<version>\\d+\\.\\d+)-\\d+$",
-      "versioningTemplate": "loose"
-    }
-  ],
   "packageRules": [
     {
       "matchManagers": [

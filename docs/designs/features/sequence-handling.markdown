@@ -97,7 +97,7 @@ For cleanup, the relevant ZWJ-like shapes are:
 
 In canonical output:
 
-- `FE0E` on a ZWJ component is replaced with `FE0F` where needed for fully-qualified form — this departs from [UTS #51](https://www.unicode.org/reports/tr51/tr51-27.html), which treats `FE0E` as breaking the sequence, but honoring that would require removing ZWJ joiners, violating the "only selectors change" invariant
+- `FE0E` on a ZWJ component is replaced with `FE0F` where needed for fully-qualified form — this departs from [UTS #51](https://www.unicode.org/reports/tr51/tr51-29.html), which treats `FE0E` as breaking the sequence, but honoring that would require removing ZWJ joiners, violating the "only selectors change" invariant
 - selectors required for the fully-qualified form are preserved or inserted
 - selectors that are redundant or unsupported under that discipline are removed
 

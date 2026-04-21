@@ -122,7 +122,7 @@ The following cases do not enter policy:
 
 - keycap handling is fixed cleanup rather than policy: standalone keycaps follow the keycap sequence rules, while keycap components inside multi-component ZWJ sequences follow ZWJ fully-qualified discipline
 - modifier defect canonicalizes by removing legacy `FE0F` before a modifier
-- ZWJ generation follows fully-qualified discipline: `FE0E` on components is replaced (departing from [UTS #51](https://www.unicode.org/reports/tr51/tr51-27.html) to preserve the "only selectors change" invariant), required `FE0F` is inserted, and unsupported selectors are removed
+- ZWJ generation follows fully-qualified discipline: `FE0E` on components is replaced (departing from [UTS #51](https://www.unicode.org/reports/tr51/tr51-29.html) to preserve the "only selectors change" invariant), required `FE0F` is inserted, and unsupported selectors are removed
 - unsanctioned or orphaned selectors are removed
 
 ### Policy resolution
