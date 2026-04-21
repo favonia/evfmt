@@ -23,7 +23,9 @@ Many Unicode characters have dual presentations, text and emoji:
 | U+26A0 | ⚠︎                 | ⚠️                 |
 | U+2764 | ❤︎                 | ❤️                 |
 
-Unicode provides invisible presentation selectors (`U+FE0E` for text, `U+FE0F` for emoji) to request a specific presentation (though platforms may not always honor the request). These two characters (`U+FE0E` and `U+FE0F`) are _variation selectors_. [Unicode Technical Standard #51](https://www.unicode.org/reports/tr51/tr51-27.html) also calls them _presentation selectors_ in the emoji context, and this document follows that convention. (The _ev_ in _evfmt_ stands for _emoji variation_, after the [emoji variation sequences](https://www.unicode.org/reports/tr51/tr51-27.html#def_emoji_variation_sequence) that these selectors produce.) Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, the same file may look different on different platforms. `evfmt` normalizes these selectors for you.
+Unicode provides invisible presentation selectors (`U+FE0E` for text, `U+FE0F` for emoji) to request a specific presentation (though platforms may not always honor the request). These two characters (`U+FE0E` and `U+FE0F`) are _variation selectors_. [Unicode Technical Standard #51](https://www.unicode.org/reports/tr51/tr51-27.html) also calls them _presentation selectors_ in the emoji context, and this document follows that convention. (The _ev_ in _evfmt_ stands for _emoji variation_, after the [emoji variation sequences](https://www.unicode.org/reports/tr51/tr51-27.html#def_emoji_variation_sequence) that these selectors produce.)
+
+Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, the same file may look different on different platforms. `evfmt` normalizes these selectors for you.
 
 The emoji selector `U+FE0F` also appears in multi-character emoji sequences such as keycaps and [Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-27.html#def_emoji_zwj_sequence) (where multiple emoji are joined into one). `evfmt` normalizes these sequences to their [fully qualified](https://www.unicode.org/reports/tr51/tr51-27.html#def_fully_qualified_emoji) forms as well.
 
@@ -62,28 +64,36 @@ cargo install --path evfmt
 
 ## 🚀 Quick Start
 
-### 🛠️ Fixing Mode
+### 🛠️ Formatting Mode
 
 ```sh
 # Format one file.
-evfmt README.md
+evfmt format README.markdown
 ```
 
 ```sh
 # Format a group of files.
-evfmt docs/*.md
+evfmt format docs/*.md
 ```
 
 ```sh
-# Format the current project.
-evfmt .
+# Format files under the current directory recursively.
+evfmt format .
 ```
 
 ```sh
 # A bare heart (U+2764) becomes the emoji-form heart by default.
 # The first command prints the same string as the second command: Love ❤️
-printf '%b' 'Love \u2764' | evfmt -
+printf '%b' 'Love \u2764' | evfmt format
 printf '%b' 'Love \u2764\ufe0f'
+```
+
+Use `-` as an explicit stdin operand when mixing stdin with files. A path such as `./-` still means a file literally named `-`. Repeating `-` is allowed and reads the same stdin stream again from its current position; with piped input, the first `-` normally consumes the stream.
+
+```sh
+evfmt format a.txt - b.txt
+evfmt format ./-
+printf '%b' 'Love \u2764' | evfmt check -
 ```
 
 ### ✅️ Checking Mode
@@ -93,10 +103,12 @@ printf '%b' 'Love \u2764\ufe0f'
 evfmt check .
 ```
 
+With no file operands, `evfmt check` checks stdin.
+
 ```sh
-# If a file name is ambiguous with a command, add `--` or use `./`
-evfmt -- check
-evfmt ./check
+# If a file name looks like an option, add `--` before file operands.
+evfmt format -- --set-ignore
+evfmt check -- --set-ignore
 ```
 
 ### 🚪 Exit Codes
@@ -109,7 +121,7 @@ evfmt ./check
 
 ## 🙈 Ignore Filters
 
-By default, `evfmt` skips files ignored by Git, files matched by `.evfmtignore`, and hidden files or directories. Change the enabled ignore filters only when the project has a specific reason to include or exclude one of those classes.
+By default, `evfmt` enables all ignore filters: it skips files ignored by Git, files matched by `.evfmtignore`, and hidden files or directories. Change the enabled ignore filters only when you have a specific reason to include or exclude one of those classes.
 
 - `--set-ignore=<filter>[,<filter>...]`
 - `--add-ignore=<filter>[,<filter>...]`
@@ -123,23 +135,19 @@ Ignore flags take one or more comma-separated filter labels:
 
 Use commas to combine labels: `git,evfmt,hidden`.
 
-Use `all` by itself to select every ignore filter. For example, `--remove-ignore=all` formats everything reachable from the operands, including Git-ignored, `.evfmtignore`-ignored, and hidden files. Use `none` by itself with `--set-ignore` to disable all ignore filters.
+Use `all` by itself to select every ignore filter; this is the default. For example, `--remove-ignore=all` formats everything reachable from the operands, including Git-ignored, `.evfmtignore`-ignored, and hidden files. Using `none` by itself with `--set-ignore` also disables all ignore filters.
 
 Use this when you want to format hidden files while still honoring Git ignore rules and `.evfmtignore`:
 
 ```sh
-evfmt --remove-ignore=hidden .
+evfmt format --remove-ignore=hidden .
 ```
 
 <a id="singleton-character"></a>
 
 ## 📐 Normalization Policy for Single Characters with Dual Presentations
 
-By default, `evfmt` leaves bare ASCII characters alone, but adds explicit selectors to non-ASCII characters with dual presentations so they render more consistently across platforms.
-
-For example, `#` stays bare. A bare copyright sign (U+00A9) gets an explicit emoji selector under the default policy, so it is normalized to `©️` (U+00A9 U+FE0F).
-
-The defaults work well for most projects: bare ASCII characters in text presentation are left alone, while all other characters with dual presentations get an explicit selector, defaulting to emoji.
+By default, `evfmt` leaves bare ASCII characters alone and gives bare non-ASCII characters with dual presentations an explicit emoji selector for more consistent cross-platform rendering. For example, `#` stays bare, while a bare copyright sign (U+00A9) normalizes to `©️` (U+00A9 U+FE0F).
 
 ⚠️ `evfmt` is a formatter, not a presentation editor. If you want to change how the copyright sign looks on your platform—say, switching it from emoji presentation to text presentation—do that in your editor by adding or removing the presentation selector (`U+FE0E` or `U+FE0F`). Run `evfmt` only after you are happy with how your document renders.
 
@@ -152,7 +160,7 @@ Use these recipes when the default policy is close to what you want, but a small
 Use this when copyright, registered, and trademark-style marks should render as text-style symbols, but you still want explicit selectors for portability:
 
 ```sh
-evfmt \
+evfmt format \
   --add-bare-as-text=rights-marks \
   README.markdown
 ```
@@ -164,7 +172,7 @@ With that option, bare rights marks normalize to explicit text forms such as `©
 Use this when copyright and trademark-style marks already look like text on your reference platform, and you want their text presentation to stay bare in your files:
 
 ```sh
-evfmt \
+evfmt format \
   --add-bare-as-text=rights-marks \
   --add-prefer-bare=rights-marks \
   README.markdown
@@ -177,7 +185,7 @@ With those options, bare or text-form copyright-style marks normalize to bare co
 Use this when arrows and card suits should stay text-style symbols in a technical document, log, or README:
 
 ```sh
-evfmt \
+evfmt format \
   --add-bare-as-text=arrows,card-suits \
   README.markdown
 ```
@@ -242,7 +250,7 @@ Supported charset items are:
 - `arrows`: arrow symbols with text/emoji variation forms
 - `card-suits`: card suit symbols with text/emoji variation forms
 - `u(HEX)`: one Unicode code point, for example `u(00A9)`
-- a single character, for example `#`, `*`, or `©️`; presentation selectors are allowed and ignored when choosing the character
+- a single character, for example `#`, `*`, or `©️`; presentation selectors are allowed and ignored when matching the character
 
 Use commas to combine items: `ascii,rights-marks,u(00A9)`. Named sets may change when `evfmt` upgrades Unicode support.
 

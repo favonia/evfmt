@@ -32,9 +32,11 @@ cargo install --path evfmt
 Quick start:
 
 ```sh
-evfmt README.markdown docs/*.markdown
+evfmt format README.markdown docs/*.markdown
 evfmt check README.markdown
-printf '%b' 'Love \u2764' | evfmt -
+printf '%b' 'Love \u2764' | evfmt format
 ```
+
+Use `-` as an explicit stdin operand when mixing stdin with files; `./-` refers to a file literally named `-`.
 
 For full documentation, see the [repository README](https://github.com/favonia/evfmt).

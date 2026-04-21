@@ -14,7 +14,7 @@ The library owns all sequence classification, rule-engine behavior, policy evalu
 
 Within the library, module boundaries implement the conceptual algorithm rather than define it. `scanner` tokenizes structure, `findings` analyzes scanned items into policy-aware findings, and `formatter` applies the default finding decisions for non-interactive formatting. These are the current implementation boundaries, not extra requirements on every implementation that satisfies the formatting model.
 
-The command family uses aligned names: `evfmt [options] FILES...` and `evfmt check [options] FILES...`.
+The command family uses aligned subcommands: `evfmt format [options] FILES...` and `evfmt check [options] FILES...`. The `--` separator is only for option-like file operands, not for disambiguating subcommand names after a subcommand has already been selected.
 
 ## Unicode data pipeline
 

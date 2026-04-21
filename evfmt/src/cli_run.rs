@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 use std::fs;
-use std::io::{self, Read as _, Write as _};
+use std::io;
 use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
@@ -12,9 +12,7 @@ use evfmt::charset::CharSet;
 use evfmt::charset::is_variation_sequence_character;
 use evfmt::formatter::{self, FormatResult};
 
-use crate::cli_args::{
-    OperationId, OrderedOperation, ParsedCommand, RESERVED_COMMANDS, SharedArgs,
-};
+use crate::cli_args::{Mode, OperationId, OrderedOperation, ParsedCommand};
 
 #[cfg(unix)]
 use std::os::unix::fs as unix_fs;
@@ -42,71 +40,56 @@ impl ExitStatus {
 pub(crate) fn run(command: &ParsedCommand) -> ExitStatus {
     let args = &command.args;
 
-    if let Err(message) = validate_reserved_names(args, command.allow_reserved_files) {
-        eprintln!("{PROG}: {message}");
-        return ExitStatus::UsageOrIoError;
-    }
-
-    let stdin_count = args.files.iter().filter(|f| f.as_os_str() == "-").count();
-    if stdin_count > 1 {
-        eprintln!("{PROG}: at most one `-` operand is allowed");
-        return ExitStatus::UsageOrIoError;
-    }
-    let has_stdin = stdin_count == 1;
-
-    if args.files.is_empty() && !has_stdin {
-        if command.check && !command.allow_reserved_files {
-            eprintln!(
-                "{PROG}: no files specified \
-                 (if you meant a file named `check`, use `evfmt -- check`)"
-            );
-        } else {
-            eprintln!("{PROG}: no files specified");
-        }
-        return ExitStatus::UsageOrIoError;
-    }
-
     let mut had_error = false;
     let Ok(settings) = build_runtime_settings(&command.ordered_operations) else {
         return ExitStatus::UsageOrIoError;
     };
-    let files = expand_paths(&args.files, settings.ignore, &mut had_error);
 
     let mut any_changed = false;
 
-    if has_stdin
-        && let Some(changed) = process_stdin(&settings.policy, command.check, &mut had_error)
-    {
-        any_changed |= changed;
-    }
-
-    for path in &files {
-        any_changed |= process_file(path, &settings.policy, command.check, &mut had_error);
+    for target in input_targets(&args.files, settings.ignore, &mut had_error) {
+        any_changed |= match command.mode {
+            Mode::Check => check_target(target, &settings.policy, &mut had_error),
+            Mode::Format => format_target(target, &settings.policy, &mut had_error),
+        };
     }
 
     if had_error {
         ExitStatus::UsageOrIoError
-    } else if command.check && any_changed {
+    } else if command.mode == Mode::Check && any_changed {
         ExitStatus::CheckFoundChanges
     } else {
         ExitStatus::Success
     }
 }
 
-fn validate_reserved_names(args: &SharedArgs, allow_reserved_files: bool) -> Result<(), String> {
-    if !allow_reserved_files
-        && let Some(reserved) = args
-            .files
-            .iter()
-            .filter_map(|path| path.to_str())
-            .find(|path| RESERVED_COMMANDS.contains(path))
-    {
-        return Err(format!(
-            "`{reserved}` is reserved as a subcommand; use `--` before file operands, \
-             for example `evfmt -- {reserved}`"
-        ));
+enum InputTarget {
+    Stdin,
+    File(PathBuf),
+}
+
+fn input_targets(
+    files: &[PathBuf],
+    ignore_settings: IgnoreSettings,
+    had_error: &mut bool,
+) -> Vec<InputTarget> {
+    if files.is_empty() {
+        return vec![InputTarget::Stdin];
     }
-    Ok(())
+
+    let mut targets = Vec::new();
+    for operand in files {
+        if operand.as_os_str() == "-" {
+            targets.push(InputTarget::Stdin);
+        } else {
+            targets.extend(
+                expand_path(operand, ignore_settings, had_error)
+                    .into_iter()
+                    .map(InputTarget::File),
+            );
+        }
+    }
+    targets
 }
 
 #[derive(Debug, PartialEq)]
@@ -508,28 +491,81 @@ impl OperationId {
     }
 }
 
-fn process_stdin(policy: &Policy, check: bool, had_error: &mut bool) -> Option<bool> {
-    match read_stdin() {
-        Ok(content) => {
-            let changed = emit_result(
-                "<stdin>",
-                &content,
-                formatter::format_text(&content, policy),
-                check,
-            );
-            Some(changed)
+enum ProcessLinesError {
+    Read(io::Error),
+    Write(io::Error),
+}
+
+fn check_target(target: InputTarget, policy: &Policy, had_error: &mut bool) -> bool {
+    match target {
+        InputTarget::Stdin => {
+            let stdin = io::stdin();
+            let mut reader = stdin.lock();
+            check_reader("<stdin>", &mut reader, policy, had_error)
         }
-        Err(error) => {
-            eprintln!("{PROG}: <stdin>: {error}");
-            *had_error = true;
-            None
+        InputTarget::File(path) => {
+            let file = match fs::File::open(&path) {
+                Ok(file) => file,
+                Err(error) => {
+                    eprintln!("{PROG}: {}: {error}", path.display());
+                    *had_error = true;
+                    return false;
+                }
+            };
+            check_reader(
+                &path.display().to_string(),
+                &mut io::BufReader::new(file),
+                policy,
+                had_error,
+            )
         }
     }
 }
 
-fn process_file(path: &Path, policy: &Policy, check: bool, had_error: &mut bool) -> bool {
-    let content = match fs::read_to_string(path) {
-        Ok(content) => content,
+fn format_target(target: InputTarget, policy: &Policy, had_error: &mut bool) -> bool {
+    match target {
+        InputTarget::Stdin => {
+            let stdin = io::stdin();
+            let mut reader = stdin.lock();
+            let stdout = io::stdout();
+            let mut stdout = stdout.lock();
+            match format_lines(&mut reader, &mut stdout, policy) {
+                Ok(changed) => changed,
+                Err(error) => {
+                    report_stdio_error(error);
+                    *had_error = true;
+                    false
+                }
+            }
+        }
+        InputTarget::File(path) => format_file(&path, policy, had_error),
+    }
+}
+
+fn check_reader<R: io::BufRead>(
+    display_name: &str,
+    reader: &mut R,
+    policy: &Policy,
+    had_error: &mut bool,
+) -> bool {
+    match detect_changes(reader, policy) {
+        Ok(changed) => {
+            if changed {
+                eprintln!("{PROG}: {display_name} would be reformatted");
+            }
+            changed
+        }
+        Err(error) => {
+            eprintln!("{PROG}: {display_name}: {error}");
+            *had_error = true;
+            false
+        }
+    }
+}
+
+fn format_file(path: &Path, policy: &Policy, had_error: &mut bool) -> bool {
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
         Err(error) => {
             eprintln!("{PROG}: {}: {error}", path.display());
             *had_error = true;
@@ -538,64 +574,100 @@ fn process_file(path: &Path, policy: &Policy, check: bool, had_error: &mut bool)
     };
 
     let display_name = path.display().to_string();
-    let result = formatter::format_text(&content, policy);
-    if check {
-        return emit_result(&display_name, &content, result, true);
-    }
-
-    match result {
-        FormatResult::Unchanged => false,
-        FormatResult::Changed(new_content) => {
-            match atomic_write(path, &new_content) {
-                Ok(warnings) => {
-                    for warning in warnings {
-                        eprintln!("{PROG}: {display_name}: warning: {warning}");
-                    }
-                }
-                Err(error) => {
-                    eprintln!("{PROG}: {display_name}: {error}");
-                    *had_error = true;
-                }
-            }
-            true
+    let changed = match detect_changes(&mut io::BufReader::new(file), policy) {
+        Ok(changed) => changed,
+        Err(error) => {
+            eprintln!("{PROG}: {display_name}: {error}");
+            *had_error = true;
+            return false;
         }
-    }
-}
+    };
 
-fn emit_result(label: &str, original: &str, result: FormatResult, check: bool) -> bool {
-    match result {
-        FormatResult::Unchanged => {
-            if !check && label == "<stdin>" {
-                print!("{original}");
+    if !changed {
+        return false;
+    }
+
+    match atomic_rewrite(path, policy) {
+        Ok((changed, warnings)) => {
+            for warning in warnings {
+                eprintln!("{PROG}: {display_name}: warning: {warning}");
             }
+            changed
+        }
+        Err(error) => {
+            eprintln!("{PROG}: {display_name}: {error}");
+            *had_error = true;
             false
         }
-        FormatResult::Changed(new_content) => {
-            if check {
-                eprintln!("{PROG}: {label} would be reformatted");
-            } else if label == "<stdin>" {
-                print!("{new_content}");
-            }
-            true
-        }
     }
 }
 
-fn expand_paths(
-    operands: &[PathBuf],
+fn detect_changes<R: io::BufRead>(reader: &mut R, policy: &Policy) -> Result<bool, io::Error> {
+    let mut changed = false;
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        let bytes_read = reader.read_line(&mut line)?;
+        if bytes_read == 0 {
+            break;
+        }
+
+        changed |= matches!(
+            formatter::format_text(&line, policy),
+            FormatResult::Changed(_)
+        );
+    }
+
+    Ok(changed)
+}
+
+fn format_lines<R: io::BufRead, W: io::Write>(
+    reader: &mut R,
+    writer: &mut W,
+    policy: &Policy,
+) -> Result<bool, ProcessLinesError> {
+    let mut changed = false;
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        let bytes_read = reader
+            .read_line(&mut line)
+            .map_err(ProcessLinesError::Read)?;
+        if bytes_read == 0 {
+            break;
+        }
+
+        match formatter::format_text(&line, policy) {
+            FormatResult::Unchanged => writer
+                .write_all(line.as_bytes())
+                .map_err(ProcessLinesError::Write)?,
+            FormatResult::Changed(new_line) => {
+                changed = true;
+                writer
+                    .write_all(new_line.as_bytes())
+                    .map_err(ProcessLinesError::Write)?;
+            }
+        }
+    }
+
+    Ok(changed)
+}
+
+fn report_stdio_error(error: ProcessLinesError) {
+    match error {
+        ProcessLinesError::Read(error) => eprintln!("{PROG}: <stdin>: {error}"),
+        ProcessLinesError::Write(error) => eprintln!("{PROG}: <stdout>: {error}"),
+    }
+}
+
+fn expand_path(
+    operand: &Path,
     ignore_settings: IgnoreSettings,
     had_error: &mut bool,
 ) -> Vec<PathBuf> {
-    let fs_operands: Vec<&PathBuf> = operands.iter().filter(|f| f.as_os_str() != "-").collect();
-
-    if fs_operands.is_empty() {
-        return Vec::new();
-    }
-
-    let mut builder = WalkBuilder::new(fs_operands[0]);
-    for operand in &fs_operands[1..] {
-        builder.add(operand);
-    }
+    let mut builder = WalkBuilder::new(operand);
 
     builder.sort_by_file_path(Ord::cmp);
 
@@ -634,12 +706,6 @@ fn expand_paths(
     files
 }
 
-fn read_stdin() -> Result<String, io::Error> {
-    let mut buf = String::new();
-    io::stdin().read_to_string(&mut buf)?;
-    Ok(buf)
-}
-
 // Write content to a file atomically via a temp file + rename.
 //
 // AUDIT NOTE: write-then-rename avoids partial writes on crash. The temp file
@@ -658,13 +724,26 @@ fn read_stdin() -> Result<String, io::Error> {
 // Metadata is copied onto the temp file before the rename so the replacement
 // preserves the original file's permissions and, on Unix, best-effort
 // ownership and extended attributes.
-fn atomic_write(path: &Path, content: &str) -> Result<Vec<String>, String> {
+fn atomic_rewrite(path: &Path, policy: &Policy) -> Result<(bool, Vec<String>), String> {
+    let input = fs::File::open(path).map_err(|error| format!("open error: {error}"))?;
     let dir = path.parent().unwrap_or(path);
     let mut temp_file =
         create_temp_file(dir).map_err(|error| format!("temp-file create error: {error}"))?;
 
-    if let Err(error) = temp_file.as_file_mut().write_all(content.as_bytes()) {
-        return Err(format!("write error: {error}"));
+    let changed = format_lines(
+        &mut io::BufReader::new(input),
+        temp_file.as_file_mut(),
+        policy,
+    )
+    .map_err(|error| match error {
+        // Keep input-read diagnostics consistent with the initial scan instead
+        // of exposing the two-pass rewrite implementation in error messages.
+        ProcessLinesError::Read(error) => error.to_string(),
+        ProcessLinesError::Write(error) => format!("write error: {error}"),
+    })?;
+
+    if !changed {
+        return Ok((false, Vec::new()));
     }
 
     let warnings = preserve_metadata(path, temp_file.path())?;
@@ -673,7 +752,7 @@ fn atomic_write(path: &Path, content: &str) -> Result<Vec<String>, String> {
         return Err(format!("rename error: {error}"));
     }
 
-    Ok(warnings)
+    Ok((true, warnings))
 }
 
 fn create_temp_file(dir: &Path) -> io::Result<NamedTempFile> {

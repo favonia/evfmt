@@ -87,7 +87,7 @@ Integration tests cover:
 
 - format rewrite success
 - already-canonical no-op success
-- `evfmt check` / `--check` exit codes
+- `evfmt check` exit codes
 - stdin and stdout via `-`
 - ordered `set/add/remove` CLI behavior for policy and ignore filters
 - invalid UTF-8 exits `2`
