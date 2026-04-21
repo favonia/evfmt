@@ -736,6 +736,8 @@ fn atomic_rewrite(path: &Path, policy: &Policy) -> Result<(bool, Vec<String>), S
         policy,
     )
     .map_err(|error| match error {
+        // Keep input-read diagnostics consistent with the initial scan instead
+        // of exposing the two-pass rewrite implementation in error messages.
         ProcessLinesError::Read(error) => error.to_string(),
         ProcessLinesError::Write(error) => format!("write error: {error}"),
     })?;
