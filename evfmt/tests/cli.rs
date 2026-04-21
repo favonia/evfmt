@@ -148,6 +148,30 @@ fn format_already_canonical_unchanged() {
 
 #[cfg(unix)]
 #[test]
+fn format_reports_unreadable_file() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+    let mode = std::fs::metadata(file.path()).unwrap().permissions().mode() & 0o777;
+    let _restore = RestoreMode {
+        path: file.path().to_owned(),
+        mode,
+    };
+    std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::File::open(file.path()).is_ok() {
+        return;
+    }
+
+    format_command()
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("test.txt"))
+        .stderr(predicates::str::contains("Permission denied"));
+}
+
+#[cfg(unix)]
+#[test]
 fn format_preserves_mode_bits() {
     let tmp = assert_fs::TempDir::new().unwrap();
     let file = tmp.child("test.sh");
@@ -237,6 +261,30 @@ fn check_canonical_exits_0() {
     file.write_str("Hello, world!").unwrap();
 
     check_command().arg(file.path()).assert().success().code(0);
+}
+
+#[cfg(unix)]
+#[test]
+fn check_reports_unreadable_file() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+    let mode = std::fs::metadata(file.path()).unwrap().permissions().mode() & 0o777;
+    let _restore = RestoreMode {
+        path: file.path().to_owned(),
+        mode,
+    };
+    std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::File::open(file.path()).is_ok() {
+        return;
+    }
+
+    check_command()
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("test.txt"))
+        .stderr(predicates::str::contains("Permission denied"));
 }
 
 // --- stdin/stdout mode ---
@@ -721,6 +769,91 @@ fn ineligible_bare_as_text_items_are_rejected() {
     file.assert("\u{00A9}");
 }
 
+#[test]
+fn empty_charset_list_is_rejected_before_any_file_is_rewritten() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .arg("--set-prefer-bare=")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("--set-prefer-bare"))
+        .stderr(predicates::str::contains("empty list"));
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn all_and_none_charset_shortcuts_must_appear_alone() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .arg("--set-bare-as-text=all,ascii")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains(
+            "`all` and `none` must appear alone",
+        ));
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn invalid_code_point_item_is_rejected() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .arg("--set-prefer-bare=u(110000)")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("invalid code point item"));
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn bare_as_text_operations_apply_left_to_right() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("#").unwrap();
+
+    format_command()
+        .arg("--set-prefer-bare=none")
+        .arg("--set-bare-as-text=all")
+        .arg("--remove-bare-as-text=ascii")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    file.assert("#\u{FE0F}");
+}
+
+#[test]
+fn add_bare_as_text_can_force_explicit_text_selector() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .arg("--set-prefer-bare=none")
+        .arg("--set-bare-as-text=none")
+        .arg("--add-bare-as-text=rights-marks")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    file.assert("\u{00A9}\u{FE0E}");
+}
+
 // --- Directory traversal ---
 
 #[test]
@@ -761,6 +894,38 @@ fn remove_ignore_evfmt_overrides_evfmtignore() {
 
     format_command()
         .arg("--remove-ignore=evfmt")
+        .arg(tmp.path())
+        .assert()
+        .success();
+
+    tmp.child("skip.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn gitignore_skips_matched_files() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    std::fs::create_dir(tmp.child(".git").path()).unwrap();
+    tmp.child(".gitignore").write_str("skip.txt\n").unwrap();
+    tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
+    tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
+
+    format_command().arg(tmp.path()).assert().success();
+
+    tmp.child("skip.txt").assert("\u{00A9}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn remove_ignore_git_overrides_gitignore() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    std::fs::create_dir(tmp.child(".git").path()).unwrap();
+    tmp.child(".gitignore").write_str("skip.txt\n").unwrap();
+    tmp.child("skip.txt").write_str("\u{00A9}").unwrap();
+    tmp.child("keep.txt").write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .arg("--remove-ignore=git")
         .arg(tmp.path())
         .assert()
         .success();

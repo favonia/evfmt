@@ -1,4 +1,5 @@
 use super::*;
+use std::io;
 
 fn operation(id: OperationId, value: &str) -> OrderedOperation {
     OrderedOperation {
@@ -260,4 +261,61 @@ fn flag_names_match_public_options() {
     assert_eq!(OperationId::SetIgnore.flag_name(), "--set-ignore");
     assert_eq!(OperationId::AddIgnore.flag_name(), "--add-ignore");
     assert_eq!(OperationId::RemoveIgnore.flag_name(), "--remove-ignore");
+}
+
+struct FailingWriter;
+
+impl io::Write for FailingWriter {
+    fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+        Err(io::Error::new(
+            io::ErrorKind::BrokenPipe,
+            "test writer failed",
+        ))
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+#[allow(clippy::panic)]
+fn format_lines_reports_writer_errors() {
+    let mut reader = io::Cursor::new("\u{00A9}");
+    let mut writer = FailingWriter;
+
+    let result = format_lines(&mut reader, &mut writer, &Policy::default());
+
+    let Err(ProcessLinesError::Write(error)) = result else {
+        panic!("format_lines should report the writer error");
+    };
+    assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+}
+
+#[test]
+#[allow(clippy::unwrap_used)]
+fn atomic_rewrite_reports_read_errors_from_rewrite_pass() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("bad.bin");
+    let mut content = "\u{00A9}\n".as_bytes().to_vec();
+    content.push(0xFF);
+    fs::write(&path, &content).unwrap();
+
+    let error = atomic_rewrite(&path, &Policy::default()).unwrap_err();
+
+    assert!(error.contains("stream did not contain valid UTF-8"));
+    assert_eq!(fs::read(&path).unwrap(), content);
+}
+
+#[test]
+#[allow(clippy::unwrap_used)]
+fn atomic_rewrite_reports_no_change_for_canonical_input() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("canonical.txt");
+    fs::write(&path, "Hello, world!").unwrap();
+
+    let result = atomic_rewrite(&path, &Policy::default()).unwrap();
+
+    assert_eq!(result, (false, Vec::new()));
+    assert_eq!(fs::read_to_string(&path).unwrap(), "Hello, world!");
 }
