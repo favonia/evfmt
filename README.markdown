@@ -84,8 +84,16 @@ evfmt format .
 ```sh
 # A bare heart (U+2764) becomes the emoji-form heart by default.
 # The first command prints the same string as the second command: Love ❤️
-printf '%b' 'Love \u2764' | evfmt format -
+printf '%b' 'Love \u2764' | evfmt format
 printf '%b' 'Love \u2764\ufe0f'
+```
+
+Use `-` as an explicit stdin operand when mixing stdin with files. A path such as `./-` still means a file literally named `-`. Repeating `-` is allowed and reads the same stdin stream again from its current position; with piped input, the first `-` normally consumes the stream.
+
+```sh
+evfmt format a.txt - b.txt
+evfmt format ./-
+printf '%b' 'Love \u2764' | evfmt check -
 ```
 
 ### ✅️ Checking Mode
@@ -94,6 +102,8 @@ printf '%b' 'Love \u2764\ufe0f'
 # Check without modifying (exits 1 if changes are needed)
 evfmt check .
 ```
+
+With no file operands, `evfmt check` checks stdin.
 
 ```sh
 # If a file name looks like an option, add `--` before file operands.

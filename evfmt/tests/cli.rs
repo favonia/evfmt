@@ -4,7 +4,7 @@
 // and assert_fs. They cover the full public CLI contract:
 //   - `format` mode (in-place rewrite), `check` mode (exit 1 if changes needed)
 //   - stdin/stdout via `-`
-//   - Error cases: multiple dashes, invalid UTF-8, no files, partial failure
+//   - Error cases: invalid UTF-8, partial failure
 //   - Ordered set operations for policy and ignore filters
 //   - Directory traversal, .evfmtignore, hidden files
 
@@ -252,6 +252,15 @@ fn stdin_stdout_via_dash() {
 }
 
 #[test]
+fn format_without_files_reads_stdin() {
+    format_command()
+        .write_stdin("\u{00A9}")
+        .assert()
+        .success()
+        .stdout("\u{00A9}\u{FE0F}");
+}
+
+#[test]
 fn stdin_stdout_canonical_passthrough() {
     format_command()
         .arg("-")
@@ -281,6 +290,109 @@ fn check_stdin_canonical_does_not_echo_stdout() {
         .stdout("");
 }
 
+#[test]
+fn check_without_files_reads_stdin() {
+    check_command()
+        .write_stdin("\u{00A9}")
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicates::str::contains("<stdin> would be reformatted"));
+}
+
+#[test]
+fn repeated_dash_reads_same_stdin_stream_to_eof() {
+    format_command()
+        .arg("-")
+        .arg("-")
+        .write_stdin("\u{00A9}")
+        .assert()
+        .success()
+        .stdout("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn format_processes_file_stdin_file_operands() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let first = tmp.child("a.txt");
+    let second = tmp.child("b.txt");
+    first.write_str("\u{00A9}").unwrap();
+    second.write_str("\u{00AE}").unwrap();
+
+    format_command()
+        .arg(first.path())
+        .arg("-")
+        .arg(second.path())
+        .write_stdin("#\u{FE0E}")
+        .assert()
+        .success()
+        .stdout("#");
+
+    first.assert("\u{00A9}\u{FE0F}");
+    second.assert("\u{00AE}\u{FE0F}");
+}
+
+#[test]
+fn check_reports_file_stdin_file_operands_in_order() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let first = tmp.child("a.txt");
+    let second = tmp.child("b.txt");
+    first.write_str("\u{00A9}").unwrap();
+    second.write_str("\u{00AE}").unwrap();
+
+    let output = check_command()
+        .arg(first.path())
+        .arg("-")
+        .arg(second.path())
+        .write_stdin("#\u{FE0E}")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let first_index = stderr.find("a.txt would be reformatted").unwrap();
+    let stdin_index = stderr.find("<stdin> would be reformatted").unwrap();
+    let second_index = stderr.find("b.txt would be reformatted").unwrap();
+    assert!(first_index < stdin_index);
+    assert!(stdin_index < second_index);
+}
+
+#[test]
+fn dash_path_names_file_named_dash() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("-");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .current_dir(tmp.path())
+        .arg("./-")
+        .assert()
+        .success()
+        .stdout("");
+
+    file.assert("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn stdin_preserves_missing_final_newline() {
+    format_command()
+        .write_stdin("\u{00A9}\n\u{00AE}")
+        .assert()
+        .success()
+        .stdout("\u{00A9}\u{FE0F}\n\u{00AE}\u{FE0F}");
+}
+
+#[test]
+fn file_formatting_preserves_crlf() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}\r\n\u{00AE}\r\n").unwrap();
+
+    format_command().arg(file.path()).assert().success();
+
+    file.assert("\u{00A9}\u{FE0F}\r\n\u{00AE}\u{FE0F}\r\n");
+}
+
 #[cfg(unix)]
 #[test]
 fn stdin_read_error_exits_2() {
@@ -300,14 +412,23 @@ fn stdin_read_error_exits_2() {
 // --- Error cases ---
 
 #[test]
-fn multiple_dash_rejected() {
+fn format_invalid_utf8_after_changed_line_does_not_rewrite_file() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("bad.bin");
+    file.write_binary("\u{00A9}\n".as_bytes()).unwrap();
+    let mut content = std::fs::read(file.path()).unwrap();
+    content.extend_from_slice(&[0xFF, 0xFE, 0x80]);
+    file.write_binary(&content).unwrap();
+
     format_command()
-        .arg("-")
-        .arg("-")
-        .write_stdin("")
+        .arg(file.path())
         .assert()
         .code(2)
-        .stderr(predicates::str::contains("at most one `-`"));
+        .stderr(predicates::str::contains(
+            "stream did not contain valid UTF-8",
+        ));
+
+    assert_eq!(std::fs::read(file.path()).unwrap(), content);
 }
 
 #[test]
@@ -330,11 +451,21 @@ fn root_without_subcommand_exits_2() {
 }
 
 #[test]
-fn format_without_files_exits_2() {
-    format_command()
+fn check_invalid_utf8_after_changed_line_exits_2() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("bad.bin");
+    file.write_binary("\u{00A9}\n".as_bytes()).unwrap();
+    let mut content = std::fs::read(file.path()).unwrap();
+    content.push(0xFF);
+    file.write_binary(&content).unwrap();
+
+    check_command()
+        .arg(file.path())
         .assert()
         .code(2)
-        .stderr(predicates::str::contains("no files"));
+        .stderr(predicates::str::contains(
+            "stream did not contain valid UTF-8",
+        ));
 }
 
 #[test]

@@ -56,9 +56,15 @@ pub(crate) struct SharedArgs {
     pub files: Vec<PathBuf>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Mode {
+    Format,
+    Check,
+}
+
 pub(crate) struct ParsedCommand {
     pub(crate) args: SharedArgs,
-    pub(crate) check: bool,
+    pub(crate) mode: Mode,
     pub(crate) ordered_operations: Vec<OrderedOperation>,
 }
 
@@ -164,16 +170,16 @@ const STATEFUL_ARGS: [StatefulArg; 3] = [BARE_AS_TEXT_ARG, PREFER_BARE_ARG, IGNO
 pub(crate) fn parse_command() -> ParsedCommand {
     let matches = build_root_command().get_matches();
 
-    let (check, matches) = match matches.subcommand() {
-        Some(("format", matches)) => (false, matches),
-        Some(("check", matches)) => (true, matches),
+    let (mode, matches) = match matches.subcommand() {
+        Some(("format", matches)) => (Mode::Format, matches),
+        Some(("check", matches)) => (Mode::Check, matches),
         Some((name, _)) => unreachable!("unexpected clap subcommand: {name}"),
         None => unreachable!("root command requires a subcommand"),
     };
 
     ParsedCommand {
         args: parse_shared_args(matches),
-        check,
+        mode,
         ordered_operations: extract_ordered_operations(matches),
     }
 }
@@ -194,10 +200,10 @@ fn build_format_command() -> Command {
         Command::new("format")
             .bin_name(format!("{PROG} format"))
             .display_name(format!("{PROG} format"))
-            .about("Format files in place")
+            .about("Format files in place, or stdin to stdout")
             .version(env!("CARGO_PKG_VERSION"))
             .after_help(FORMAT_HELP_FOOTER),
-        "Files to format (use `-` for stdin/stdout)",
+        "Files to format; omit for stdin/stdout or use `-` as a stdin operand",
     )
 }
 
@@ -209,7 +215,7 @@ fn build_check_command() -> Command {
             .about("Check whether formatting changes would be required")
             .version(env!("CARGO_PKG_VERSION"))
             .after_help(CHECK_HELP_FOOTER),
-        "Files to check (use `-` for stdin)",
+        "Files to check; omit for stdin or use `-` as a stdin operand",
     )
 }
 

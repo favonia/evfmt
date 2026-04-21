@@ -118,7 +118,11 @@ No files are modified. Exit nonzero if any file would change.
 
 ### Stdin and stdout
 
-`-` as a file operand means read from stdin and write to stdout. At most one `-` operand is allowed.
+With no file operands, `format` reads stdin and writes formatted text to stdout; `check` reads stdin and reports whether changes would be needed.
+
+`-` as a file operand means read from stdin and, in format mode, write formatted text to stdout at that operand position. A path such as `./-` refers to a file literally named `-`.
+
+Repeated `-` operands are allowed and read the same stdin stream from its current position. With piped input, the first `-` normally consumes the stream and later `-` operands see EOF.
 
 Use `--` only to end option parsing before file operands that look like options, such as `evfmt format -- --set-ignore`. Subcommand names are not file-name ambiguities once `format` or `check` has been selected; for example, `evfmt format check` formats a file named `check`.
 
