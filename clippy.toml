@@ -1,1 +1,5 @@
-allowed-duplicate-crates = ["hashbrown"]
+# `getrandom`'s transitive WASI support brings in two `wit-bindgen` versions.
+# That same WebAssembly toolchain also splits `hashbrown`: `indexmap` uses
+# `hashbrown 0.17`, while `wasmparser` still pulls `hashbrown 0.15`.
+# `evfmt` does not depend on these crates directly.
+allowed-duplicate-crates = ["hashbrown", "wit-bindgen"]
