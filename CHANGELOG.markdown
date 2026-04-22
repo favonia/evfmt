@@ -1,25 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-04-22)
 
 Changes:
 
-- Reorganized the library API so high-level helpers live at the crate root.
-- Reduced visibility of internal scanner and slot helpers.
-- Tightened and clarified module documentation.
-- Preserve file permissions and metadata during in-place formatting.
-- Changed in-place formatting to use the explicit `evfmt format` subcommand.
-- Replaced the old one-shot CLI policy flags with ordered `set/add/remove` operations for policy and ignore filters.
-- Made standalone keycap formatting configurable with `keycap-emojis`.
-- Changed the default policy to keep Unicode emoji-default characters bare, so redundant `FE0F` selectors are removed from those standalone characters by default.
-- Replaced the library's old string expression parser with typed `evfmt::variation_set` smart constructors.
-- Replaced the public `review` API with `findings` analysis APIs for scanned items.
-- Changed findings replacements to use per-slot decision vectors, and made ZWJ components resolve through the same component-local policy as standalone items.
-- Removed the unused bare replacement decision; bare canonicalization is exposed as a fixed repair with no decision slot.
-- Changed `scan` to return an iterator and exposed the `Scanner` type.
-- Reworked scanner recognition around emoji-like state-machine structure, including malformed ZWJ-related structures and unsanctioned presentation-selector runs.
-- Updated Unicode-derived classification to use emoji property ranges, regional indicators, and `Emoji_Presentation` data.
-- Refined fixed cleanup for keycap, modifier, tag, flag, and ZWJ-related structures while keeping formatting limited to presentation-selector changes.
+- Reworked the CLI around an explicit `evfmt format` subcommand, ordered `set/add/remove` policy operations, and metadata-preserving in-place formatting. ([#5], [#7], [#13])
+- Rebuilt emoji analysis and formatting on Unicode 17.0 data, with more accurate handling for keycaps, modifiers, tags, flags, ZWJ-related structures, and presentation-selector runs. Keycap emoji formatting is now configurable, and emoji-default characters are kept bare by default. ([#11], [#14], [#16], [#17], [#18])
+- Reshaped the library API around crate-root helpers, typed `evfmt::variation_set` constructors, iterator-based scanning, the exposed `Scanner` type, and `findings` APIs with per-slot replacement decisions. ([#3], [#9], [#11], [#18])
+- Expanded examples and clarified stability and policy configuration guidance. ([#19])
 
 ## 0.1.0 (2026-04-09)
 
@@ -32,3 +20,15 @@ Features:
 - Check mode for CI and pre-commit use.
 - Library API for scanning, classification and formatting.
 - Policy controls via `--prefer-bare-for` and `--treat-bare-as-text-for`.
+
+[#11]: https://github.com/favonia/evfmt/pull/11
+[#13]: https://github.com/favonia/evfmt/pull/13
+[#14]: https://github.com/favonia/evfmt/pull/14
+[#16]: https://github.com/favonia/evfmt/pull/16
+[#17]: https://github.com/favonia/evfmt/pull/17
+[#18]: https://github.com/favonia/evfmt/pull/18
+[#19]: https://github.com/favonia/evfmt/pull/19
+[#3]: https://github.com/favonia/evfmt/pull/3
+[#5]: https://github.com/favonia/evfmt/pull/5
+[#7]: https://github.com/favonia/evfmt/pull/7
+[#9]: https://github.com/favonia/evfmt/pull/9
