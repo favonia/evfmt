@@ -125,6 +125,31 @@ impl Policy {
         self
     }
 
+    /// Return a copy of this policy with `prefer_bare` updated by `modify`.
+    ///
+    /// This is a convenience for applying set operations to the current
+    /// `prefer_bare` value without restating the default set.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use evfmt::{FormatResult, Policy, format_text, variation_set};
+    ///
+    /// let policy = Policy::default().modify_prefer_bare(|set| {
+    ///     set | variation_set::RIGHTS_MARKS
+    /// });
+    ///
+    /// assert_eq!(
+    ///     format_text("\u{00A9}\u{FE0F}", &policy),
+    ///     FormatResult::Changed("\u{00A9}".into())
+    /// );
+    /// ```
+    #[must_use]
+    pub fn modify_prefer_bare(mut self, modify: impl FnOnce(VariationSet) -> VariationSet) -> Self {
+        self.prefer_bare = modify(self.prefer_bare);
+        self
+    }
+
     /// Return a copy of this policy with a new `bare_as_text` set.
     ///
     /// This set controls what bare form means when a standalone
@@ -153,6 +178,33 @@ impl Policy {
     #[must_use]
     pub fn with_bare_as_text(mut self, bare_as_text: VariationSet) -> Self {
         self.bare_as_text = bare_as_text;
+        self
+    }
+
+    /// Return a copy of this policy with `bare_as_text` updated by `modify`.
+    ///
+    /// This is a convenience for applying set operations to the current
+    /// `bare_as_text` value without restating the default set.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use evfmt::{FormatResult, Policy, format_text, variation_set};
+    ///
+    /// let policy = Policy::default()
+    ///     .modify_bare_as_text(|set| set | variation_set::RIGHTS_MARKS);
+    ///
+    /// assert_eq!(
+    ///     format_text("\u{00A9}", &policy),
+    ///     FormatResult::Changed("\u{00A9}\u{FE0E}".into())
+    /// );
+    /// ```
+    #[must_use]
+    pub fn modify_bare_as_text(
+        mut self,
+        modify: impl FnOnce(VariationSet) -> VariationSet,
+    ) -> Self {
+        self.bare_as_text = modify(self.bare_as_text);
         self
     }
 

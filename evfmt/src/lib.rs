@@ -3,6 +3,13 @@
 //!
 //! Most callers will want [`format_text`] together with [`Policy`].
 //!
+//! # Stability
+//!
+//! This library API is experimental. `evfmt` follows
+//! [Cargo's SemVer compatibility conventions][cargo-semver].
+//!
+//! [cargo-semver]: https://doc.rust-lang.org/cargo/reference/semver.html
+//!
 //! # Examples
 //!
 //! Use [`format_text`] for whole-input canonicalization under one [`Policy`].

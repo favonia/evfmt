@@ -2,6 +2,8 @@
 
 `evfmt` normalizes text/emoji variation selectors in your files.
 
+`evfmt` is ready for normal formatter use. The Rust library APIs and some advanced CLI use are still experimental. `evfmt` follows [Cargo's SemVer compatibility conventions](https://doc.rust-lang.org/cargo/reference/semver.html).
+
 It is an opinionated formatter for Unicode variation selectors:
 
 - chooses a deterministic bare, text, or emoji form for characters with variation sequences
