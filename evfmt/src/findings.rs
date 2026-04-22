@@ -475,7 +475,12 @@ fn single_emoji_singleton_finding<'a>(
             ),
         )),
         SingletonAnalysisOutcome::ResolvePresentation { default } if trailing_links.is_empty() => {
-            Some(resolve_presentation_finding(item, base, default))
+            Some(resolve_presentation_finding(
+                item,
+                base,
+                modifications,
+                default,
+            ))
         }
         SingletonAnalysisOutcome::ResolvePresentation { default } => {
             Some(resolve_zwj_wrapper_presentation_finding(
@@ -628,7 +633,7 @@ struct SingletonModificationShape {
 
 enum BasePresentationCleanup {
     Fixed(Option<Presentation>),
-    UseStandalonePolicy,
+    UsePolicy,
 }
 
 impl SingletonModificationShape {
@@ -655,10 +660,6 @@ impl SingletonModificationShape {
 
         shape
     }
-
-    const fn is_empty(self) -> bool {
-        !self.has_modifier && !self.has_tag && !self.has_keycap
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -682,8 +683,8 @@ enum SingletonAnalysisOutcome {
 /// Decide how a singleton-base emoji-like unit should be analyzed.
 ///
 /// The fixed-cleanup precedence lives in
-/// `docs/designs/features/sequence-handling.markdown`. Rule 8 is the only
-/// path where standalone policy may be consulted.
+/// `docs/designs/features/sequence-handling.markdown`. Rule 5 is the only
+/// path where policy may be consulted.
 fn singleton_analysis_outcome(
     base: char,
     presentation_selectors_after_base: &[Presentation],
@@ -692,17 +693,18 @@ fn singleton_analysis_outcome(
 ) -> SingletonAnalysisOutcome {
     let shape = SingletonModificationShape::from_modifications(modifications);
 
-    match singleton_base_presentation_cleanup(base, presentation_selectors_after_base, shape) {
+    match singleton_base_presentation_cleanup(base, shape) {
         BasePresentationCleanup::Fixed(canonical_presentation) => singleton_fixed_cleanup_outcome(
             presentation_selectors_after_base,
             modifications,
             shape,
             canonical_presentation,
         ),
-        BasePresentationCleanup::UseStandalonePolicy => standalone_singleton_analysis_outcome(
+        BasePresentationCleanup::UsePolicy => standalone_singleton_analysis_outcome(
             base,
             presentation_selectors_after_base,
             unicode::has_variation_sequence(base),
+            shape.has_keycap,
             policy,
         ),
     }
@@ -710,7 +712,6 @@ fn singleton_analysis_outcome(
 
 fn singleton_base_presentation_cleanup(
     base: char,
-    presentation_selectors_after_base: &[Presentation],
     shape: SingletonModificationShape,
 ) -> BasePresentationCleanup {
     // Precedence 2: emoji modifiers force a bare base. Legacy FE0F before an
@@ -729,29 +730,15 @@ fn singleton_base_presentation_cleanup(
         });
     }
 
-    // Precedence 5: keycap on an emoji-default base strips any base
-    // presentation selector.
-    if shape.has_keycap && unicode::is_emoji_default(base) {
-        return BasePresentationCleanup::Fixed(None);
-    }
-
-    // Precedence 6 and 7: standalone keycap preserves an explicitly
-    // text-styled base; otherwise it uses emoji presentation. Precedence 1
-    // removes unsupported selector choices for permissively grouped bases.
-    if shape.has_keycap {
-        let presentation = match presentation_selectors_after_base.first() {
-            Some(Presentation::Text) => Presentation::Text,
-            _ => Presentation::Emoji,
-        };
-        return BasePresentationCleanup::Fixed(sanctioned_presentation(base, presentation));
-    }
-
     debug_assert!(
-        shape.is_empty(),
+        !shape.has_modifier && !shape.has_tag,
         "all fixed-cleanup singleton modification rules were exhausted"
     );
 
-    BasePresentationCleanup::UseStandalonePolicy
+    // Precedence 5: no fixed-cleanup context remains, so policy chooses the
+    // canonical presentation. The policy analysis still rejects selector
+    // choices unsupported by the base's variation-sequence data.
+    BasePresentationCleanup::UsePolicy
 }
 
 fn sanctioned_presentation(base: char, presentation: Presentation) -> Option<Presentation> {
@@ -805,11 +792,13 @@ fn standalone_singleton_analysis_outcome(
     base: char,
     presentation_selectors_after_base: &[Presentation],
     has_sanctioned_presentation: bool,
+    is_keycap: bool,
     policy: &Policy,
 ) -> SingletonAnalysisOutcome {
     // This function is entered only after fixed-cleanup rules have been
     // exhausted. It therefore handles a true standalone base slot: no
-    // modifier, tag, or keycap context can force a presentation before policy.
+    // modifier, tag, or missing-variation keycap context can force a
+    // presentation before policy.
     if !has_sanctioned_presentation {
         // Base has no sanctioned variation sequence data. Any attached
         // presentation selector is unsanctioned and gets removed; absence of
@@ -825,7 +814,7 @@ fn standalone_singleton_analysis_outcome(
     }
 
     match (
-        policy.singleton_rule(base),
+        policy.singleton_rule(base, is_keycap),
         presentation_selectors_after_base,
     ) {
         // More than one presentation selector where the first matches the
@@ -915,6 +904,7 @@ fn unambiguous_finding<'a>(
 fn resolve_presentation_finding<'a>(
     item: &ScanItem<'a>,
     base: char,
+    modifications: &[EmojiModification],
     default: Presentation,
 ) -> Finding<'a> {
     Finding {
@@ -923,8 +913,8 @@ fn resolve_presentation_finding<'a>(
         replacement_plan: ReplacementPlan::ResolvePresentation {
             violation: Violation::primary(PrimaryViolationKind::BareNeedsResolution, false),
             default,
-            text_replacement: render_singleton(base, Some(Presentation::Text), &[]),
-            emoji_replacement: render_singleton(base, Some(Presentation::Emoji), &[]),
+            text_replacement: render_singleton(base, Some(Presentation::Text), modifications),
+            emoji_replacement: render_singleton(base, Some(Presentation::Emoji), modifications),
         },
     }
 }

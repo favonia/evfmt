@@ -1,19 +1,19 @@
 use super::*;
-use crate::charset::CharSet;
 use crate::findings::analyze_scan_item;
 use crate::scanner::scan;
 use crate::unicode;
+use crate::variation_set::VariationSet;
 use proptest::prelude::*;
 
 fn default_policy() -> Policy {
     Policy::default()
 }
 
-fn bool_charset(matches: bool) -> CharSet {
+fn bool_variation_set(matches: bool) -> VariationSet {
     if matches {
-        CharSet::all()
+        VariationSet::all()
     } else {
-        CharSet::none()
+        VariationSet::none()
     }
 }
 
@@ -94,7 +94,7 @@ fn keycap_cleanup_follows_current_sequence_contract() {
     );
     assert_eq!(
         format_text("#\u{20E3}", &policy),
-        FormatResult::Changed("#\u{FE0F}\u{20E3}".to_owned())
+        FormatResult::Changed("#\u{FE0E}\u{20E3}".to_owned())
     );
     // Standalone text-styled keycaps are sanctioned and intentionally stay
     // text-styled; true multi-component ZWJ context uses forced emoji cleanup.
@@ -105,6 +105,35 @@ fn keycap_cleanup_follows_current_sequence_contract() {
     assert_eq!(
         format_text("#\u{FE0E}\u{20E3}\u{200D}\u{1F525}", &policy),
         FormatResult::Changed("#\u{FE0F}\u{20E3}\u{200D}\u{1F525}".to_owned())
+    );
+    assert_eq!(
+        format_text("\u{26A0}\u{20E3}", &policy),
+        FormatResult::Changed("\u{26A0}\u{FE0E}\u{20E3}".to_owned())
+    );
+    assert_eq!(
+        format_text("#\u{20E3}\u{FE0F}", &policy),
+        FormatResult::Changed("#\u{FE0E}\u{20E3}".to_owned())
+    );
+}
+
+#[test]
+fn keycap_policy_can_select_bare_text_or_emoji_outputs() {
+    let emoji_policy = Policy::default().with_bare_as_text(VariationSet::none());
+    assert_eq!(
+        format_text("#\u{20E3}", &emoji_policy),
+        FormatResult::Changed("#\u{FE0F}\u{20E3}".to_owned())
+    );
+
+    let bare_text_policy = Policy::default()
+        .with_prefer_bare(crate::variation_set::KEYCAP_CHARS)
+        .with_bare_as_text(crate::variation_set::KEYCAP_CHARS);
+    assert_eq!(
+        format_text("#\u{FE0E}\u{20E3}", &bare_text_policy),
+        FormatResult::Changed("#\u{20E3}".to_owned())
+    );
+    assert_eq!(
+        format_text("#\u{20E3}", &bare_text_policy),
+        FormatResult::Unchanged
     );
 }
 
@@ -212,8 +241,8 @@ fn exhaustive_standalone_variation_sequence_policy_table() {
     for ch in unicode::variation_sequence_chars() {
         for policy_flags in policies {
             let policy = Policy::default()
-                .with_prefer_bare(bool_charset(policy_flags.prefer_bare))
-                .with_bare_as_text(bool_charset(policy_flags.bare_as_text));
+                .with_prefer_bare(bool_variation_set(policy_flags.prefer_bare))
+                .with_bare_as_text(bool_variation_set(policy_flags.bare_as_text));
 
             for selector in selectors {
                 let input = build_input(ch, selector);
@@ -263,8 +292,8 @@ fn interesting_string_strategy() -> impl Strategy<Value = String> {
 fn policy_strategy() -> impl Strategy<Value = Policy> {
     (prop::bool::ANY, prop::bool::ANY).prop_map(|(prefer_bare, bare_as_text)| {
         Policy::default()
-            .with_prefer_bare(bool_charset(prefer_bare))
-            .with_bare_as_text(bool_charset(bare_as_text))
+            .with_prefer_bare(bool_variation_set(prefer_bare))
+            .with_bare_as_text(bool_variation_set(bare_as_text))
     })
 }
 

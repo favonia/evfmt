@@ -72,22 +72,23 @@ fn format_help_describes_stateful_options() {
         .stdout(predicates::str::contains("Policy [prefer-bare]:"))
         .stdout(predicates::str::contains("Policy [bare-as-text]:"))
         .stdout(predicates::str::contains(
-            "--set-prefer-bare <CHARSET[,CHARSET]...>",
+            "--set-prefer-bare <VARIATIONSET[,VARIATIONSET]...>",
         ))
         .stdout(predicates::str::contains(
-            "--set-bare-as-text <CHARSET[,CHARSET]...>",
+            "--set-bare-as-text <VARIATIONSET[,VARIATIONSET]...>",
         ))
         .stdout(predicates::str::contains(
             "--set-ignore <FILTER[,FILTER]...>",
         ))
         .stdout(predicates::str::contains(
-            "CHARSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), or a single character.",
+            "VARIATIONSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits,",
         ))
         .stdout(predicates::str::contains(
-            "FILTER: git, evfmt, or hidden.",
+            "keycap-chars, non-keycap-chars, keycap-emojis, u(HEX), or a single character.",
         ))
+        .stdout(predicates::str::contains("FILTER: git, evfmt, or hidden."))
         .stdout(predicates::str::contains(
-            "Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.",
+            "Use all for every VARIATIONSET or FILTER. Use none to clear a set with --set-*.",
         ))
         .stdout(predicates::str::contains("Unicode defaults").not())
         .stdout(predicates::str::contains("--help-expression").not());
@@ -102,19 +103,20 @@ fn check_help_describes_stateful_options() {
         .stdout(predicates::str::contains("Policy [prefer-bare]:"))
         .stdout(predicates::str::contains("Policy [bare-as-text]:"))
         .stdout(predicates::str::contains(
-            "--set-prefer-bare <CHARSET[,CHARSET]...>",
+            "--set-prefer-bare <VARIATIONSET[,VARIATIONSET]...>",
         ))
         .stdout(predicates::str::contains(
             "--set-ignore <FILTER[,FILTER]...>",
         ))
         .stdout(predicates::str::contains(
-            "CHARSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), or a single character.",
+            "VARIATIONSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits,",
         ))
         .stdout(predicates::str::contains(
-            "FILTER: git, evfmt, or hidden.",
+            "keycap-chars, non-keycap-chars, keycap-emojis, u(HEX), or a single character.",
         ))
+        .stdout(predicates::str::contains("FILTER: git, evfmt, or hidden."))
         .stdout(predicates::str::contains(
-            "Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.",
+            "Use all for every VARIATIONSET or FILTER. Use none to clear a set with --set-*.",
         ))
         .stdout(predicates::str::contains("Unicode defaults").not())
         .stdout(predicates::str::contains("--help-expression").not());
@@ -770,7 +772,7 @@ fn ineligible_bare_as_text_items_are_rejected() {
 }
 
 #[test]
-fn empty_charset_list_is_rejected_before_any_file_is_rewritten() {
+fn empty_variation_set_list_is_rejected_before_any_file_is_rewritten() {
     let tmp = assert_fs::TempDir::new().unwrap();
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
@@ -787,7 +789,7 @@ fn empty_charset_list_is_rejected_before_any_file_is_rewritten() {
 }
 
 #[test]
-fn all_and_none_charset_shortcuts_must_appear_alone() {
+fn all_and_none_variation_set_shortcuts_must_appear_alone() {
     let tmp = assert_fs::TempDir::new().unwrap();
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();

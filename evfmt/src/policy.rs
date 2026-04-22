@@ -1,28 +1,33 @@
 //! Formatter policy configuration.
 //!
-//! Policy applies only to standalone variation-sequence characters whose
-//! selector state remains ambiguous after sequence-specific cleanup. Keycap,
-//! ZWJ, malformed-selector, and other fixed-cleanup cases are repaired before
+//! Policy applies only to standalone variation positions whose selector state
+//! remains ambiguous after sequence-specific cleanup. Standalone
+//! keycap-character forms use the keycap domain of the same policy sets; ZWJ,
+//! malformed-selector, and other fixed-cleanup cases are repaired before
 //! policy is consulted.
 //!
-//! A policy is expressed with two [`CharSet`] predicates:
+//! A policy is expressed with two [`VariationSet`] predicates:
 //!
-//! - `prefer_bare`: characters whose bare form is canonical when bare can
+//! - `prefer_bare`: positions whose bare form is canonical when bare can
 //!   preserve the selected presentation
-//! - `bare_as_text`: characters whose bare form should be interpreted as text
+//! - `bare_as_text`: positions whose bare form should be interpreted as text
 //!   presentation, rather than emoji presentation
 //!
-//! The default policy uses [`charset::ASCII`] for both predicates. That
-//! keeps ASCII bare forms such as `#` canonical, removes redundant selectors
-//! such as the `FE0E` in `#\u{FE0E}`, and resolves non-ASCII bare forms such as
-//! `\u{00A9}` to emoji presentation by inserting `FE0F`.
+//! The default policy uses [`variation_set::ASCII`] for `prefer_bare` and
+//! [`variation_set::ASCII`] plus [`variation_set::KEYCAP_CHARS`] for
+//! `bare_as_text`. That keeps ASCII bare forms such as `#` canonical, removes
+//! redundant selectors such as the `FE0E` in `#\u{FE0E}`, resolves non-ASCII
+//! bare forms such as `\u{00A9}` to emoji presentation by inserting `FE0F`,
+//! and resolves bare keycap-character forms such as `#\u{20E3}` to text
+//! presentation by inserting `FE0E` before `U+20E3`.
 
-use crate::charset::{self, CharSet};
+use crate::variation_set::{self, VariationSet};
 
-/// Formatting policy for standalone variation-sequence characters.
+/// Formatting policy for standalone variation positions.
 ///
-/// The policy is base-indexed: when policy is needed, `evfmt` uses the
-/// standalone variation-sequence base character to query the `prefer_bare` and
+/// The policy is base-indexed with an ordinary/keycap domain qualifier: when
+/// policy is needed, `evfmt` uses the variation-sequence base character to
+/// query either the ordinary or keycap domain of the `prefer_bare` and
 /// `bare_as_text` sets. The pair of answers determines the canonical
 /// replacement choices:
 ///
@@ -43,7 +48,7 @@ use crate::charset::{self, CharSet};
 /// # Examples
 ///
 /// ```rust
-/// use evfmt::{charset, FormatResult, Policy, format_text};
+/// use evfmt::{FormatResult, Policy, format_text, variation_set};
 ///
 /// let policy = Policy::default();
 ///
@@ -54,7 +59,7 @@ use crate::charset::{self, CharSet};
 /// );
 ///
 /// let rights_marks =
-///     charset::ASCII | charset::RIGHTS_MARKS;
+///     variation_set::ASCII | variation_set::RIGHTS_MARKS;
 /// let policy = Policy::default()
 ///     .with_prefer_bare(rights_marks)
 ///     .with_bare_as_text(rights_marks);
@@ -64,10 +69,10 @@ use crate::charset::{self, CharSet};
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Policy {
-    /// Characters whose bare form is canonical when it preserves presentation.
-    prefer_bare: CharSet,
-    /// Characters whose bare form represents text presentation.
-    bare_as_text: CharSet,
+    /// Positions whose bare form is canonical when it preserves presentation.
+    prefer_bare: VariationSet,
+    /// Positions whose bare form represents text presentation.
+    bare_as_text: VariationSet,
 }
 
 impl Policy {
@@ -86,10 +91,10 @@ impl Policy {
     /// # Examples
     ///
     /// ```rust
-    /// use evfmt::{charset, FormatResult, Policy, format_text};
+    /// use evfmt::{FormatResult, Policy, format_text, variation_set};
     ///
     /// let policy = Policy::default().with_prefer_bare(
-    ///     charset::ASCII | charset::RIGHTS_MARKS,
+    ///     variation_set::ASCII | variation_set::RIGHTS_MARKS,
     /// );
     ///
     /// assert_eq!(
@@ -98,7 +103,7 @@ impl Policy {
     /// );
     /// ```
     #[must_use]
-    pub fn with_prefer_bare(mut self, prefer_bare: CharSet) -> Self {
+    pub fn with_prefer_bare(mut self, prefer_bare: VariationSet) -> Self {
         self.prefer_bare = prefer_bare;
         self
     }
@@ -117,11 +122,11 @@ impl Policy {
     /// # Examples
     ///
     /// ```rust
-    /// use evfmt::{CharSet, FormatResult, Policy, format_text};
+    /// use evfmt::{FormatResult, Policy, VariationSet, format_text};
     ///
     /// let policy = Policy::default()
-    ///     .with_prefer_bare(CharSet::none())
-    ///     .with_bare_as_text(CharSet::all());
+    ///     .with_prefer_bare(VariationSet::none())
+    ///     .with_bare_as_text(VariationSet::all());
     ///
     /// assert_eq!(
     ///     format_text("\u{00A9}", &policy),
@@ -129,16 +134,24 @@ impl Policy {
     /// );
     /// ```
     #[must_use]
-    pub fn with_bare_as_text(mut self, bare_as_text: CharSet) -> Self {
+    pub fn with_bare_as_text(mut self, bare_as_text: VariationSet) -> Self {
         self.bare_as_text = bare_as_text;
         self
     }
 
-    pub(crate) fn singleton_rule(&self, base: char) -> SingletonRule {
-        match (
-            self.prefer_bare.contains(base),
-            self.bare_as_text.contains(base),
-        ) {
+    pub(crate) fn singleton_rule(&self, base: char, is_keycap: bool) -> SingletonRule {
+        let prefer_bare = if is_keycap {
+            self.prefer_bare.contains_keycap(base)
+        } else {
+            self.prefer_bare.contains(base)
+        };
+        let bare_as_text = if is_keycap {
+            self.bare_as_text.contains_keycap(base)
+        } else {
+            self.bare_as_text.contains(base)
+        };
+
+        match (prefer_bare, bare_as_text) {
             (false, false) => SingletonRule::BareToEmoji,
             (false, true) => SingletonRule::BareToText,
             (true, false) => SingletonRule::EmojiToBare,
@@ -150,8 +163,8 @@ impl Policy {
 impl Default for Policy {
     fn default() -> Self {
         Self {
-            prefer_bare: charset::ASCII,
-            bare_as_text: charset::ASCII,
+            prefer_bare: variation_set::ASCII,
+            bare_as_text: variation_set::ASCII | variation_set::KEYCAP_CHARS,
         }
     }
 }

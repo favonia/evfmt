@@ -12,10 +12,11 @@ Policy:
   prefer-bare: characters to keep bare when that preserves the chosen presentation.
 
 Values:
-  CHARSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), \
+  VARIATIONSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, \
+keycap-chars, non-keycap-chars, keycap-emojis, u(HEX), \
 or a single character.
   FILTER: git, evfmt, or hidden.
-  Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.
+  Use all for every VARIATIONSET or FILTER. Use none to clear a set with --set-*.
 
 Use `--` before file operands that would otherwise parse as options, for example: \
 `evfmt format -- --set-ignore`.";
@@ -25,10 +26,11 @@ Policy:
   prefer-bare: characters to keep bare when that preserves the chosen presentation.
 
 Values:
-  CHARSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, u(HEX), \
+  VARIATIONSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, \
+keycap-chars, non-keycap-chars, keycap-emojis, u(HEX), \
 or a single character.
   FILTER: git, evfmt, or hidden.
-  Use all for every CHARSET or FILTER. Use none to clear a set with --set-*.
+  Use all for every VARIATIONSET or FILTER. Use none to clear a set with --set-*.
 
 Use `--` before file operands that would otherwise parse as options, for example: \
 `evfmt check -- --set-ignore`.";
@@ -148,13 +150,13 @@ const SET_ADD_REMOVE_OPERATIONS_IGNORE: [StatefulOperation; 3] = [
 
 const PREFER_BARE_ARG: StatefulArg = StatefulArg {
     help_heading: "Policy [prefer-bare]",
-    value_name: "CHARSET[,CHARSET]...",
+    value_name: "VARIATIONSET[,VARIATIONSET]...",
     operations: &SET_ADD_REMOVE_OPERATIONS_PREFER_BARE,
 };
 
 const BARE_AS_TEXT_ARG: StatefulArg = StatefulArg {
     help_heading: "Policy [bare-as-text]",
-    value_name: "CHARSET[,CHARSET]...",
+    value_name: "VARIATIONSET[,VARIATIONSET]...",
     operations: &SET_ADD_REMOVE_OPERATIONS_BARE_AS_TEXT,
 };
 

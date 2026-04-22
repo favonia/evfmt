@@ -1,5 +1,5 @@
 use super::*;
-use crate::scanner::{EmojiTagRun, scan};
+use crate::scanner::scan;
 
 fn default_policy() -> Policy {
     Policy::default()
@@ -88,8 +88,8 @@ fn standalone_bare_singleton_uses_plain_presentation_resolution() {
 #[test]
 fn standalone_bare_singleton_can_default_to_text_resolution() {
     let policy = Policy::default()
-        .with_prefer_bare(crate::charset::CharSet::none())
-        .with_bare_as_text(crate::charset::CharSet::all());
+        .with_prefer_bare(crate::variation_set::VariationSet::none())
+        .with_bare_as_text(crate::variation_set::VariationSet::all());
     let finding = finding_for_first_item_with_policy("\u{00A9}", &policy);
     assert_eq!(finding.default_decision(), ReplacementDecision::Text);
     assert_eq!(finding.default_replacement(), "\u{00A9}\u{FE0E}");
@@ -168,9 +168,13 @@ fn single_emoji_keycap_wrapper_repairs_without_dropping_link() {
     let finding = finding_for_first_item("#\u{20E3}\u{200D}");
     assert_eq!(
         finding.violation(),
-        primary_violation(PrimaryViolationKind::NotFullyQualifiedSequence, false)
+        primary_violation(PrimaryViolationKind::BareNeedsResolution, false)
     );
-    assert_eq!(finding.default_replacement(), "#\u{FE0F}\u{20E3}\u{200D}");
+    assert_eq!(finding.default_replacement(), "#\u{FE0E}\u{20E3}\u{200D}");
+    assert_eq!(
+        finding.replacement(ReplacementDecision::Emoji),
+        Some("#\u{FE0F}\u{20E3}\u{200D}")
+    );
 }
 
 #[test]
@@ -178,9 +182,9 @@ fn single_emoji_keycap_wrapper_reports_trailing_link_selector_cleanup() {
     let finding = finding_for_first_item("#\u{20E3}\u{200D}\u{FE0F}");
     assert_eq!(
         finding.violation(),
-        primary_violation(PrimaryViolationKind::NotFullyQualifiedSequence, true)
+        primary_violation(PrimaryViolationKind::BareNeedsResolution, true)
     );
-    assert_eq!(finding.default_replacement(), "#\u{FE0F}\u{20E3}\u{200D}");
+    assert_eq!(finding.default_replacement(), "#\u{FE0E}\u{20E3}\u{200D}");
 }
 
 #[test]
@@ -352,31 +356,4 @@ fn combo_true_zwj_sequence_uses_forced_component_cleanup() {
         finding.default_replacement(),
         "\u{2764}\u{FE0F}\u{200D}\u{1F525}\u{200D}"
     );
-}
-
-#[test]
-fn singleton_modification_shape_is_empty_only_without_modifications() {
-    let empty = SingletonModificationShape::from_modifications(&[]);
-    assert!(empty.is_empty());
-
-    let with_modifier =
-        SingletonModificationShape::from_modifications(&[EmojiModification::EmojiModifier {
-            modifier: '\u{1F3FB}',
-            presentation_selectors_after_modifier: vec![],
-        }]);
-    assert!(!with_modifier.is_empty());
-
-    let with_tag = SingletonModificationShape::from_modifications(&[
-        EmojiModification::TagModifier(vec![EmojiTagRun {
-            tag: vec!['\u{E0067}'],
-            presentation_selectors_after_tag: vec![],
-        }]),
-    ]);
-    assert!(!with_tag.is_empty());
-
-    let with_keycap =
-        SingletonModificationShape::from_modifications(&[EmojiModification::EnclosingKeycap {
-            presentation_selectors_after_keycap: vec![],
-        }]);
-    assert!(!with_keycap.is_empty());
 }
