@@ -112,8 +112,7 @@ struct RuntimeSettings {
 }
 
 fn build_runtime_settings(operations: &[OrderedOperation]) -> Result<RuntimeSettings, ()> {
-    let mut prefer_bare = variation_set::ASCII | variation_set::EMOJI_DEFAULTS;
-    let mut bare_as_text = variation_set::ASCII | variation_set::KEYCAP_CHARS;
+    let mut policy = Policy::default();
     let mut ignore = IgnoreSettings::default();
 
     for operation in operations {
@@ -121,12 +120,16 @@ fn build_runtime_settings(operations: &[OrderedOperation]) -> Result<RuntimeSett
             RuntimeOperation::PreferBare(kind) => {
                 let parsed = parse_variation_set_list(kind, &operation.value)
                     .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
-                prefer_bare = apply_variation_set_update(prefer_bare, kind, parsed);
+                policy = policy.modify_prefer_bare(|current| {
+                    apply_variation_set_update(current, kind, parsed)
+                });
             }
             RuntimeOperation::BareAsText(kind) => {
                 let parsed = parse_variation_set_list(kind, &operation.value)
                     .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
-                bare_as_text = apply_variation_set_update(bare_as_text, kind, parsed);
+                policy = policy.modify_bare_as_text(|current| {
+                    apply_variation_set_update(current, kind, parsed)
+                });
             }
             RuntimeOperation::Ignore(kind) => {
                 let parsed = parse_ignore_list(kind, &operation.value)
@@ -136,12 +139,7 @@ fn build_runtime_settings(operations: &[OrderedOperation]) -> Result<RuntimeSett
         }
     }
 
-    Ok(RuntimeSettings {
-        policy: Policy::default()
-            .with_prefer_bare(prefer_bare)
-            .with_bare_as_text(bare_as_text),
-        ignore,
-    })
+    Ok(RuntimeSettings { policy, ignore })
 }
 
 fn apply_variation_set_update(

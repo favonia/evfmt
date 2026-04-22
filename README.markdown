@@ -1,4 +1,4 @@
-# ✨ evfmt: opinionated emoji variation formatter
+# ✨ evfmt: emoji-variation selector formatter
 
 [![crates.io](https://img.shields.io/crates/v/evfmt?logo=rust)](https://crates.io/crates/evfmt)
 [![docs.rs](https://img.shields.io/docsrs/evfmt?logo=docs.rs)](https://docs.rs/evfmt)
@@ -6,11 +6,17 @@
 [![coverage](https://img.shields.io/codecov/c/github/favonia/evfmt?logo=codecov)](https://app.codecov.io/gh/favonia/evfmt)
 [![source code](https://img.shields.io/badge/source%20code-GitHub-24292f?logo=github)](https://github.com/favonia/evfmt)
 
-`evfmt` normalizes text/emoji presentation selectors in your files.
+`evfmt` is an opinionated formatter for Unicode text/emoji presentation selectors (`U+FE0E` and `U+FE0F`) in your files.
 
-It is both a command-line tool and a Rust library.
+The name stands for “emoji variation formatter”; use it as a command-line formatter or as a Rust library.
 
 This project was developed with AI assistance, guided by [detailed design documents](docs/designs/README.markdown) and substantial testing.
+
+## 🧭 Stability
+
+`evfmt` is ready for normal formatter use. Core commands such as `evfmt format` and `evfmt check`, documented exit codes, and the formatter's hard invariants are intended to remain stable.
+
+The Rust library APIs and some advanced CLI use are still experimental. `evfmt` follows [Cargo's SemVer compatibility conventions](https://doc.rust-lang.org/cargo/reference/semver.html).
 
 ## 🔣 What Are Presentation Selectors?
 
@@ -25,7 +31,7 @@ Many Unicode characters have dual presentations, text and emoji:
 
 Unicode provides invisible presentation selectors (`U+FE0E` for text, `U+FE0F` for emoji) to request a specific presentation (though platforms may not always honor the request). These two characters (`U+FE0E` and `U+FE0F`) are _variation selectors_. [Unicode Technical Standard #51](https://www.unicode.org/reports/tr51/tr51-29.html) also calls them _presentation selectors_ in the emoji context, and this document follows that convention. (The _ev_ in _evfmt_ stands for _emoji variation_, after the [emoji variation sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_variation_sequence) that these selectors produce.)
 
-Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, certain dual-presentation characters may look different on different platforms. `evfmt` normalizes these selectors for you.
+Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, certain dual-presentation characters may look different on different platforms. On the other hand, selectors are considered redundant or even defective in other contexts. `evfmt` normalizes these selectors for you.
 
 The emoji selector `U+FE0F` also appears in multi-character emoji sequences such as keycaps and [Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_zwj_sequence) (where multiple emoji are joined into one). `evfmt` normalizes selector usage in these sequences as well.
 
@@ -34,8 +40,8 @@ The emoji selector `U+FE0F` also appears in multi-character emoji sequences such
 Different platforms can render the same character differently when presentation selectors are missing or ambiguous. `evfmt` produces a canonical source spelling that reduces this cross-platform inconsistency:
 
 - Chooses a deterministic form—bare, text, or emoji—for each character with dual presentations
+- Preserves all emoji sequences that are [recommended for general interchange (RGI)](https://www.unicode.org/reports/tr51/tr51-29.html#def_rgi_set)
 - Removes stray selectors in unsupported positions
-- Fixes multi-character emoji sequences that are not [fully qualified](https://www.unicode.org/reports/tr51/tr51-29.html#def_fully_qualified_emoji)
 - Respects `.gitignore` and `.evfmtignore`
 
 **Hard invariants:** `evfmt` is idempotent, deterministic, and only modifies presentation selectors—no other content is touched.
@@ -119,19 +125,37 @@ evfmt check -- --set-ignore
 | `1`  | Changes needed (check mode only)      |
 | `2`  | Error (I/O, invalid UTF-8, usage)     |
 
-## 🙈 Ignore Filters
+## 📝 Notes on Specific Emoji Sequences
+
+### 🧩 Emoji ZWJ Sequences
+
+[Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_zwj_sequence) are sequences of multiple emoji characters joined by the zero-width joiner (ZWJ; `U+200D`). For example, the rainbow flag 🏳️‍🌈 joins the white flag 🏳️ and the rainbow 🌈. `evfmt` normalizes each component in a ZWJ sequence as if that component appeared without the surrounding ZWJ links.
+
+### 🔢 Normalization of Keycap Sequences
+
+Keycap sequences combine a base character (`0`–`9`, `#`, or `*`) with the combining enclosing keycap (`U+20E3`) to produce keycap buttons like 1️⃣ and #️⃣. The base character can appear bare, with a text selector (`U+FE0E`), or with an emoji selector (`U+FE0F`) before the keycap mark. Historically, bare keycap sequences were used for both text and emoji presentations, which made them ambiguous. `evfmt` normalizes bare keycap sequences to explicit text forms by default. Explicit text and emoji selectors in keycap forms are preserved.
+
+## 🧪 Advanced Configuration
+
+The options below are for projects that need to tune traversal or presentation policy beyond the default formatter behavior.
+
+### 🙈 Ignore Filters
 
 By default, `evfmt` enables all ignore filters: it skips files ignored by Git, files matched by `.evfmtignore`, and hidden files or directories. Change the enabled ignore filters only when you have a specific reason to include or exclude one of those classes.
 
-- `--set-ignore=<filter>[,<filter>...]`
-- `--add-ignore=<filter>[,<filter>...]`
-- `--remove-ignore=<filter>[,<filter>...]`
+| Option                                   | Effect              |
+| ---------------------------------------- | ------------------- |
+| `--set-ignore=<filter>[,<filter>...]`    | Replace the set     |
+| `--add-ignore=<filter>[,<filter>...]`    | Add to the set      |
+| `--remove-ignore=<filter>[,<filter>...]` | Remove from the set |
 
 Ignore flags take one or more comma-separated filter labels:
 
-- `git`: ignore files matched by Git ignore rules
-- `evfmt`: ignore files matched by `.evfmtignore`
-- `hidden`: ignore hidden files and directories
+| Label    | Meaning                           |
+| -------- | --------------------------------- |
+| `git`    | Files matched by Git ignore rules |
+| `evfmt`  | Files matched by `.evfmtignore`   |
+| `hidden` | Hidden files and directories      |
 
 Use commas to combine labels: `git,evfmt,hidden`.
 
@@ -145,27 +169,25 @@ evfmt format --remove-ignore=hidden .
 
 <a id="singleton-character"></a>
 
-## 📐 Normalization Policy for Single Characters with Dual Presentations
+### 📐 Presentation Policy Cookbook
 
 By default, `evfmt` leaves bare ASCII characters and Unicode emoji-default characters alone, while text-default non-ASCII characters with dual presentations get an explicit emoji selector. For example, `#` and bare sparkles (U+2728) stay bare, while a bare copyright sign (U+00A9) normalizes to `©️` (U+00A9 U+FE0F).
 
 ⚠️ `evfmt` is a formatter, not a presentation editor. If you want to change how the copyright sign looks on your platform—say, switching it from emoji presentation to text presentation—do that in your editor by adding or removing the presentation selector (`U+FE0E` or `U+FE0F`). Run `evfmt` only after you are happy with how your document renders.
 
-### 📖 Cookbook
-
 Use these recipes when the default policy is close to what you want, but a small class of symbols needs different handling.
 
-#### Keep Text-Looking Marks in Text Presentation
+#### Keep Selected Symbols in Text Presentation
 
-Use this when copyright, registered, and trademark-style marks should render as text-style symbols, but you still want explicit selectors for portability:
+Use this when rights marks, arrows, and card suits already render as text-style symbols, and you want explicit text selectors for portability:
 
 ```sh
 evfmt format \
-  --add-bare-as-text=rights-marks \
+  --add-bare-as-text=rights-marks,arrows,card-suits \
   README.markdown
 ```
 
-With that option, bare rights marks normalize to explicit text forms such as `©︎`, `®︎`, and `™︎`. Explicit emoji-form marks such as `©️` stay emoji.
+With that option, bare rights marks, arrows, and card suits normalize to explicit text forms such as `©︎`, `®︎`, `™︎`, `➡︎`, and `♠︎`. Explicit emoji-form symbols such as `©️`, `➡️`, and `♠️` stay emoji.
 
 #### Keep Text-Looking Marks Bare
 
@@ -180,26 +202,26 @@ evfmt format \
 
 With those options, bare or text-form copyright-style marks normalize to bare copyright-style marks. Explicit emoji-form marks such as `©️` stay emoji.
 
-#### Keep Symbols as Text
+#### Use Emoji-Style Keycaps
 
-Use this when arrows and card suits should stay text-style symbols in a technical document, log, or README:
+Use this when existing text contains bare keycap sequences such as `1` + `U+20E3` and `#` + `U+20E3`, and you want them treated as emoji keycaps rather than text-style keycaps. [Some older emoji mappings](https://www.unicode.org/L2/L2011/11414-emoji-var-seq.pdf) used these bare keycap sequences as emoji.
 
 ```sh
 evfmt format \
-  --add-bare-as-text=arrows,card-suits \
+  --remove-bare-as-text=keycap-emojis \
   README.markdown
 ```
 
-With that option, bare arrows and card suits normalize to explicit text forms such as `➡︎` and `♠︎`. Explicit emoji-form symbols such as `➡️` and `♠️` stay emoji.
+With that option, bare keycap sequences normalize to explicit emoji forms such as `1️⃣` and `#️⃣`. Explicit text-form keycaps such as `1︎⃣` stay text.
 
-### ⚙️ Detailed Explanation
+### ⚙️ How Presentation Policy Works
 
 The policy is shaped by two choices: how bare characters render on your _reference platform_, and which bare characters are stable enough to keep bare in your files. A reference platform is the environment whose bare-character rendering you are using as your baseline, usually the editor, terminal, or browser where you review the formatted text.
 
 The CLI exposes those choices as two mutable sets:
 
-- `bare-as-text`: Which variation positions the reference platform shows as text when bare. Many modern platforms show bare non-ASCII characters as emoji, so the default set is `ascii,keycap-chars`.
-- `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is `ascii,emoji-defaults`, so emoji-default characters can stay bare while text-default non-ASCII characters still get explicit selectors.
+- `bare-as-text`: Which variation positions the reference platform shows as text when bare. Many modern platforms show bare non-ASCII, non-keycap characters as emoji, so the default set is `ascii,keycap-chars`.
+- `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is `ascii,emoji-defaults`, so characters with default emoji presentation in Unicode stay bare, while text-default non-ASCII characters still get explicit selectors.
 
 To choose the right policy, first decide whether a character's bare form looks like text or emoji on your reference platform. Put it in `bare-as-text` if the bare form looks like text. Then decide whether the character should stay bare in the files you publish, as long as doing so preserves the intended presentation. Put it in `prefer-bare` if bare spelling is stable enough for your target platforms.
 
@@ -216,63 +238,43 @@ With the default sets `bare-as-text = ascii,keycap-chars` and `prefer-bare = asc
 
 #### Policy Flags
 
-Use these flags to update the policy sets. Each flag takes one or more comma-separated variation-set items:
+Use these flags to update the policy sets. Each flag takes one or more comma-separated variation sets:
 
-- To update the `bare-as-text` set:
+To update the `bare-as-text` set:
 
-  <dl>
-  <dt><code>--set-bare-as-text=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
-  <dd>Replaces <code>bare-as-text</code> with the specified variation-set items.</dd>
-  <dt><code>--add-bare-as-text=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
-  <dd>Adds variation-set items to <code>bare-as-text</code>.</dd>
-  <dt><code>--remove-bare-as-text=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
-  <dd>Removes variation-set items from <code>bare-as-text</code>.</dd>
-  </dl>
+| Option                                   | Effect              |
+| ---------------------------------------- | ------------------- |
+| `--set-bare-as-text=<set>[,<set>...]`    | Replace the set     |
+| `--add-bare-as-text=<set>[,<set>...]`    | Add to the set      |
+| `--remove-bare-as-text=<set>[,<set>...]` | Remove from the set |
 
-- To update the `prefer-bare` set:
+To update the `prefer-bare` set:
 
-  <dl>
-  <dt><code>--set-prefer-bare=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
-  <dd>Replaces <code>prefer-bare</code> with the specified variation-set items.</dd>
-  <dt><code>--add-prefer-bare=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
-  <dd>Adds variation-set items to <code>prefer-bare</code>.</dd>
-  <dt><code>--remove-prefer-bare=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
-  <dd>Removes variation-set items from <code>prefer-bare</code>.</dd>
-  </dl>
+| Option                                  | Effect              |
+| --------------------------------------- | ------------------- |
+| `--set-prefer-bare=<set>[,<set>...]`    | Replace the set     |
+| `--add-prefer-bare=<set>[,<set>...]`    | Add to the set      |
+| `--remove-prefer-bare=<set>[,<set>...]` | Remove from the set |
 
 The policy sets start as `prefer-bare = ascii,emoji-defaults` and `bare-as-text = ascii,keycap-chars`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
 
-Supported variation-set items are:
+Each `<set>` in the list can be either one of the named sets below, one code point with `u(HEX)`, such as `u(00A9)`, or one character, such as `#`, `*`, or `©️`. Presentation selectors are ignored when matching a single character. Except for sets whose names start with `keycap-`, named sets apply only to ordinary non-keycap positions.
 
-- `ascii`: ASCII characters with text/emoji variation forms, such as `#`, `*`, and digits
-- `text-defaults`: characters whose bare form defaults to text presentation in Unicode
-- `emoji-defaults`: characters whose bare form defaults to emoji presentation in Unicode
-- `rights-marks`: copyright and registered/trademark-style marks
-- `arrows`: arrow symbols with text/emoji variation forms
-- `card-suits`: card suit symbols with text/emoji variation forms
-- `keycap-chars`: all keycap-character positions for variation-sequence bases
-- `non-keycap-chars`: all ordinary variation-sequence base positions
-- `keycap-emojis`: RGI emoji keycap bases (`#`, `*`, `0`-`9`) in keycap-character positions
-- `u(HEX)`: one Unicode code point, for example `u(00A9)`
-- a single character, for example `#`, `*`, or `©️`; presentation selectors are allowed and ignored when matching the character
+| Set                | Meaning                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| `ascii`            | Dual-presentation characters in the ASCII range, such as `#`, `*`, and digits          |
+| `text-defaults`    | Dual-presentation characters whose bare form defaults to text presentation in Unicode  |
+| `emoji-defaults`   | Dual-presentation characters whose bare form defaults to emoji presentation in Unicode |
+| `rights-marks`     | Copyright and registered/trademark-style marks with dual presentations                 |
+| `arrows`           | Arrow symbols with dual presentations                                                  |
+| `card-suits`       | Card suit symbols with dual presentations                                              |
+| `keycap-chars`     | Dual-presentation characters in keycap-character positions                             |
+| `non-keycap-chars` | Dual-presentation characters in ordinary non-keycap positions                          |
+| `keycap-emojis`    | Emoji keycap bases (`#`, `*`, `0`–`9`) in keycap-character positions                   |
 
-Use commas to combine items: `ascii,rights-marks,u(00A9)`. Named sets may change when `evfmt` upgrades Unicode support.
+The meaning of named sets may change as Unicode adds or revises dual-presentation characters.
 
 Use `all` by itself to select every variation position `evfmt` can format. For example, `--remove-prefer-bare=all` makes every format-supported position require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII and bare keycap-character forms then normalize to explicit text form and ordinary bare non-ASCII normalizes to explicit emoji form.
-
-<a id="zwj-sequences"></a>
-
-## 🧩 Normalization of Emoji ZWJ Sequences
-
-[Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_zwj_sequence) are sequences of multiple emoji characters joined by the zero-width joiner (ZWJ; `U+200D`). For example, the rainbow flag 🏳️‍🌈 is the white flag 🏳️ and the rainbow 🌈 joined together. When a component carries an explicit text presentation selector (`U+FE0E`), [Unicode Technical Standard #51](https://www.unicode.org/reports/tr51/tr51-29.html) says that selector breaks the combined emoji image and the platform should display the components separately.
-
-`evfmt` honors that component-level presentation request. It preserves ZWJ code points, removes selectors attached to the ZWJ itself, and resolves each component as if it appeared without the surrounding ZWJ links. With the default policy, bare text-default components such as a bare heart become emoji-form components, while explicit text-form components stay text-form.
-
-## 🔢 Normalization of Keycap Sequences
-
-Keycap sequences combine a base character (`0`–`9`, `#`, or `*`) with the combining enclosing keycap (`U+20E3`) to produce keycap buttons like 1️⃣ and #️⃣. The base character can appear bare, with a text selector (`U+FE0E`), or with an emoji selector (`U+FE0F`) before the keycap mark. By default, `evfmt` treats bare keycap-character forms as text and normalizes `[0-9#*] U+20E3` to `[0-9#*] U+FE0E U+20E3`. Explicit text and emoji selectors in keycap forms are preserved.
-
-The text form (`[0-9#*] U+FE0E U+20E3`) is not in the current standard but appeared in earlier ISO/IEC 10646 working documents (for example, [N4228](https://www.unicode.org/L2/L2012/12199-02n4228_10646pdam2.pdf) and [N4349](https://unicode.org/wg2/docs/n4349.pdf)).
 
 ## ⚖️ License
 

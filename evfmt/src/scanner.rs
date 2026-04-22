@@ -29,6 +29,20 @@
 //! input streaming would require carrying incomplete UTF-8, presentation
 //! selector runs, and in-progress emoji sequences across input chunks.
 //!
+//! # Examples
+//!
+//! ```rust
+//! use evfmt::scanner::{ScanKind, scan};
+//!
+//! let items: Vec<_> = scan("A\u{FE0F}\u{00A9}").collect();
+//! let reconstructed = items.iter().map(|item| item.raw).collect::<String>();
+//!
+//! assert_eq!(reconstructed, "A\u{FE0F}\u{00A9}");
+//! assert!(matches!(items[0].kind, ScanKind::Passthrough));
+//! assert!(matches!(items[1].kind, ScanKind::UnsanctionedPresentationSelectors(_)));
+//! assert!(matches!(items[2].kind, ScanKind::EmojiSequence(_)));
+//! ```
+//!
 //! The item model is also shaped for `evfmt`'s built-in findings and
 //! formatting pipeline: callers can analyze the scanned items and rebuild
 //! repaired output from the original items without rescanning after each
@@ -268,6 +282,17 @@ pub enum EmojiSequence {
 ///
 /// Concatenating all `raw` slices from a scan reconstructs the original
 /// input exactly.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{ScanKind, scan};
+///
+/// let item = scan("\u{00A9}").next().unwrap();
+/// assert_eq!(item.raw, "\u{00A9}");
+/// assert_eq!(item.span, 0.."\u{00A9}".len());
+/// assert!(matches!(item.kind, ScanKind::EmojiSequence(_)));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ScanItem<'a> {
@@ -280,6 +305,20 @@ pub struct ScanItem<'a> {
 }
 
 /// The structural classification of a scanned item.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{ScanKind, scan};
+///
+/// let items: Vec<_> = scan("A\u{FE0F}").collect();
+///
+/// assert!(matches!(items[0].kind, ScanKind::Passthrough));
+/// assert!(matches!(
+///     items[1].kind,
+///     ScanKind::UnsanctionedPresentationSelectors(_)
+/// ));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ScanKind {
@@ -430,6 +469,18 @@ impl EmojiSequenceInProgress {
 ///
 /// Created by [`scan`]. Implements [`Iterator`] for lazy, forward-only
 /// scanning with one-character lookahead.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::scan;
+///
+/// let mut scanner = scan("#\u{FE0E}");
+/// let item = scanner.next().unwrap();
+///
+/// assert_eq!(item.raw, "#\u{FE0E}");
+/// assert!(scanner.next().is_none());
+/// ```
 #[derive(Debug)]
 pub struct Scanner<'a> {
     /// The full input string.
@@ -453,6 +504,17 @@ pub struct Scanner<'a> {
 ///
 /// Returns a [`Scanner`] iterator. Concatenating all [`ScanItem::raw`]
 /// slices from the iterator reconstructs the original input exactly.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::scan;
+///
+/// let input = "plain #\u{FE0E}";
+/// let reconstructed = scan(input).map(|item| item.raw).collect::<String>();
+///
+/// assert_eq!(reconstructed, input);
+/// ```
 #[must_use]
 pub fn scan(input: &str) -> Scanner<'_> {
     Scanner {
