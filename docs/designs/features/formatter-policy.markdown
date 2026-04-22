@@ -11,27 +11,27 @@ Defines: the public policy surface, CLI modes, and exit codes.
 - the preferred-bare set
 - the bare-as-text set
 
-The CLI manages those predicates through ordered set operations, while the library can still construct them directly with the typed [charset API](charset-api.markdown).
+The CLI manages those predicates through ordered set operations, while the library can still construct them directly with the typed [VariationSet API](variation-set-api.markdown).
 
 ### Preferred-bare set
 
-Selects bases whose bare form is preferred when both bare and explicit forms remain reasonable.
+Selects variation positions whose bare form is preferred when both bare and explicit forms remain reasonable.
 
 CLI flags:
 
-- `--set-prefer-bare=<charset[,charset]...>`
-- `--add-prefer-bare=<charset[,charset]...>`
-- `--remove-prefer-bare=<charset[,charset]...>`
+- `--set-prefer-bare=<set[,set]...>`
+- `--add-prefer-bare=<set[,set]...>`
+- `--remove-prefer-bare=<set[,set]...>`
 
 ### Bare-as-text set
 
-Selects bases whose bare form is interpreted as text-like rather than emoji-like when policy must decide what bare means.
+Selects variation positions whose bare form is interpreted as text-like rather than emoji-like when policy must decide what bare means.
 
 CLI flags:
 
-- `--set-bare-as-text=<charset[,charset]...>`
-- `--add-bare-as-text=<charset[,charset]...>`
-- `--remove-bare-as-text=<charset[,charset]...>`
+- `--set-bare-as-text=<set[,set]...>`
+- `--add-bare-as-text=<set[,set]...>`
+- `--remove-bare-as-text=<set[,set]...>`
 
 ## Ordered CLI model
 
@@ -41,11 +41,11 @@ The CLI applies repeated set-operation flags strictly left to right within each 
 - `add-*` unions new items into the current set
 - `remove-*` subtracts items from the current set
 
-Character-set flags take comma-separated lists of:
+Policy set flags take comma-separated lists of:
 
-- named presets such as `ascii`, `rights-marks`, or `arrows`
-- `u(HEX)` code-point items
-- single-character charset literals, optionally followed by a variation selector, such as `#`, `*`, `©︎` (U+00A9 U+FE0E), or `©️` (U+00A9 U+FE0F)
+- named presets such as `ascii`, `rights-marks`, `arrows`, `keycap-chars`, `non-keycap-chars`, or `keycap-emojis`
+- ordinary `u(HEX)` code-point items
+- single-character literals, optionally followed by a variation selector, such as `#`, `*`, `©︎` (U+00A9 U+FE0E), or `©️` (U+00A9 U+FE0F)
 
 `all` selects every character `evfmt` can format and works with any policy set-operation flag. `none` clears a policy set and works only with `--set-*` policy flags. Unknown preset-like items are errors and should offer nearby suggestions when practical.
 
@@ -81,7 +81,7 @@ You can also derive the predicates from the actions you want:
 
 ```sh
 --set-prefer-bare=ascii
---set-bare-as-text=ascii
+--set-bare-as-text=ascii,keycap-chars
 --set-ignore=git,evfmt,hidden
 ```
 
@@ -89,13 +89,14 @@ This means:
 
 - ASCII ambiguous bare forms stay bare
 - non-ASCII ambiguous bare forms default to emoji presentation
+- bare keycap-character forms default to text presentation
 
-With the default sets `bare-as-text = ascii` and `preferred-bare = ascii`, the resulting actions are:
+With the default sets `bare-as-text = ascii,keycap-chars` and `preferred-bare = ascii`, the resulting actions are:
 
-|                                      | Treating bare as text (`ascii`) | Not treating bare as text (except `ascii`) |
-| ------------------------------------ | ------------------------------- | ------------------------------------------ |
-| Preferring bare (`ascii`)            | Change text to bare for ASCII   | Change emoji to bare for none              |
-| Not preferring bare (except `ascii`) | Change bare to text for none    | Change bare to emoji for non-ASCII         |
+|                                      | Treating bare as text (`ascii,keycap-chars`)       | Not treating bare as text (except `ascii,keycap-chars`) |
+| ------------------------------------ | -------------------------------------------------- | ------------------------------------------------------- |
+| Preferring bare (`ascii`)            | Change text to bare for ASCII                      | Change emoji to bare for none                           |
+| Not preferring bare (except `ascii`) | Change bare to text for keycap-character positions | Change bare to emoji for ordinary non-ASCII positions   |
 
 ## Formatting modes
 

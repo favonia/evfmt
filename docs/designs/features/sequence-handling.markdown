@@ -30,7 +30,7 @@ Concrete scanner state shapes and local edge cases belong in scanner comments an
 
 ## Core decision boundary
 
-Policy is only for genuinely ambiguous standalone variation-sequence slots.
+Policy is only for genuinely ambiguous standalone variation positions.
 
 Sequence-specific cleanup rules must resolve before policy.
 
@@ -40,28 +40,25 @@ Sequence-specific cleanup rules must resolve before policy.
 
 For a standalone base with variation-sequence data, the formatter may need policy to choose among bare, `FE0E`, and `FE0F`.
 
-Only standalone variation-sequence slots may remain policy-ambiguous after context-aware cleanup.
+Only standalone variation-sequence slots and standalone keycap-character slots may remain policy-ambiguous after context-aware cleanup.
 
 ### Fixed cleanup for singleton-base slots
 
-When a singleton base is followed by emoji modifications, tag characters, a keycap mark, or appears as a component of a multi-component ZWJ sequence, selector handling is fixed cleanup rather than policy.
+When a singleton base is followed by emoji modifications, tag characters, or appears as a component of a multi-component ZWJ sequence, selector handling is fixed cleanup rather than policy. A standalone singleton base followed only by `U+20E3` uses keycap-character policy when the base has variation-sequence data.
 
 The base-presentation decision is resolved by this precedence:
 
-| Precedence | Context                                                         | Canonical base presentation |
-| ---------- | --------------------------------------------------------------- | --------------------------- |
-| 1          | The chosen presentation would be unsanctioned                   | bare                        |
-| 2          | Emoji modifier present                                          | bare                        |
-| 3          | Tag present or multi-component ZWJ context, emoji-default base  | bare                        |
-| 4          | Tag present or multi-component ZWJ context, other base          | emoji                       |
-| 5          | Keycap present, emoji-default base                              | bare                        |
-| 6          | Keycap present, base currently text-styled                      | text                        |
-| 7          | Keycap present otherwise                                        | emoji                       |
-| 8          | No modifications on the base and no multi-component ZWJ context | use standalone policy       |
+| Precedence | Context                                                        | Canonical base presentation |
+| ---------- | -------------------------------------------------------------- | --------------------------- |
+| 1          | The chosen presentation would be unsanctioned                  | bare                        |
+| 2          | Emoji modifier present                                         | bare                        |
+| 3          | Tag present or multi-component ZWJ context, emoji-default base | bare                        |
+| 4          | Tag present or multi-component ZWJ context, other base         | emoji                       |
+| 5          | No fixed-cleanup context remains                               | use policy                  |
 
-Rule 8 is the boundary back to standalone variation-sequence handling. It is not a policy hook for modified bases or multi-component ZWJ components.
+Rule 5 is the boundary back to policy. Keycap-character slots query the keycap-character domain, and ordinary standalone slots query the ordinary domain. This is not a policy hook for emoji modifiers, tag modifiers, or multi-component ZWJ components.
 
-Every `[0-9#*]` keycap base has standardized text and emoji presentation sequences and is text-default in the pinned Unicode data, so the unsanctioned-presentation check collapses to the ordinary variation-sequence-data check for those bases. The emoji-default keycap rule is still part of the general singleton-base precedence because scanner grouping is permissive and keycap-like modifications can appear after other emoji-like bases.
+Every `[0-9#*]` keycap base has standardized text and emoji presentation sequences and is text-default in the pinned Unicode data. Scanner grouping is broader than RGI keycaps, so policy queries outside that standardized base set may still collapse to selector cleanup when the base lacks variation-sequence data.
 
 ### Keycap sequences
 
@@ -71,11 +68,15 @@ In true keycap context, the RGI emoji keycap form (UTS #51 §1.4.5) is:
 [0-9#*] FE0F 20E3
 ```
 
-Standalone bare keycap inputs (`[0-9#*] 20E3`) are normalized to this `FE0F` form.
+Standalone bare keycap inputs (`[0-9#*] 20E3`) use keycap-character policy. The default policy treats bare keycap-character forms as text, so the default canonical spelling is:
+
+```text
+[0-9#*] FE0E 20E3
+```
 
 Explicit `FE0E` in the same standalone slot is preserved rather than overwritten. `[0-9#*] FE0E` is a standardized text variation sequence (`StandardizedVariants.txt`), and per the Unicode Standard Chapter 23 a variation selector's effect on the base may propagate to subsequent combining marks — so `[0-9#*] FE0E 20E3` has a well-defined compositional meaning (a text-styled digit enclosed by a keycap mark inheriting that appearance). It is not an RGI emoji sequence, but it is not unsanctioned either; promoting `FE0E` to `FE0F` here would destructively convert a text-style form into an emoji one.
 
-Keycap handling is fixed cleanup, not policy. The precedence table above explains why standalone text-styled keycaps are preserved, while keycap components inside multi-component ZWJ sequences are normalized to emoji presentation.
+Explicit `FE0F` in a standalone keycap-character slot is preserved under the default policy. Keycap components inside multi-component ZWJ sequences are still fixed cleanup and normalize to emoji presentation.
 
 ### Modifier sequences
 
@@ -93,7 +94,7 @@ For cleanup, the relevant ZWJ-like shapes are:
 
 - no emoji component: only presentation selectors attached to ZWJ links are removed
 - one emoji component: the component uses the ordinary singleton or flag cleanup path, while surrounding ZWJ links are preserved and link-attached selectors are removed
-- multiple emoji components: each component is in true ZWJ component context and standalone policy never applies
+- multiple emoji components: each component is in true ZWJ component context and standalone ordinary/keycap policy never applies
 
 In canonical output:
 
@@ -112,6 +113,7 @@ Selectors that are not part of a sanctioned local selector-bearing context are r
 The durable slot distinction is:
 
 - standalone variation-sequence slot
+- standalone keycap-character slot
 - fixed-cleanup sequence slot
 - not-a-slot
 

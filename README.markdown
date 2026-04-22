@@ -27,7 +27,7 @@ Unicode provides invisible presentation selectors (`U+FE0E` for text, `U+FE0F` f
 
 Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, the same file may look different on different platforms. `evfmt` normalizes these selectors for you.
 
-The emoji selector `U+FE0F` also appears in multi-character emoji sequences such as keycaps and [Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_zwj_sequence) (where multiple emoji are joined into one). `evfmt` normalizes these sequences to their [fully qualified](https://www.unicode.org/reports/tr51/tr51-29.html#def_fully_qualified_emoji) forms as well.
+The emoji selector `U+FE0F` also appears in multi-character emoji sequences such as keycaps and [Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_zwj_sequence) (where multiple emoji are joined into one). `evfmt` normalizes selector usage in these sequences as well.
 
 ## ✨️ What It Does
 
@@ -198,12 +198,12 @@ The policy is shaped by two choices: how bare characters render on your _referen
 
 The CLI exposes those choices as two mutable sets:
 
-- `bare-as-text`: Which characters the reference platform shows as text when bare. Many modern platforms show bare non-ASCII characters as emoji, so the default set is `ascii`.
+- `bare-as-text`: Which variation positions the reference platform shows as text when bare. Many modern platforms show bare non-ASCII characters as emoji, so the default set is `ascii,keycap-chars`.
 - `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is also `ascii`, so non-ASCII characters always get an explicit selector for maximum cross-platform consistency.
 
 To choose the right policy, first decide whether a character's bare form looks like text or emoji on your reference platform. Put it in `bare-as-text` if the bare form looks like text. Then decide whether the character should stay bare in the files you publish, as long as doing so preserves the intended presentation. Put it in `prefer-bare` if bare spelling is stable enough for your target platforms.
 
-The two choices determine how `evfmt` repairs each ambiguous standalone character:
+The two choices determine how `evfmt` repairs each ambiguous standalone variation position:
 
 | If a character is...                | `evfmt` does this                                   |
 | ----------------------------------- | --------------------------------------------------- |
@@ -212,49 +212,52 @@ The two choices determine how `evfmt` repairs each ambiguous standalone characte
 | in `prefer-bare` only               | changes explicit emoji to bare; leaves others alone |
 | in neither set                      | changes bare to explicit emoji; leaves others alone |
 
-With the default sets `bare-as-text = ascii` and `prefer-bare = ascii`, ASCII bare forms stay bare and non-ASCII bare forms get explicit emoji selectors.
+With the default sets `bare-as-text = ascii,keycap-chars` and `prefer-bare = ascii`, ASCII bare forms stay bare, ordinary non-ASCII bare forms get explicit emoji selectors, and bare keycap-character forms get explicit text selectors.
 
 #### Policy Flags
 
-Use these flags to update the policy sets. Each flag takes one or more comma-separated charset items:
+Use these flags to update the policy sets. Each flag takes one or more comma-separated variation-set items:
 
 - To update the `bare-as-text` set:
 
   <dl>
-  <dt><code>--set-bare-as-text=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
-  <dd>Replaces <code>bare-as-text</code> with the specified charset items.</dd>
-  <dt><code>--add-bare-as-text=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
-  <dd>Adds charset items to <code>bare-as-text</code>.</dd>
-  <dt><code>--remove-bare-as-text=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
-  <dd>Removes charset items from <code>bare-as-text</code>.</dd>
+  <dt><code>--set-bare-as-text=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
+  <dd>Replaces <code>bare-as-text</code> with the specified variation-set items.</dd>
+  <dt><code>--add-bare-as-text=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
+  <dd>Adds variation-set items to <code>bare-as-text</code>.</dd>
+  <dt><code>--remove-bare-as-text=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
+  <dd>Removes variation-set items from <code>bare-as-text</code>.</dd>
   </dl>
 
 - To update the `prefer-bare` set:
 
   <dl>
-  <dt><code>--set-prefer-bare=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
-  <dd>Replaces <code>prefer-bare</code> with the specified charset items.</dd>
-  <dt><code>--add-prefer-bare=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
-  <dd>Adds charset items to <code>prefer-bare</code>.</dd>
-  <dt><code>--remove-prefer-bare=&lt;charset&gt;[,&lt;charset&gt;...]</code></dt>
-  <dd>Removes charset items from <code>prefer-bare</code>.</dd>
+  <dt><code>--set-prefer-bare=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
+  <dd>Replaces <code>prefer-bare</code> with the specified variation-set items.</dd>
+  <dt><code>--add-prefer-bare=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
+  <dd>Adds variation-set items to <code>prefer-bare</code>.</dd>
+  <dt><code>--remove-prefer-bare=&lt;set&gt;[,&lt;set&gt;...]</code></dt>
+  <dd>Removes variation-set items from <code>prefer-bare</code>.</dd>
   </dl>
 
-Both policy sets start as `ascii`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
+The policy sets start as `prefer-bare = ascii` and `bare-as-text = ascii,keycap-chars`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
 
-Supported charset items are:
+Supported variation-set items are:
 
 - `ascii`: ASCII characters with text/emoji variation forms, such as `#`, `*`, and digits
 - `emoji-defaults`: characters whose bare form defaults to emoji presentation in Unicode
 - `rights-marks`: copyright and registered/trademark-style marks
 - `arrows`: arrow symbols with text/emoji variation forms
 - `card-suits`: card suit symbols with text/emoji variation forms
+- `keycap-chars`: all keycap-character positions for variation-sequence bases
+- `non-keycap-chars`: all ordinary variation-sequence base positions
+- `keycap-emojis`: RGI emoji keycap bases (`#`, `*`, `0`-`9`) in keycap-character positions
 - `u(HEX)`: one Unicode code point, for example `u(00A9)`
 - a single character, for example `#`, `*`, or `©️`; presentation selectors are allowed and ignored when matching the character
 
 Use commas to combine items: `ascii,rights-marks,u(00A9)`. Named sets may change when `evfmt` upgrades Unicode support.
 
-Use `all` by itself to select every character `evfmt` can format. For example, `--remove-prefer-bare=all` makes every format-supported character require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII then normalizes to explicit text form and bare non-ASCII normalizes to explicit emoji form.
+Use `all` by itself to select every variation position `evfmt` can format. For example, `--remove-prefer-bare=all` makes every format-supported position require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII and bare keycap-character forms then normalize to explicit text form and ordinary bare non-ASCII normalizes to explicit emoji form.
 
 <a id="zwj-sequences"></a>
 
@@ -266,9 +269,9 @@ Use `all` by itself to select every character `evfmt` can format. For example, `
 
 ## 🔢 Normalization of Keycap Sequences
 
-Keycap sequences combine a base character (`0`–`9`, `#`, or `*`) with the combining enclosing keycap (`U+20E3`) to produce keycap buttons like 1️⃣ and #️⃣. The base character can appear bare, with a text selector (`U+FE0E`), or with an emoji selector (`U+FE0F`) before the keycap mark. [Unicode Technical Standard #51](https://www.unicode.org/reports/tr51/tr51-29.html) discourages the bare form (`[0-9#*] U+20E3` without a presentation selector), so `evfmt` normalizes bare keycap sequences to the emoji form (`[0-9#*] U+FE0F U+20E3`), which is the form most platforms render as the familiar keycap buttons. For standalone keycap sequences, explicit text selectors are preserved. However, when a keycap sequence appears as a component of a ZWJ sequence, `evfmt` normalizes it unconditionally to the emoji form, because ZWJ sequences are intended for emoji presentation only (see [Normalization of Emoji ZWJ Sequences](#zwj-sequences)).
+Keycap sequences combine a base character (`0`–`9`, `#`, or `*`) with the combining enclosing keycap (`U+20E3`) to produce keycap buttons like 1️⃣ and #️⃣. The base character can appear bare, with a text selector (`U+FE0E`), or with an emoji selector (`U+FE0F`) before the keycap mark. By default, `evfmt` treats bare standalone keycap-character forms as text and normalizes `[0-9#*] U+20E3` to `[0-9#*] U+FE0E U+20E3`. Explicit text and emoji selectors in standalone keycap forms are preserved. When a keycap sequence appears as a component of a ZWJ sequence, `evfmt` normalizes it unconditionally to the emoji form, because ZWJ sequences are intended for emoji presentation only (see [Normalization of Emoji ZWJ Sequences](#zwj-sequences)).
 
-The text form (`[0-9#*] U+FE0E U+20E3`) is not in the current standard but appeared in earlier ISO/IEC 10646 working documents (for example, [N4228](https://www.unicode.org/L2/L2012/12199-02n4228_10646pdam2.pdf) and [N4349](https://unicode.org/wg2/docs/n4349.pdf)). If a real use for text-form keycaps is later discovered, a future version of `evfmt` may allow users to specify `--add-bare-as-text=keycaps` similar to how the policy can be configured for single characters, but such functionality is deliberately excluded from the current interface.
+The text form (`[0-9#*] U+FE0E U+20E3`) is not in the current standard but appeared in earlier ISO/IEC 10646 working documents (for example, [N4228](https://www.unicode.org/L2/L2012/12199-02n4228_10646pdam2.pdf) and [N4349](https://unicode.org/wg2/docs/n4349.pdf)).
 
 ## ⚖️ License
 

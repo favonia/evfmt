@@ -41,7 +41,7 @@ pub(crate) fn is_tag(ch: char) -> bool {
 ///
 /// We use a custom implementation instead of the standard library's
 /// `binary_search_by` because this function needs to be `const` for
-/// compile-time bitset construction in `charset.rs`.
+/// compile-time bitset construction in `variation_set.rs`.
 const fn in_ranges(ranges: &[(char, char)], ch: char) -> bool {
     let val = ch as u32;
     let mut lo = 0usize;

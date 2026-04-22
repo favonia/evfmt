@@ -79,7 +79,7 @@ These guard the product assumptions:
 - modifier context must not re-enter policy ambiguity
 - ZWJ terminal handling must not re-enter policy ambiguity
 - keycap cleanup must not re-enter policy ambiguity; standalone keycaps and ZWJ-component keycaps keep distinct fixed-cleanup behavior
-- after fixed rules, ambiguous policy slots must still collapse to base-indexed policy keys
+- after fixed rules, ambiguous policy slots must still collapse to base-indexed policy keys with only the ordinary/keycap domain as an added qualifier
 
 ### 8. CLI contract evidence
 

@@ -7,10 +7,10 @@ use ignore::WalkBuilder;
 use tempfile::NamedTempFile;
 
 use evfmt::Policy;
-use evfmt::charset;
-use evfmt::charset::CharSet;
-use evfmt::charset::is_variation_sequence_character;
 use evfmt::formatter::{self, FormatResult};
+use evfmt::variation_set;
+use evfmt::variation_set::VariationSet;
+use evfmt::variation_set::is_variation_sequence_character;
 
 use crate::cli_args::{Mode, OperationId, OrderedOperation, ParsedCommand};
 
@@ -112,21 +112,21 @@ struct RuntimeSettings {
 }
 
 fn build_runtime_settings(operations: &[OrderedOperation]) -> Result<RuntimeSettings, ()> {
-    let mut prefer_bare = charset::ASCII;
-    let mut bare_as_text = charset::ASCII;
+    let mut prefer_bare = variation_set::ASCII;
+    let mut bare_as_text = variation_set::ASCII | variation_set::KEYCAP_CHARS;
     let mut ignore = IgnoreSettings::default();
 
     for operation in operations {
         match operation.id.runtime_operation() {
             RuntimeOperation::PreferBare(kind) => {
-                let parsed = parse_charset_list(kind, &operation.value)
+                let parsed = parse_variation_set_list(kind, &operation.value)
                     .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
-                prefer_bare = apply_charset_update(prefer_bare, kind, parsed);
+                prefer_bare = apply_variation_set_update(prefer_bare, kind, parsed);
             }
             RuntimeOperation::BareAsText(kind) => {
-                let parsed = parse_charset_list(kind, &operation.value)
+                let parsed = parse_variation_set_list(kind, &operation.value)
                     .map_err(|error| report_usage_error(operation.id.flag_name(), &error))?;
-                bare_as_text = apply_charset_update(bare_as_text, kind, parsed);
+                bare_as_text = apply_variation_set_update(bare_as_text, kind, parsed);
             }
             RuntimeOperation::Ignore(kind) => {
                 let parsed = parse_ignore_list(kind, &operation.value)
@@ -144,7 +144,11 @@ fn build_runtime_settings(operations: &[OrderedOperation]) -> Result<RuntimeSett
     })
 }
 
-fn apply_charset_update(current: CharSet, kind: UpdateKind, parsed: CharSet) -> CharSet {
+fn apply_variation_set_update(
+    current: VariationSet,
+    kind: UpdateKind,
+    parsed: VariationSet,
+) -> VariationSet {
     match kind {
         UpdateKind::Set => parsed,
         UpdateKind::Add => current | parsed,
@@ -235,12 +239,12 @@ impl IgnoreSettings {
     }
 }
 
-fn parse_charset_list(kind: UpdateKind, input: &str) -> Result<CharSet, CliParseError> {
+fn parse_variation_set_list(kind: UpdateKind, input: &str) -> Result<VariationSet, CliParseError> {
     let items = split_list_items(input)?;
     if items.len() == 1 {
         match items[0] {
-            "all" => return Ok(CharSet::all()),
-            "none" if kind == UpdateKind::Set => return Ok(CharSet::none()),
+            "all" => return Ok(VariationSet::all()),
+            "none" if kind == UpdateKind::Set => return Ok(VariationSet::none()),
             "none" => {
                 return Err(CliParseError {
                     message: "`none` is only allowed with `--set-*`".to_owned(),
@@ -256,9 +260,9 @@ fn parse_charset_list(kind: UpdateKind, input: &str) -> Result<CharSet, CliParse
         });
     }
 
-    let mut set = CharSet::none();
+    let mut set = VariationSet::none();
     for item in items {
-        set |= parse_charset_item(item)?;
+        set |= parse_variation_set_item(item)?;
     }
 
     Ok(set)
@@ -285,21 +289,28 @@ fn split_list_items(input: &str) -> Result<Vec<&str>, CliParseError> {
     Ok(items)
 }
 
-fn parse_charset_item(item: &str) -> Result<CharSet, CliParseError> {
+fn parse_variation_set_item(item: &str) -> Result<VariationSet, CliParseError> {
     if let Some(named_set) = parse_named_set(item) {
         return Ok(named_set);
     }
 
     if item.starts_with("u(") {
-        return parse_code_point_item(item);
+        return parse_code_point_item(item, CodePointDomain::Ordinary);
+    }
+
+    // Undocumented compatibility spelling: the CLI accepts keycap-domain
+    // singletons for internal round-tripping, but this syntax is not mature
+    // enough to advertise as public policy grammar.
+    if item.starts_with("k(") {
+        return parse_code_point_item(item, CodePointDomain::Keycap);
     }
 
     if let Some(ch) = parse_naked_single(item) {
-        return parse_singleton_item(item, ch);
+        return parse_singleton_item(item, ch, CodePointDomain::Ordinary);
     }
 
     if looks_like_identifier(item) {
-        let mut message = format!("unknown charset preset `{item}`");
+        let mut message = format!("unknown variation set preset `{item}`");
         if let Some(suggestion) = suggest_name(item, &named_set_names()) {
             let _ = write!(message, "; did you mean `{suggestion}`?");
         }
@@ -307,7 +318,7 @@ fn parse_charset_item(item: &str) -> Result<CharSet, CliParseError> {
     }
 
     Err(CliParseError {
-        message: format!("invalid charset item `{item}`"),
+        message: format!("invalid variation set item `{item}`"),
     })
 }
 
@@ -351,21 +362,37 @@ fn parse_ignore_list(kind: UpdateKind, input: &str) -> Result<Vec<IgnoreLabel>, 
     Ok(labels)
 }
 
-fn parse_named_set(item: &str) -> Option<CharSet> {
+fn parse_named_set(item: &str) -> Option<VariationSet> {
     match item {
-        "ascii" => Some(charset::ASCII),
-        "text-defaults" => Some(charset::TEXT_DEFAULTS),
-        "emoji-defaults" => Some(charset::EMOJI_DEFAULTS),
-        "rights-marks" => Some(charset::RIGHTS_MARKS),
-        "arrows" => Some(charset::ARROWS),
-        "card-suits" => Some(charset::CARD_SUITS),
+        "ascii" => Some(variation_set::ASCII),
+        "text-defaults" => Some(variation_set::TEXT_DEFAULTS),
+        "emoji-defaults" => Some(variation_set::EMOJI_DEFAULTS),
+        "rights-marks" => Some(variation_set::RIGHTS_MARKS),
+        "arrows" => Some(variation_set::ARROWS),
+        "card-suits" => Some(variation_set::CARD_SUITS),
+        "keycap-chars" => Some(variation_set::KEYCAP_CHARS),
+        "non-keycap-chars" => Some(variation_set::NON_KEYCAP_CHARS),
+        "keycap-emojis" => Some(variation_set::KEYCAP_EMOJIS),
         _ => None,
     }
 }
 
-fn parse_code_point_item(item: &str) -> Result<CharSet, CliParseError> {
+#[derive(Clone, Copy)]
+enum CodePointDomain {
+    Ordinary,
+    Keycap,
+}
+
+fn parse_code_point_item(
+    item: &str,
+    domain: CodePointDomain,
+) -> Result<VariationSet, CliParseError> {
+    let prefix = match domain {
+        CodePointDomain::Ordinary => "u(",
+        CodePointDomain::Keycap => "k(",
+    };
     let Some(hex) = item
-        .strip_prefix("u(")
+        .strip_prefix(prefix)
         .and_then(|rest| rest.strip_suffix(')'))
     else {
         return Err(CliParseError {
@@ -385,19 +412,26 @@ fn parse_code_point_item(item: &str) -> Result<CharSet, CliParseError> {
             message: format!("invalid code point item `{item}`"),
         });
     };
-    parse_singleton_item(item, ch)
+    parse_singleton_item(item, ch, domain)
 }
 
-fn parse_singleton_item(item: &str, ch: char) -> Result<CharSet, CliParseError> {
+fn parse_singleton_item(
+    item: &str,
+    ch: char,
+    domain: CodePointDomain,
+) -> Result<VariationSet, CliParseError> {
     if !is_variation_sequence_character(ch) {
         return Err(CliParseError {
             message: format!("character `{item}` is not eligible for emoji variation selectors"),
         });
     }
-    Ok(CharSet::singleton(ch))
+    Ok(match domain {
+        CodePointDomain::Ordinary => VariationSet::singleton(ch),
+        CodePointDomain::Keycap => VariationSet::singleton_keycap(ch),
+    })
 }
 
-fn named_set_names() -> [&'static str; 6] {
+fn named_set_names() -> [&'static str; 9] {
     [
         "ascii",
         "text-defaults",
@@ -405,6 +439,9 @@ fn named_set_names() -> [&'static str; 6] {
         "rights-marks",
         "arrows",
         "card-suits",
+        "keycap-chars",
+        "non-keycap-chars",
+        "keycap-emojis",
     ]
 }
 

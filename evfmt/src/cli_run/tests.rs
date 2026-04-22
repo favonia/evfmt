@@ -47,85 +47,96 @@ fn ignore_settings_apply_label_updates() {
 
 #[test]
 #[allow(clippy::unwrap_used)]
-fn charset_lists_parse_shortcuts_and_comma_lists() {
-    let all = parse_charset_list(UpdateKind::Add, "all").unwrap();
+fn variation_set_lists_parse_shortcuts_and_comma_lists() {
+    let all = parse_variation_set_list(UpdateKind::Add, "all").unwrap();
     assert!(all.contains('#'));
+    assert!(all.contains_keycap('#'));
     assert!(all.contains('\u{00A9}'));
 
     assert_eq!(
-        parse_charset_list(UpdateKind::Set, "none").unwrap(),
-        CharSet::none()
+        parse_variation_set_list(UpdateKind::Set, "none").unwrap(),
+        VariationSet::none()
     );
 
-    let set = parse_charset_list(UpdateKind::Add, " ascii, u(00A9), *\u{FE0F} ").unwrap();
+    let set =
+        parse_variation_set_list(UpdateKind::Add, " ascii, u(00A9), k(0023), *\u{FE0F} ").unwrap();
     assert!(set.contains('#'));
     assert!(set.contains('*'));
     assert!(set.contains('\u{00A9}'));
+    assert!(set.contains_keycap('#'));
     assert!(!set.contains('\u{2728}'));
 
-    let text_defaults = parse_charset_list(UpdateKind::Add, "text-defaults").unwrap();
+    let text_defaults = parse_variation_set_list(UpdateKind::Add, "text-defaults").unwrap();
     assert!(text_defaults.contains('\u{00A9}'));
     assert!(!text_defaults.contains('\u{2728}'));
 
-    let emoji_defaults = parse_charset_list(UpdateKind::Add, "emoji-defaults").unwrap();
+    let emoji_defaults = parse_variation_set_list(UpdateKind::Add, "emoji-defaults").unwrap();
     assert!(emoji_defaults.contains('\u{2728}'));
     assert!(!emoji_defaults.contains('\u{00A9}'));
 
-    let arrows = parse_charset_list(UpdateKind::Add, "arrows").unwrap();
+    let arrows = parse_variation_set_list(UpdateKind::Add, "arrows").unwrap();
     assert!(arrows.contains('\u{2194}'));
     assert!(!arrows.contains('\u{2660}'));
+
+    let keycap_chars = parse_variation_set_list(UpdateKind::Add, "keycap-chars").unwrap();
+    assert!(!keycap_chars.contains('#'));
+    assert!(keycap_chars.contains_keycap('#'));
+
+    let keycap_emojis = parse_variation_set_list(UpdateKind::Add, "keycap-emojis").unwrap();
+    assert!(keycap_emojis.contains_keycap('#'));
+    assert!(!keycap_emojis.contains_keycap('\u{00A9}'));
 }
 
 #[test]
-fn charset_lists_reject_invalid_shortcut_usage() {
+fn variation_set_lists_reject_invalid_shortcut_usage() {
     assert_parse_error(
-        parse_charset_list(UpdateKind::Add, "none"),
+        parse_variation_set_list(UpdateKind::Add, "none"),
         "`none` is only allowed",
     );
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "all,ascii"),
+        parse_variation_set_list(UpdateKind::Set, "all,ascii"),
         "`all` and `none` must appear alone",
     );
-    assert_parse_error(parse_charset_list(UpdateKind::Set, ""), "empty list");
+    assert_parse_error(parse_variation_set_list(UpdateKind::Set, ""), "empty list");
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "ascii,"),
+        parse_variation_set_list(UpdateKind::Set, "ascii,"),
         "empty list item",
     );
 }
 
 #[test]
-fn charset_items_report_specific_errors() {
+fn variation_set_items_report_specific_errors() {
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "arowws"),
-        "unknown charset preset `arowws`; did you mean `arrows`?",
+        parse_variation_set_list(UpdateKind::Set, "arowws"),
+        "unknown variation set preset `arowws`; did you mean `arrows`?",
     );
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "card_suit"),
+        parse_variation_set_list(UpdateKind::Set, "card_suit"),
         "did you mean `card-suits`?",
     );
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "u(110000)"),
+        parse_variation_set_list(UpdateKind::Set, "u(110000)"),
         "invalid code point item",
     );
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "u(00ag)"),
+        parse_variation_set_list(UpdateKind::Set, "u(00ag)"),
         "invalid code point item",
     );
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "u(00A9"),
+        parse_variation_set_list(UpdateKind::Set, "u(00A9"),
         "invalid code point item",
     );
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "u(0041)"),
+        parse_variation_set_list(UpdateKind::Set, "u(0041)"),
         "not eligible for emoji variation selectors",
     );
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "A"),
+        parse_variation_set_list(UpdateKind::Set, "A"),
         "not eligible for emoji variation selectors",
     );
     assert_parse_error(
-        parse_charset_list(UpdateKind::Set, "\u{00A9}#"),
-        "invalid charset item",
+        parse_variation_set_list(UpdateKind::Set, "\u{00A9}#"),
+        "invalid variation set item",
     );
 }
 

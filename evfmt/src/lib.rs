@@ -62,14 +62,14 @@
 //! It analyzes scanned items under the supplied [`Policy`] and returns the
 //! valid replacement choices for each finding.
 //!
-//! Custom policies can be built from [`charset`] charsets. In this example,
+//! Custom policies can be built from [`variation_set`] variation sets. In this example,
 //! `rights-marks` contains `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to
 //! remain bare.
 //!
 //! ```rust
-//! use evfmt::{charset, Policy, format_text};
+//! use evfmt::{Policy, format_text, variation_set};
 //!
-//! let ascii_and_rights_marks = charset::ASCII | charset::RIGHTS_MARKS;
+//! let ascii_and_rights_marks = variation_set::ASCII | variation_set::RIGHTS_MARKS;
 //! let policy = Policy::default()
 //!     .with_prefer_bare(ascii_and_rights_marks)
 //!     .with_bare_as_text(ascii_and_rights_marks);
@@ -91,17 +91,16 @@
 //!   item is non-canonical and which replacements are available
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
 //!   chains, standalone variation selector runs, and passthrough slices
-//! - [`charset`] defines the typed character-set model used by the library
+//! - [`variation_set`] defines the typed variation-set model used by the library
 //!   policy API
 
-pub mod charset;
 pub mod findings;
 pub mod formatter;
 pub mod policy;
 pub mod scanner;
 mod unicode;
+pub mod variation_set;
 
-pub use charset::CharSet;
 pub use findings::{
     Finding, PrimaryViolation, PrimaryViolationKind, ReplacementDecision, Violation,
     analyze_scan_item,
@@ -109,3 +108,4 @@ pub use findings::{
 pub use formatter::{FormatResult, format_text};
 pub use policy::Policy;
 pub use scanner::{ScanItem, ScanKind, Scanner, scan};
+pub use variation_set::VariationSet;
