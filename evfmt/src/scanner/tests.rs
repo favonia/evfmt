@@ -322,16 +322,40 @@ fn permissive_modifier_and_flag_cases_match_formatter_contract() {
 //   - RGI ZWJ sequences always contain ZWJ, never FE0E
 //   - Text-default RGI ZWJ components have FE0F
 //   - Official keycap and ZWJ sequences scan as one visible structural item
-//     and are already canonical to the formatter
+//   - All RGI emoji in the pinned sequence files are already canonical to
+//     the formatter
 //
 // If a future Unicode version violates any of these, these tests fail.
 // -------------------------------------------------------------------
 
-/// Parse a line from emoji-sequences.txt or emoji-zwj-sequences.txt.
-/// Returns (`code_points`, `type_field`) or `None` for comments/blanks.
+struct SequenceRecord {
+    entries: Vec<Vec<u32>>,
+    type_field: String,
+}
+
+// Malformed pinned Unicode data is a conformance-test fixture failure.
+#[allow(clippy::expect_used)]
+fn code_point_string(cps: &[u32]) -> String {
+    cps.iter()
+        .map(|&cp| char::from_u32(cp).expect("Unicode data should contain valid code points"))
+        .collect()
+}
+
+fn rgi_emoji_sequence_type(type_field: &str) -> bool {
+    matches!(
+        type_field,
+        "Basic_Emoji"
+            | "Emoji_Keycap_Sequence"
+            | "RGI_Emoji_Flag_Sequence"
+            | "RGI_Emoji_Tag_Sequence"
+            | "RGI_Emoji_Modifier_Sequence"
+            | "RGI_Emoji_ZWJ_Sequence"
+    )
+}
+
 // Malformed pinned Unicode data is a conformance-test fixture failure.
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-fn parse_sequence_line(line: &str) -> Option<(Vec<u32>, String)> {
+fn parse_sequence_line(line: &str) -> Option<SequenceRecord> {
     let line = line.trim();
     if line.is_empty() || line.starts_with('#') {
         return None;
@@ -350,7 +374,6 @@ fn parse_sequence_line(line: &str) -> Option<(Vec<u32>, String)> {
         "sequence line has empty type field: {line}"
     );
 
-    // Handle ranges like "231A..231B"
     if let Some((start, end)) = cp_part.split_once("..") {
         assert!(
             !end.contains(".."),
@@ -360,7 +383,14 @@ fn parse_sequence_line(line: &str) -> Option<(Vec<u32>, String)> {
             .unwrap_or_else(|_| panic!("invalid range start in sequence line: {line}"));
         let end = u32::from_str_radix(end.trim(), 16)
             .unwrap_or_else(|_| panic!("invalid range end in sequence line: {line}"));
-        return Some((vec![start, end], type_field));
+        assert!(
+            start <= end,
+            "sequence range start is after range end: {line}"
+        );
+        return Some(SequenceRecord {
+            entries: (start..=end).map(|cp| vec![cp]).collect(),
+            type_field,
+        });
     }
 
     let cps = cp_part
@@ -374,15 +404,10 @@ fn parse_sequence_line(line: &str) -> Option<(Vec<u32>, String)> {
         !cps.is_empty(),
         "sequence line has empty code point list: {line}"
     );
-    Some((cps, type_field))
-}
-
-// Malformed pinned Unicode data is a conformance-test fixture failure.
-#[allow(clippy::expect_used)]
-fn code_point_string(cps: &[u32]) -> String {
-    cps.iter()
-        .map(|&cp| char::from_u32(cp).expect("Unicode data should contain valid code points"))
-        .collect()
+    Some(SequenceRecord {
+        entries: vec![cps],
+        type_field,
+    })
 }
 
 #[test]
@@ -391,13 +416,15 @@ fn test_conformance_keycap_bases() {
     let mut keycap_bases: Vec<u32> = Vec::new();
 
     for line in data.lines() {
-        if let Some((cps, type_field)) = parse_sequence_line(line)
-            && type_field == "Emoji_Keycap_Sequence"
+        if let Some(record) = parse_sequence_line(line)
+            && record.type_field == "Emoji_Keycap_Sequence"
         {
-            assert_eq!(cps.len(), 3, "keycap sequence has wrong length: {cps:?}");
-            assert_eq!(cps[1], 0xFE0F, "keycap middle must be FE0F");
-            assert_eq!(cps[2], 0x20E3, "keycap end must be 20E3");
-            keycap_bases.push(cps[0]);
+            for cps in record.entries {
+                assert_eq!(cps.len(), 3, "keycap sequence has wrong length: {cps:?}");
+                assert_eq!(cps[1], 0xFE0F, "keycap middle must be FE0F");
+                assert_eq!(cps[2], 0x20E3, "keycap end must be 20E3");
+                keycap_bases.push(cps[0]);
+            }
         }
     }
 
@@ -418,22 +445,24 @@ fn test_conformance_rgi_keycaps_are_fully_qualified() {
     let data = include_str!("../../data/emoji-sequences.txt");
 
     for line in data.lines() {
-        if let Some((cps, type_field)) = parse_sequence_line(line)
-            && type_field == "Emoji_Keycap_Sequence"
+        if let Some(record) = parse_sequence_line(line)
+            && record.type_field == "Emoji_Keycap_Sequence"
         {
-            assert_eq!(
-                cps.len(),
-                3,
-                "RGI keycap sequence has wrong length: {cps:?}"
-            );
-            assert_eq!(
-                cps[1], 0xFE0F,
-                "RGI keycap sequence should use FE0F: {cps:?}"
-            );
-            assert_eq!(
-                cps[2], 0x20E3,
-                "RGI keycap sequence should end with U+20E3: {cps:?}"
-            );
+            for cps in record.entries {
+                assert_eq!(
+                    cps.len(),
+                    3,
+                    "RGI keycap sequence has wrong length: {cps:?}"
+                );
+                assert_eq!(
+                    cps[1], 0xFE0F,
+                    "RGI keycap sequence should use FE0F: {cps:?}"
+                );
+                assert_eq!(
+                    cps[2], 0x20E3,
+                    "RGI keycap sequence should end with U+20E3: {cps:?}"
+                );
+            }
         }
     }
 }
@@ -444,22 +473,24 @@ fn test_conformance_zwj_structure() {
     let mut count = 0;
 
     for line in data.lines() {
-        if let Some((cps, type_field)) = parse_sequence_line(line) {
-            if type_field != "RGI_Emoji_ZWJ_Sequence" {
+        if let Some(record) = parse_sequence_line(line) {
+            if record.type_field != "RGI_Emoji_ZWJ_Sequence" {
                 continue;
             }
-            count += 1;
+            for cps in record.entries {
+                count += 1;
 
-            assert!(cps.contains(&0x200D), "ZWJ sequence missing ZWJ: {cps:?}");
-            assert!(
-                !cps.contains(&0xFE0E),
-                "ZWJ sequence contains FE0E: {cps:?} — \
-                 our repair assumes no text-presentation ZWJ sequences",
-            );
+                assert!(cps.contains(&0x200D), "ZWJ sequence missing ZWJ: {cps:?}");
+                assert!(
+                    !cps.contains(&0xFE0E),
+                    "ZWJ sequence contains FE0E: {cps:?} — \
+                     our repair assumes no text-presentation ZWJ sequences",
+                );
 
-            for (i, &cp) in cps.iter().enumerate() {
-                if cp == 0xFE0F {
-                    assert!(i > 0, "FE0F at start of ZWJ sequence: {cps:?}");
+                for (i, &cp) in cps.iter().enumerate() {
+                    if cp == 0xFE0F {
+                        assert!(i > 0, "FE0F at start of ZWJ sequence: {cps:?}");
+                    }
                 }
             }
         }
@@ -477,38 +508,40 @@ fn test_conformance_zwj_text_default_has_fe0f() {
     let mut checked = 0;
 
     for line in data.lines() {
-        if let Some((cps, type_field)) = parse_sequence_line(line) {
-            if type_field != "RGI_Emoji_ZWJ_Sequence" {
+        if let Some(record) = parse_sequence_line(line) {
+            if record.type_field != "RGI_Emoji_ZWJ_Sequence" {
                 continue;
             }
 
-            let mut i = 0;
-            while i < cps.len() {
-                let base_cp = cps[i];
-                if base_cp == 0x200D {
+            for cps in record.entries {
+                let mut i = 0;
+                while i < cps.len() {
+                    let base_cp = cps[i];
+                    if base_cp == 0x200D {
+                        i += 1;
+                        continue;
+                    }
+
+                    let next = cps.get(i + 1).copied().unwrap_or(0);
+                    let has_modifier = char::from_u32(next).is_some_and(unicode::is_emoji_modifier);
+
+                    if let Some(ch) = char::from_u32(base_cp)
+                        && unicode::is_text_default(ch)
+                        && unicode::has_variation_sequence(ch)
+                        && !has_modifier
+                    {
+                        assert_eq!(
+                            cps.get(i + 1).copied(),
+                            Some(0xFE0F),
+                            "text-default U+{base_cp:04X} in ZWJ without FE0F: {cps:?}"
+                        );
+                        checked += 1;
+                    }
+
                     i += 1;
-                    continue;
-                }
-
-                let next = cps.get(i + 1).copied().unwrap_or(0);
-                let has_modifier = char::from_u32(next).is_some_and(unicode::is_emoji_modifier);
-
-                if let Some(ch) = char::from_u32(base_cp)
-                    && unicode::is_text_default(ch)
-                    && unicode::has_variation_sequence(ch)
-                    && !has_modifier
-                {
-                    assert_eq!(
-                        cps.get(i + 1).copied(),
-                        Some(0xFE0F),
-                        "text-default U+{base_cp:04X} in ZWJ without FE0F: {cps:?}"
-                    );
-                    checked += 1;
-                }
-
-                i += 1;
-                while i < cps.len() && cps[i] != 0x200D {
-                    i += 1;
+                    while i < cps.len() && cps[i] != 0x200D {
+                        i += 1;
+                    }
                 }
             }
         }
@@ -525,26 +558,27 @@ fn test_conformance_all_sequences_scan_as_one_canonical_item() {
     // Keycap sequences
     let seq_data = include_str!("../../data/emoji-sequences.txt");
     for line in seq_data.lines() {
-        if let Some((cps, type_field)) = parse_sequence_line(line) {
-            if type_field != "Emoji_Keycap_Sequence" {
+        if let Some(record) = parse_sequence_line(line) {
+            if record.type_field != "Emoji_Keycap_Sequence" {
                 continue;
             }
-            let s = code_point_string(&cps);
-            let items = scan(&s);
-            assert_eq!(
-                items.len(),
-                1,
-                "keycap sequence didn't scan as single item: {cps:?} → {items:?}"
-            );
-            assert_eq!(items[0].raw, s);
-            assert_eq!(items[0].span, 0..s.len());
-            assert!(
-                matches!(items[0].kind, ScanKind::EmojiSequence(_)),
-                "keycap sequence scanned as wrong kind: {:?} -> {:?}",
-                cps,
-                items[0].kind
-            );
-            assert_eq!(format_text(&s, &default_policy()), FormatResult::Unchanged);
+            for cps in record.entries {
+                let s = code_point_string(&cps);
+                let items = scan(&s);
+                assert_eq!(
+                    items.len(),
+                    1,
+                    "keycap sequence didn't scan as single item: {cps:?} → {items:?}"
+                );
+                assert_eq!(items[0].raw, s);
+                assert_eq!(items[0].span, 0..s.len());
+                assert!(
+                    matches!(items[0].kind, ScanKind::EmojiSequence(_)),
+                    "keycap sequence scanned as wrong kind: {:?} -> {:?}",
+                    cps,
+                    items[0].kind
+                );
+            }
         }
     }
 
@@ -552,29 +586,75 @@ fn test_conformance_all_sequences_scan_as_one_canonical_item() {
     let zwj_data = include_str!("../../data/emoji-zwj-sequences.txt");
     let mut zwj_count = 0;
     for line in zwj_data.lines() {
-        if let Some((cps, type_field)) = parse_sequence_line(line) {
-            if type_field != "RGI_Emoji_ZWJ_Sequence" {
+        if let Some(record) = parse_sequence_line(line) {
+            if record.type_field != "RGI_Emoji_ZWJ_Sequence" {
                 continue;
             }
-            let s = code_point_string(&cps);
-            let items = scan(&s);
-            assert_eq!(
-                items.len(),
-                1,
-                "ZWJ sequence didn't scan as single item: {cps:X?} → {items:#?}"
-            );
-            assert_eq!(items[0].raw, s);
-            assert_eq!(items[0].span, 0..s.len());
-            assert!(
-                matches!(items[0].kind, ScanKind::EmojiSequence(_)),
-                "ZWJ sequence scanned as wrong kind: {:X?} -> {:?}",
-                cps,
-                items[0].kind
-            );
-            assert_eq!(format_text(&s, &default_policy()), FormatResult::Unchanged);
-            zwj_count += 1;
+            for cps in record.entries {
+                let s = code_point_string(&cps);
+                let items = scan(&s);
+                assert_eq!(
+                    items.len(),
+                    1,
+                    "ZWJ sequence didn't scan as single item: {cps:X?} → {items:#?}"
+                );
+                assert_eq!(items[0].raw, s);
+                assert_eq!(items[0].span, 0..s.len());
+                assert!(
+                    matches!(items[0].kind, ScanKind::EmojiSequence(_)),
+                    "ZWJ sequence scanned as wrong kind: {:X?} -> {:?}",
+                    cps,
+                    items[0].kind
+                );
+                zwj_count += 1;
+            }
         }
     }
 
     assert!(zwj_count > 100, "too few ZWJ sequences found: {zwj_count}");
+}
+
+#[test]
+fn test_conformance_all_rgi_emoji_are_preserved() {
+    let mut checked = 0;
+
+    for line in include_str!("../../data/emoji-sequences.txt").lines() {
+        if let Some(record) = parse_sequence_line(line) {
+            if !rgi_emoji_sequence_type(&record.type_field) {
+                continue;
+            }
+
+            for expanded_cps in record.entries {
+                let s = code_point_string(&expanded_cps);
+                assert_eq!(
+                    format_text(&s, &default_policy()),
+                    FormatResult::Unchanged,
+                    "RGI emoji from emoji-sequences.txt changed: {} {expanded_cps:X?}",
+                    record.type_field,
+                );
+                checked += 1;
+            }
+        }
+    }
+
+    for line in include_str!("../../data/emoji-zwj-sequences.txt").lines() {
+        if let Some(record) = parse_sequence_line(line) {
+            if !rgi_emoji_sequence_type(&record.type_field) {
+                continue;
+            }
+
+            for expanded_cps in record.entries {
+                let s = code_point_string(&expanded_cps);
+                assert_eq!(
+                    format_text(&s, &default_policy()),
+                    FormatResult::Unchanged,
+                    "RGI emoji from emoji-zwj-sequences.txt changed: {} {expanded_cps:X?}",
+                    record.type_field,
+                );
+                checked += 1;
+            }
+        }
+    }
+
+    assert!(checked > 3000, "too few RGI emoji checked: {checked}");
 }
