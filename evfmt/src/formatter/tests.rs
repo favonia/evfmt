@@ -45,7 +45,7 @@ fn standalone_ascii_default_policy_prefers_bare_text_side() {
 }
 
 #[test]
-fn standalone_non_ascii_default_policy_resolves_bare_to_emoji() {
+fn standalone_text_default_non_ascii_default_policy_resolves_bare_to_emoji() {
     let policy = default_policy();
 
     assert_eq!(
@@ -59,6 +59,21 @@ fn standalone_non_ascii_default_policy_resolves_bare_to_emoji() {
     assert_eq!(
         format_text("\u{00A9}\u{FE0F}", &policy),
         FormatResult::Unchanged
+    );
+}
+
+#[test]
+fn standalone_emoji_default_non_ascii_default_policy_prefers_bare_emoji_side() {
+    let policy = default_policy();
+
+    assert_eq!(format_text("\u{2728}", &policy), FormatResult::Unchanged);
+    assert_eq!(
+        format_text("\u{2728}\u{FE0E}", &policy),
+        FormatResult::Unchanged
+    );
+    assert_eq!(
+        format_text("\u{2728}\u{FE0F}", &policy),
+        FormatResult::Changed("\u{2728}".to_owned())
     );
 }
 
@@ -134,6 +149,20 @@ fn keycap_policy_can_select_bare_text_or_emoji_outputs() {
     assert_eq!(
         format_text("#\u{20E3}", &bare_text_policy),
         FormatResult::Unchanged
+    );
+}
+
+#[test]
+fn keycap_policy_uses_first_modification_only() {
+    let policy = default_policy();
+
+    assert_eq!(
+        format_text("#\u{20E3}\u{1F3FB}", &policy),
+        FormatResult::Changed("#\u{FE0E}\u{20E3}\u{1F3FB}".to_owned())
+    );
+    assert_eq!(
+        format_text("#\u{20E3}\u{1F3FB}\u{FE0F}", &policy),
+        FormatResult::Changed("#\u{FE0E}\u{20E3}\u{1F3FB}".to_owned())
     );
 }
 

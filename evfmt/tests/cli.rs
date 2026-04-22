@@ -127,14 +127,25 @@ fn check_help_describes_stateful_options() {
 #[test]
 fn format_rewrites_file() {
     let tmp = assert_fs::TempDir::new().unwrap();
-    // ©️ is eligible, text-default in Unicode, not bare-preferred → gets FE0F with default policy
-    // (bare-as-text='ascii' does not match non-ASCII ©️, so bare resolves to emoji).
+    // ©️ is eligible, text-default in Unicode, and not bare-preferred, so bare
+    // resolves to emoji under the default policy.
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
     format_command().arg(file.path()).assert().success().code(0);
 
     file.assert("\u{00A9}\u{FE0F}");
+}
+
+#[test]
+fn format_keeps_bare_emoji_default_characters_bare_by_default() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{2728}\u{FE0F}").unwrap();
+
+    format_command().arg(file.path()).assert().success().code(0);
+
+    file.assert("\u{2728}");
 }
 
 #[test]

@@ -78,6 +78,8 @@ The public option surface for these predicates lives in [formatter-policy.markdo
 
 ## Product assumptions
 
+Unicode standards and pinned Unicode data define Unicode facts for this project; they do not by themselves establish how real renderers, keyboards, editors, terminals, fonts, or users behave. Questions about user expectation or implementation behavior need platform/user evidence. Check real implementations when feasible; otherwise state that evidence is missing.
+
 ### Omitted-state policy
 
 `evfmt` does not claim that omitted presentation is literally identical to `FE0E` or `FE0F`. Instead it adopts a weaker product assumption:

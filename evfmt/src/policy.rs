@@ -13,13 +13,15 @@
 //! - `bare_as_text`: positions whose bare form should be interpreted as text
 //!   presentation, rather than emoji presentation
 //!
-//! The default policy uses [`variation_set::ASCII`] for `prefer_bare` and
+//! The default policy uses [`variation_set::ASCII`] plus
+//! [`variation_set::EMOJI_DEFAULTS`] for `prefer_bare` and
 //! [`variation_set::ASCII`] plus [`variation_set::KEYCAP_CHARS`] for
 //! `bare_as_text`. That keeps ASCII bare forms such as `#` canonical, removes
-//! redundant selectors such as the `FE0E` in `#\u{FE0E}`, resolves non-ASCII
-//! bare forms such as `\u{00A9}` to emoji presentation by inserting `FE0F`,
-//! and resolves bare keycap-character forms such as `#\u{20E3}` to text
-//! presentation by inserting `FE0E` before `U+20E3`.
+//! redundant selectors such as the `FE0E` in `#\u{FE0E}`, keeps emoji-default
+//! bare forms such as `\u{2728}` canonical, resolves text-default bare forms
+//! such as `\u{00A9}` to emoji presentation by inserting `FE0F`, and resolves
+//! bare keycap-character forms such as `#\u{20E3}` to text presentation by
+//! inserting `FE0E` before `U+20E3`.
 
 use crate::variation_set::{self, VariationSet};
 
@@ -57,6 +59,7 @@ use crate::variation_set::{self, VariationSet};
 ///     format_text("\u{00A9}", &policy),
 ///     FormatResult::Changed("\u{00A9}\u{FE0F}".into())
 /// );
+/// assert_eq!(format_text("\u{2728}", &policy), FormatResult::Unchanged);
 ///
 /// let rights_marks =
 ///     variation_set::ASCII | variation_set::RIGHTS_MARKS;
@@ -163,7 +166,7 @@ impl Policy {
 impl Default for Policy {
     fn default() -> Self {
         Self {
-            prefer_bare: variation_set::ASCII,
+            prefer_bare: variation_set::ASCII | variation_set::EMOJI_DEFAULTS,
             bare_as_text: variation_set::ASCII | variation_set::KEYCAP_CHARS,
         }
     }
