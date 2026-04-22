@@ -6,9 +6,9 @@
 [![coverage](https://img.shields.io/codecov/c/github/favonia/evfmt?logo=codecov)](https://app.codecov.io/gh/favonia/evfmt)
 [![source code](https://img.shields.io/badge/source%20code-GitHub-24292f?logo=github)](https://github.com/favonia/evfmt)
 
-`evfmt` is an opinionated formatter for Unicode text/emoji presentation selectors (`U+FE0E` and `U+FE0F`) in your files.
+`evfmt` is an opinionated formatter for Unicode presentation selectors (`U+FE0E` and `U+FE0F`).
 
-The name stands for “emoji variation formatter”; use it as a command-line formatter or as a Rust library.
+The name stands for “emoji variation formatter”. It is a command-line formatter and a Rust library.
 
 This project was developed with AI assistance, guided by [detailed design documents](docs/designs/README.markdown) and substantial testing.
 
