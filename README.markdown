@@ -1,4 +1,4 @@
-# ✨️ evfmt: opinionated emoji variation formatter
+# ✨ evfmt: opinionated emoji variation formatter
 
 [![crates.io](https://img.shields.io/crates/v/evfmt?logo=rust)](https://crates.io/crates/evfmt)
 [![docs.rs](https://img.shields.io/docsrs/evfmt?logo=docs.rs)](https://docs.rs/evfmt)
@@ -25,11 +25,11 @@ Many Unicode characters have dual presentations, text and emoji:
 
 Unicode provides invisible presentation selectors (`U+FE0E` for text, `U+FE0F` for emoji) to request a specific presentation (though platforms may not always honor the request). These two characters (`U+FE0E` and `U+FE0F`) are _variation selectors_. [Unicode Technical Standard #51](https://www.unicode.org/reports/tr51/tr51-29.html) also calls them _presentation selectors_ in the emoji context, and this document follows that convention. (The _ev_ in _evfmt_ stands for _emoji variation_, after the [emoji variation sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_variation_sequence) that these selectors produce.)
 
-Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, the same file may look different on different platforms. `evfmt` normalizes these selectors for you.
+Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, certain dual-presentation characters may look different on different platforms. `evfmt` normalizes these selectors for you.
 
 The emoji selector `U+FE0F` also appears in multi-character emoji sequences such as keycaps and [Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_zwj_sequence) (where multiple emoji are joined into one). `evfmt` normalizes selector usage in these sequences as well.
 
-## ✨️ What It Does
+## ✨ What It Does
 
 Different platforms can render the same character differently when presentation selectors are missing or ambiguous. `evfmt` produces a canonical source spelling that reduces this cross-platform inconsistency:
 
@@ -40,7 +40,7 @@ Different platforms can render the same character differently when presentation 
 
 **Hard invariants:** `evfmt` is idempotent, deterministic, and only modifies presentation selectors—no other content is touched.
 
-## 📦️ Installation
+## 📦 Installation
 
 Install the CLI from [crates.io](https://crates.io/crates/evfmt):
 
@@ -96,7 +96,7 @@ evfmt format ./-
 printf '%b' 'Love \u2764' | evfmt check -
 ```
 
-### ✅️ Checking Mode
+### ✅ Checking Mode
 
 ```sh
 # Check without modifying (exits 1 if changes are needed)
@@ -147,7 +147,7 @@ evfmt format --remove-ignore=hidden .
 
 ## 📐 Normalization Policy for Single Characters with Dual Presentations
 
-By default, `evfmt` leaves bare ASCII characters alone and gives bare non-ASCII characters with dual presentations an explicit emoji selector for more consistent cross-platform rendering. For example, `#` stays bare, while a bare copyright sign (U+00A9) normalizes to `©️` (U+00A9 U+FE0F).
+By default, `evfmt` leaves bare ASCII characters and Unicode emoji-default characters alone, while text-default non-ASCII characters with dual presentations get an explicit emoji selector. For example, `#` and bare sparkles (U+2728) stay bare, while a bare copyright sign (U+00A9) normalizes to `©️` (U+00A9 U+FE0F).
 
 ⚠️ `evfmt` is a formatter, not a presentation editor. If you want to change how the copyright sign looks on your platform—say, switching it from emoji presentation to text presentation—do that in your editor by adding or removing the presentation selector (`U+FE0E` or `U+FE0F`). Run `evfmt` only after you are happy with how your document renders.
 
@@ -199,7 +199,7 @@ The policy is shaped by two choices: how bare characters render on your _referen
 The CLI exposes those choices as two mutable sets:
 
 - `bare-as-text`: Which variation positions the reference platform shows as text when bare. Many modern platforms show bare non-ASCII characters as emoji, so the default set is `ascii,keycap-chars`.
-- `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is also `ascii`, so non-ASCII characters always get an explicit selector for maximum cross-platform consistency.
+- `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is `ascii,emoji-defaults`, so emoji-default characters can stay bare while text-default non-ASCII characters still get explicit selectors.
 
 To choose the right policy, first decide whether a character's bare form looks like text or emoji on your reference platform. Put it in `bare-as-text` if the bare form looks like text. Then decide whether the character should stay bare in the files you publish, as long as doing so preserves the intended presentation. Put it in `prefer-bare` if bare spelling is stable enough for your target platforms.
 
@@ -212,7 +212,7 @@ The two choices determine how `evfmt` repairs each ambiguous standalone variatio
 | in `prefer-bare` only               | changes explicit emoji to bare; leaves others alone |
 | in neither set                      | changes bare to explicit emoji; leaves others alone |
 
-With the default sets `bare-as-text = ascii,keycap-chars` and `prefer-bare = ascii`, ASCII bare forms stay bare, ordinary non-ASCII bare forms get explicit emoji selectors, and bare keycap-character forms get explicit text selectors.
+With the default sets `bare-as-text = ascii,keycap-chars` and `prefer-bare = ascii,emoji-defaults`, ASCII bare forms and emoji-default bare forms stay bare, text-default non-ASCII bare forms get explicit emoji selectors, and bare keycap-character forms get explicit text selectors.
 
 #### Policy Flags
 
@@ -240,11 +240,12 @@ Use these flags to update the policy sets. Each flag takes one or more comma-sep
   <dd>Removes variation-set items from <code>prefer-bare</code>.</dd>
   </dl>
 
-The policy sets start as `prefer-bare = ascii` and `bare-as-text = ascii,keycap-chars`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
+The policy sets start as `prefer-bare = ascii,emoji-defaults` and `bare-as-text = ascii,keycap-chars`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
 
 Supported variation-set items are:
 
 - `ascii`: ASCII characters with text/emoji variation forms, such as `#`, `*`, and digits
+- `text-defaults`: characters whose bare form defaults to text presentation in Unicode
 - `emoji-defaults`: characters whose bare form defaults to emoji presentation in Unicode
 - `rights-marks`: copyright and registered/trademark-style marks
 - `arrows`: arrow symbols with text/emoji variation forms

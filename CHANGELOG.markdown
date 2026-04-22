@@ -11,6 +11,7 @@ Changes:
 - Changed in-place formatting to use the explicit `evfmt format` subcommand.
 - Replaced the old one-shot CLI policy flags with ordered `set/add/remove` operations for policy and ignore filters.
 - Made standalone keycap formatting configurable with `keycap-emojis`.
+- Changed the default policy to keep Unicode emoji-default characters bare, so redundant `FE0F` selectors are removed from those standalone characters by default.
 - Replaced the library's old string expression parser with typed `evfmt::variation_set` smart constructors.
 - Replaced the public `review` API with `findings` analysis APIs for scanned items.
 - Changed `scan` to return an iterator and exposed the `Scanner` type.

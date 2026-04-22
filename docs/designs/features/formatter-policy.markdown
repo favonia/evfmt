@@ -43,7 +43,7 @@ The CLI applies repeated set-operation flags strictly left to right within each 
 
 Policy set flags take comma-separated lists of:
 
-- named presets such as `ascii`, `rights-marks`, `arrows`, `keycap-chars`, `non-keycap-chars`, or `keycap-emojis`
+- named presets such as `ascii`, `text-defaults`, `emoji-defaults`, `rights-marks`, `arrows`, `keycap-chars`, `non-keycap-chars`, or `keycap-emojis`
 - ordinary `u(HEX)` code-point items
 - single-character literals, optionally followed by a variation selector, such as `#`, `*`, `©︎` (U+00A9 U+FE0E), or `©️` (U+00A9 U+FE0F)
 
@@ -80,7 +80,7 @@ You can also derive the predicates from the actions you want:
 ## Recommended defaults
 
 ```sh
---set-prefer-bare=ascii
+--set-prefer-bare=ascii,emoji-defaults
 --set-bare-as-text=ascii,keycap-chars
 --set-ignore=git,evfmt,hidden
 ```
@@ -88,15 +88,16 @@ You can also derive the predicates from the actions you want:
 This means:
 
 - ASCII ambiguous bare forms stay bare
-- non-ASCII ambiguous bare forms default to emoji presentation
+- emoji-default ambiguous bare forms stay bare
+- text-default non-ASCII ambiguous bare forms default to emoji presentation
 - bare keycap-character forms default to text presentation
 
-With the default sets `bare-as-text = ascii,keycap-chars` and `preferred-bare = ascii`, the resulting actions are:
+With the default sets `bare-as-text = ascii,keycap-chars` and `preferred-bare = ascii,emoji-defaults`, the resulting actions are:
 
-|                                      | Treating bare as text (`ascii,keycap-chars`)       | Not treating bare as text (except `ascii,keycap-chars`) |
-| ------------------------------------ | -------------------------------------------------- | ------------------------------------------------------- |
-| Preferring bare (`ascii`)            | Change text to bare for ASCII                      | Change emoji to bare for none                           |
-| Not preferring bare (except `ascii`) | Change bare to text for keycap-character positions | Change bare to emoji for ordinary non-ASCII positions   |
+|                                                     | Treating bare as text (`ascii,keycap-chars`)       | Not treating bare as text (except `ascii,keycap-chars`)   |
+| --------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------- |
+| Preferring bare (`ascii,emoji-defaults`)            | Change text to bare for ASCII                      | Change emoji to bare for emoji-default positions          |
+| Not preferring bare (except `ascii,emoji-defaults`) | Change bare to text for keycap-character positions | Change bare to emoji for text-default non-ASCII positions |
 
 ## Formatting modes
 

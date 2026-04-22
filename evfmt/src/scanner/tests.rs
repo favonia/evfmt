@@ -300,7 +300,7 @@ fn zwj_related_selector_cases_match_formatter_contract() {
     );
     assert_format(
         "\u{200D}\u{FE0F}\u{231A}",
-        &FormatResult::Changed("\u{200D}\u{231A}\u{FE0F}".to_owned()),
+        &FormatResult::Changed("\u{200D}\u{231A}".to_owned()),
     );
 }
 

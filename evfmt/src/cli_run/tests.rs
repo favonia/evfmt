@@ -176,6 +176,21 @@ fn ignore_lists_reject_invalid_labels() {
 
 #[test]
 #[allow(clippy::unwrap_used)]
+fn runtime_settings_start_with_documented_policy_defaults() {
+    let settings = build_runtime_settings(&[]).unwrap();
+
+    assert_eq!(
+        formatter::format_text("\u{2728}\u{FE0F}", &settings.policy),
+        FormatResult::Changed("\u{2728}".to_owned())
+    );
+    assert_eq!(
+        formatter::format_text("\u{00A9}", &settings.policy),
+        FormatResult::Changed("\u{00A9}\u{FE0F}".to_owned())
+    );
+}
+
+#[test]
+#[allow(clippy::unwrap_used)]
 fn policy_operations_apply_to_their_target_in_order() {
     let settings = build_runtime_settings(&[
         operation(OperationId::SetPreferBare, "none"),

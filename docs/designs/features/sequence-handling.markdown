@@ -44,17 +44,19 @@ Only standalone variation-sequence slots and standalone keycap-character slots m
 
 ### Fixed cleanup for singleton-base slots
 
-When a singleton base is followed by emoji modifications, tag characters, or appears as a component of a multi-component ZWJ sequence, selector handling is fixed cleanup rather than policy. A standalone singleton base followed only by `U+20E3` uses keycap-character policy when the base has variation-sequence data.
+When the first modification after a singleton base is an emoji modifier or a tag specification, or when the base appears as a component of a multi-component ZWJ sequence, selector handling is fixed cleanup rather than policy. A standalone singleton base whose first modification is `U+20E3` uses keycap-character policy when the base has variation-sequence data.
+
+Only the first `EmojiModification` after the base determines this base-presentation context. Later modifier, keycap, or tag material is preserved in source order and its own trailing presentation selectors are still cleaned, but it does not move the base slot into a different policy domain or fixed-cleanup family.
 
 The base-presentation decision is resolved by this precedence:
 
-| Precedence | Context                                                        | Canonical base presentation |
-| ---------- | -------------------------------------------------------------- | --------------------------- |
-| 1          | The chosen presentation would be unsanctioned                  | bare                        |
-| 2          | Emoji modifier present                                         | bare                        |
-| 3          | Tag present or multi-component ZWJ context, emoji-default base | bare                        |
-| 4          | Tag present or multi-component ZWJ context, other base         | emoji                       |
-| 5          | No fixed-cleanup context remains                               | use policy                  |
+| Precedence | Context                                                                         | Canonical base presentation |
+| ---------- | ------------------------------------------------------------------------------- | --------------------------- |
+| 1          | The chosen presentation would be unsanctioned                                   | bare                        |
+| 2          | First modification is an emoji modifier                                         | bare                        |
+| 3          | First modification is a tag, or multi-component ZWJ context, emoji-default base | bare                        |
+| 4          | First modification is a tag, or multi-component ZWJ context, other base         | emoji                       |
+| 5          | No fixed-cleanup context remains                                                | use policy                  |
 
 Rule 5 is the boundary back to policy. Keycap-character slots query the keycap-character domain, and ordinary standalone slots query the ordinary domain. This is not a policy hook for emoji modifiers, tag modifiers, or multi-component ZWJ components.
 
@@ -140,10 +142,11 @@ Implementation APIs may surface these categories as findings with valid decision
 
 ## Relation to policy
 
-| Context                       | Policy applies?                           | Behavior                                             |
-| ----------------------------- | ----------------------------------------- | ---------------------------------------------------- |
-| Standalone variation sequence | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets |
-| Keycap                        | No                                        | Governed by singleton-base fixed-cleanup precedence  |
-| Modifier sequence defect      | No                                        | Remove legacy `FE0F` before the modifier             |
-| ZWJ-related sequence          | No                                        | Apply fixed fully-qualified sequence discipline      |
-| Not-a-slot                    | No                                        | Remove illegal selector usage                        |
+| Context                           | Policy applies?                           | Behavior                                                                  |
+| --------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| Standalone variation sequence     | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets                      |
+| Standalone keycap-character slot  | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets in the keycap domain |
+| Keycap inside multi-component ZWJ | No                                        | Apply fixed fully-qualified sequence discipline                           |
+| Modifier sequence defect          | No                                        | Remove legacy `FE0F` before the modifier                                  |
+| ZWJ-related sequence              | No                                        | Apply fixed fully-qualified sequence discipline                           |
+| Not-a-slot                        | No                                        | Remove illegal selector usage                                             |

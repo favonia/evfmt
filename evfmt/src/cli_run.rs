@@ -112,7 +112,7 @@ struct RuntimeSettings {
 }
 
 fn build_runtime_settings(operations: &[OrderedOperation]) -> Result<RuntimeSettings, ()> {
-    let mut prefer_bare = variation_set::ASCII;
+    let mut prefer_bare = variation_set::ASCII | variation_set::EMOJI_DEFAULTS;
     let mut bare_as_text = variation_set::ASCII | variation_set::KEYCAP_CHARS;
     let mut ignore = IgnoreSettings::default();
 

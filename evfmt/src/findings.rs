@@ -561,18 +561,14 @@ fn zwj_forced_singleton_presentation(
     base: char,
     modifications: &[EmojiModification],
 ) -> Option<Presentation> {
-    let shape = SingletonModificationShape::from_modifications(modifications);
-    multi_component_zwj_singleton_presentation(base, shape)
-}
-
-fn multi_component_zwj_singleton_presentation(
-    base: char,
-    shape: SingletonModificationShape,
-) -> Option<Presentation> {
-    // Emoji modifiers still force a bare base. Otherwise, multi-component ZWJ
-    // context forces emoji presentation for non-emoji-default bases when that
-    // presentation selector is sanctioned.
-    if shape.has_modifier || unicode::is_emoji_default(base) {
+    // An emoji modifier that immediately follows the base still forces a bare
+    // base. Otherwise, multi-component ZWJ context forces emoji presentation
+    // for non-emoji-default bases when that presentation selector is sanctioned.
+    if matches!(
+        modifications.first(),
+        Some(EmojiModification::EmojiModifier { .. })
+    ) || unicode::is_emoji_default(base)
+    {
         None
     } else {
         sanctioned_presentation(base, Presentation::Emoji)
@@ -625,44 +621,6 @@ fn zwj_forced_emoji_like(emoji: &EmojiLike) -> FixedEmojiLike<'_> {
 // --- Singleton analysis planning ---
 
 #[derive(Clone, Copy)]
-struct SingletonModificationShape {
-    has_modifier: bool,
-    has_tag: bool,
-    has_keycap: bool,
-}
-
-enum BasePresentationCleanup {
-    Fixed(Option<Presentation>),
-    UsePolicy,
-}
-
-impl SingletonModificationShape {
-    /// Summarize which modification families are present.
-    ///
-    /// The fixed-cleanup precedence depends on families, not on how many
-    /// modifiers or tag runs appeared. Fixed rendering still derives from the
-    /// original modifications so source order and non-selector content are
-    /// preserved.
-    fn from_modifications(modifications: &[EmojiModification]) -> Self {
-        let mut shape = Self {
-            has_modifier: false,
-            has_tag: false,
-            has_keycap: false,
-        };
-
-        for m in modifications {
-            match m {
-                EmojiModification::EmojiModifier { .. } => shape.has_modifier = true,
-                EmojiModification::TagModifier(_) => shape.has_tag = true,
-                EmojiModification::EnclosingKeycap { .. } => shape.has_keycap = true,
-            }
-        }
-
-        shape
-    }
-}
-
-#[derive(Clone, Copy)]
 enum SingletonAnalysisOutcome {
     /// No finding is needed.
     Canonical,
@@ -691,54 +649,38 @@ fn singleton_analysis_outcome(
     modifications: &[EmojiModification],
     policy: &Policy,
 ) -> SingletonAnalysisOutcome {
-    let shape = SingletonModificationShape::from_modifications(modifications);
-
-    match singleton_base_presentation_cleanup(base, shape) {
-        BasePresentationCleanup::Fixed(canonical_presentation) => singleton_fixed_cleanup_outcome(
+    match modifications.first() {
+        // Precedence 2: emoji modifiers force a bare base. Legacy FE0F before an
+        // emoji modifier is removed.
+        Some(EmojiModification::EmojiModifier { .. }) => {
+            singleton_fixed_cleanup_outcome(presentation_selectors_after_base, modifications, None)
+        }
+        // Precedence 3: tag context forces emoji presentation for
+        // non-emoji-default bases, subject to precedence 1's
+        // sanctioned-presentation guard below.
+        Some(EmojiModification::TagModifier(_)) => singleton_fixed_cleanup_outcome(
             presentation_selectors_after_base,
             modifications,
-            shape,
-            canonical_presentation,
+            if unicode::is_emoji_default(base) {
+                None
+            } else {
+                sanctioned_presentation(base, Presentation::Emoji)
+            },
         ),
-        BasePresentationCleanup::UsePolicy => standalone_singleton_analysis_outcome(
+        // Precedence 5: no fixed-cleanup context remains, so policy chooses the
+        // canonical presentation. The policy analysis still rejects selector
+        // choices unsupported by the base's variation-sequence data.
+        first_modification => standalone_singleton_analysis_outcome(
             base,
             presentation_selectors_after_base,
             unicode::has_variation_sequence(base),
-            shape.has_keycap,
+            matches!(
+                first_modification,
+                Some(EmojiModification::EnclosingKeycap { .. })
+            ),
             policy,
         ),
     }
-}
-
-fn singleton_base_presentation_cleanup(
-    base: char,
-    shape: SingletonModificationShape,
-) -> BasePresentationCleanup {
-    // Precedence 2: emoji modifiers force a bare base. Legacy FE0F before an
-    // emoji modifier is removed.
-    if shape.has_modifier {
-        return BasePresentationCleanup::Fixed(None);
-    }
-
-    // Precedence 3: tag context forces emoji presentation for non-emoji-default
-    // bases, subject to precedence 1's sanctioned-presentation guard below.
-    if shape.has_tag {
-        return BasePresentationCleanup::Fixed(if unicode::is_emoji_default(base) {
-            None
-        } else {
-            sanctioned_presentation(base, Presentation::Emoji)
-        });
-    }
-
-    debug_assert!(
-        !shape.has_modifier && !shape.has_tag,
-        "all fixed-cleanup singleton modification rules were exhausted"
-    );
-
-    // Precedence 5: no fixed-cleanup context remains, so policy chooses the
-    // canonical presentation. The policy analysis still rejects selector
-    // choices unsupported by the base's variation-sequence data.
-    BasePresentationCleanup::UsePolicy
 }
 
 fn sanctioned_presentation(base: char, presentation: Presentation) -> Option<Presentation> {
@@ -748,7 +690,6 @@ fn sanctioned_presentation(base: char, presentation: Presentation) -> Option<Pre
 fn singleton_fixed_cleanup_outcome(
     presentation_selectors_after_base: &[Presentation],
     modifications: &[EmojiModification],
-    shape: SingletonModificationShape,
     canonical_presentation: Option<Presentation>,
 ) -> SingletonAnalysisOutcome {
     // Fixed cleanup is canonical only when both the base slot is already in the
@@ -764,11 +705,7 @@ fn singleton_fixed_cleanup_outcome(
 
     SingletonAnalysisOutcome::Repair {
         canonical_presentation,
-        violation: if shape.has_keycap {
-            Violation::primary(PrimaryViolationKind::NotFullyQualifiedSequence, false)
-        } else {
-            Violation::UnsanctionedSelectorsOnly
-        },
+        violation: Violation::UnsanctionedSelectorsOnly,
     }
 }
 

@@ -18,6 +18,8 @@ No memory unsafety. No uncontrolled termination (panics, segfaults, aborts). No 
 
 The program must produce correct output. This includes determinism, reproducibility, and thorough testing. Same input must always produce same output regardless of environment.
 
+When evaluating product semantics, judge the design against intended user-facing behavior, not against the current implementation. Current code, tests, architecture, and data structures are not evidence that a semantic behavior is correct.
+
 ## 3. Usability
 
 Easy adoption, clear error messages, sensible defaults. A correct but unusable tool fails its purpose. Note: noticeable performance degradation is a usability problem and is caught here, not at level 5.
