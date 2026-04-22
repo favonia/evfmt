@@ -89,8 +89,8 @@
 //!   convenience analysis helpers
 //! - [`policy`] defines formatter policy configuration
 //! - [`formatter`] owns whole-text formatting
-//! - [`mod@findings`] owns policy-aware finding analysis: ask why a scanned
-//!   item is non-canonical and which replacements are available
+//! - [`mod@findings`] analyzes scanned items under policy and reports violations
+//!   plus available replacements
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
 //!   chains, standalone variation selector runs, and passthrough slices
 //! - [`variation_set`] defines the typed variation-set model used by the library

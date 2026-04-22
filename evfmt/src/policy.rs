@@ -22,6 +22,20 @@
 //! such as `\u{00A9}` to emoji presentation by inserting `FE0F`, and resolves
 //! bare keycap-character forms such as `#\u{20E3}` to text presentation by
 //! inserting `FE0E` before `U+20E3`.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use evfmt::{FormatResult, Policy, format_text};
+//!
+//! let policy = Policy::default();
+//!
+//! assert_eq!(format_text("#\u{FE0E}", &policy), FormatResult::Changed("#".into()));
+//! assert_eq!(
+//!     format_text("\u{00A9}", &policy),
+//!     FormatResult::Changed("\u{00A9}\u{FE0F}".into())
+//! );
+//! ```
 
 use crate::variation_set::{self, VariationSet};
 

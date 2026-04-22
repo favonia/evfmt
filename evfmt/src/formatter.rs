@@ -1,6 +1,20 @@
 //! Core formatting engine.
 //!
 //! This module provides whole-text formatting.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use evfmt::{FormatResult, Policy, format_text};
+//!
+//! let policy = Policy::default();
+//!
+//! assert_eq!(
+//!     format_text("#\u{FE0E}", &policy),
+//!     FormatResult::Changed("#".into())
+//! );
+//! assert_eq!(format_text("#", &policy), FormatResult::Unchanged);
+//! ```
 //
 // formatter.rs — The core formatting engine.
 //
@@ -24,6 +38,17 @@ use crate::policy::Policy;
 use crate::scanner;
 
 /// The result of formatting a text string.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{FormatResult, Policy, format_text};
+///
+/// match format_text("#\u{FE0E}", &Policy::default()) {
+///     FormatResult::Changed(text) => assert_eq!(text, "#"),
+///     FormatResult::Unchanged => panic!("the selector should be removed"),
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FormatResult {
     /// The input was already canonical; no changes needed.

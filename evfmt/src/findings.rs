@@ -10,6 +10,30 @@
 //!
 //! - [`crate::scanner`] decides structural item boundaries
 //! - [`analyze_scan_item`] turns policy-neutral reasonableness into findings and replacement slots
+//!
+//! Use this module when callers need to inspect or override repairs
+//! item-by-item; otherwise [`crate::format_text`] is the shorter path.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use evfmt::{Policy, scan};
+//! use evfmt::findings::analyze_scan_item;
+//!
+//! let policy = Policy::default();
+//! let input = "A\u{FE0F}\u{00A9}";
+//!
+//! let repaired = scan(input)
+//!     .map(|item| {
+//!         analyze_scan_item(&item, &policy).map_or_else(
+//!             || item.raw.to_owned(),
+//!             |finding| finding.default_replacement().to_owned(),
+//!         )
+//!     })
+//!     .collect::<String>();
+//!
+//! assert_eq!(repaired, "A\u{00A9}\u{FE0F}");
+//! ```
 
 use std::ops::Range;
 
@@ -34,6 +58,20 @@ mod tests;
 /// Unsanctioned presentation selectors are tracked as a separate axis because
 /// they can be the whole problem, or they can appear alongside a primary
 /// sequence/policy violation.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{Policy, scan};
+/// use evfmt::findings::{Violation, analyze_scan_item};
+///
+/// let policy = Policy::default();
+/// let finding = scan("A\u{FE0F}")
+///     .find_map(|item| analyze_scan_item(&item, &policy))
+///     .unwrap();
+///
+/// assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Violation {
@@ -64,6 +102,24 @@ impl Violation {
 }
 
 /// A primary sequence or policy violation, plus any attached selector cleanup.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{Policy, scan};
+/// use evfmt::findings::{PrimaryViolationKind, Violation, analyze_scan_item};
+///
+/// let policy = Policy::default();
+/// let finding = scan("\u{00A9}")
+///     .find_map(|item| analyze_scan_item(&item, &policy))
+///     .unwrap();
+///
+/// let Violation::Primary(primary) = finding.violation() else {
+///     panic!("bare copyright should need policy resolution");
+/// };
+/// assert_eq!(primary.kind, PrimaryViolationKind::BareNeedsResolution);
+/// assert!(!primary.has_unsanctioned_selectors);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct PrimaryViolation {
@@ -83,6 +139,24 @@ impl PrimaryViolation {
 }
 
 /// Primary sequence or policy category for a non-canonical scanned item.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{Policy, scan};
+/// use evfmt::findings::{PrimaryViolationKind, Violation, analyze_scan_item};
+///
+/// let policy = Policy::default();
+/// let finding = scan("#\u{FE0E}")
+///     .find_map(|item| analyze_scan_item(&item, &policy))
+///     .unwrap();
+///
+/// assert!(matches!(
+///     finding.violation(),
+///     Violation::Primary(primary)
+///         if primary.kind == PrimaryViolationKind::RedundantSelector
+/// ));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PrimaryViolationKind {
@@ -105,6 +179,27 @@ pub enum PrimaryViolationKind {
 /// slots, so their complete decision vector is empty. In particular, choosing
 /// bare form is represented as a fixed repair rather than as a public decision
 /// slot.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{Policy, scan};
+/// use evfmt::findings::{ReplacementDecision, analyze_scan_item};
+///
+/// let policy = Policy::default();
+/// let finding = scan("\u{00A9}")
+///     .find_map(|item| analyze_scan_item(&item, &policy))
+///     .unwrap();
+///
+/// assert_eq!(
+///     finding.replacement(&[ReplacementDecision::Text]).unwrap(),
+///     "\u{00A9}\u{FE0E}"
+/// );
+/// assert_eq!(
+///     finding.replacement(&[ReplacementDecision::Emoji]).unwrap(),
+///     "\u{00A9}\u{FE0F}"
+/// );
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ReplacementDecision {
@@ -124,6 +219,22 @@ impl ReplacementDecision {
 }
 
 /// One presentation slot in a finding's replacement decision vector.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{Policy, scan};
+/// use evfmt::findings::{ReplacementDecision, analyze_scan_item};
+///
+/// let policy = Policy::default();
+/// let finding = scan("\u{00A9}")
+///     .find_map(|item| analyze_scan_item(&item, &policy))
+///     .unwrap();
+///
+/// let slot = &finding.decision_slots()[0];
+/// assert_eq!(slot.choices(), &[ReplacementDecision::Text, ReplacementDecision::Emoji]);
+/// assert_eq!(slot.default_decision(), ReplacementDecision::Emoji);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecisionSlot {
     choices: Vec<ReplacementDecision>,
@@ -236,6 +347,25 @@ impl ReplacementPlan {
 }
 
 /// A single non-canonical scanned item with its valid replacement decisions and replacements.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{Policy, scan};
+/// use evfmt::findings::{ReplacementDecision, analyze_scan_item};
+///
+/// let policy = Policy::default();
+/// let finding = scan("\u{00A9}")
+///     .find_map(|item| analyze_scan_item(&item, &policy))
+///     .unwrap();
+///
+/// assert_eq!(finding.raw, "\u{00A9}");
+/// assert_eq!(finding.default_replacement(), "\u{00A9}\u{FE0F}");
+/// assert_eq!(
+///     finding.replacement(&[ReplacementDecision::Text]).unwrap(),
+///     "\u{00A9}\u{FE0E}"
+/// );
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding<'a> {
     /// Byte range in the original input.
@@ -309,6 +439,23 @@ impl Finding<'_> {
 // --- Public API ---
 
 /// Analyze a scanned item under the current formatter policy.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{Policy, scan};
+/// use evfmt::findings::{Violation, analyze_scan_item};
+///
+/// let policy = Policy::default();
+///
+/// assert!(scan("plain text")
+///     .all(|item| analyze_scan_item(&item, &policy).is_none()));
+///
+/// let selector_item = scan("\u{FE0F}").next().unwrap();
+/// let finding = analyze_scan_item(&selector_item, &policy).unwrap();
+/// assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
+/// assert_eq!(finding.replacement(&[]).unwrap(), "");
+/// ```
 #[must_use]
 pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Finding<'a>> {
     match &item.kind {

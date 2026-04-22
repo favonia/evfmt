@@ -7,6 +7,18 @@
 //! - ordinary non-keycap variation positions
 //! - keycap-character positions, where the same base is followed by
 //!   `U+20E3 COMBINING ENCLOSING KEYCAP`
+//!
+//! # Examples
+//!
+//! ```rust
+//! use evfmt::{FormatResult, Policy, format_text, variation_set};
+//!
+//! let policy = Policy::default()
+//!     .with_prefer_bare(variation_set::ASCII | variation_set::RIGHTS_MARKS)
+//!     .with_bare_as_text(variation_set::ASCII | variation_set::RIGHTS_MARKS);
+//!
+//! assert_eq!(format_text("\u{00A9}", &policy), FormatResult::Unchanged);
+//! ```
 
 use std::fmt;
 use std::ops::{
@@ -96,6 +108,20 @@ enum NamedSet {
 /// keycap-character positions. Both domains are indexed by the generated
 /// variation-sequence base table. Characters outside that table are never
 /// members, including in [`VariationSet::all`].
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::{VariationSet, variation_set};
+///
+/// let rights_marks = variation_set::RIGHTS_MARKS;
+/// assert!(rights_marks.contains('\u{00A9}'));
+/// assert!(!rights_marks.contains_keycap('\u{00A9}'));
+///
+/// let keycap_hash = VariationSet::singleton_keycap('#');
+/// assert!(keycap_hash.contains_keycap('#'));
+/// assert!(!keycap_hash.contains('#'));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VariationSet {
     chars: CharSet,
@@ -113,6 +139,15 @@ struct CharSet {
 /// This checks for a base code point in the crate's pinned
 /// `emoji-variation-sequences.txt` data, not for a complete base-plus-selector
 /// sequence.
+///
+/// # Examples
+///
+/// ```rust
+/// use evfmt::variation_set::is_variation_sequence_character;
+///
+/// assert!(is_variation_sequence_character('\u{00A9}'));
+/// assert!(!is_variation_sequence_character('A'));
+/// ```
 #[must_use]
 pub fn is_variation_sequence_character(ch: char) -> bool {
     has_variation_sequence(ch)
