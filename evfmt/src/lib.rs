@@ -38,7 +38,7 @@
 //!
 //! ```rust
 //! use evfmt::{Policy, ScanKind, scan};
-//! use evfmt::findings::{ReplacementDecision, Violation, analyze_scan_item};
+//! use evfmt::findings::{Violation, analyze_scan_item};
 //!
 //! let policy = Policy::default();
 //! let input = "A\u{FE0F}";
@@ -53,15 +53,16 @@
 //!
 //! let finding = analyze_scan_item(&item, &policy).unwrap();
 //! assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
-//! assert_eq!(finding.choices(), &[ReplacementDecision::Fix]);
+//! assert!(finding.decision_slots().is_empty());
 //!
-//! let repaired = finding.replacement(ReplacementDecision::Fix).unwrap();
+//! let repaired = finding.replacement(&[]).unwrap();
 //! assert_eq!(repaired, "");
 //! ```
 //!
 //! The [`mod@findings`] API is the usual entry point for interactive fixing.
 //! It analyzes scanned items under the supplied [`Policy`] and returns the
-//! valid replacement choices for each finding.
+//! presentation slots that must be chosen for each finding. Fixed repairs have
+//! no slots and use the empty decision vector.
 //!
 //! Custom policies can be built from [`variation_set`] variation sets. In this example,
 //! `rights-marks` contains `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to
@@ -103,7 +104,7 @@ mod unicode;
 pub mod variation_set;
 
 pub use findings::{
-    Finding, PrimaryViolation, PrimaryViolationKind, ReplacementDecision, Violation,
+    DecisionSlot, Finding, PrimaryViolation, PrimaryViolationKind, ReplacementDecision, Violation,
     analyze_scan_item,
 };
 pub use formatter::{FormatResult, format_text};

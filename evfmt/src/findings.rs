@@ -2,14 +2,14 @@
 //!
 //! This module implements the policy and fixed-rule analysis steps from the
 //! conceptual formatting algorithm. It produces findings with valid replacement
-//! decisions and precomputed replacements, so callers can choose a replacement
+//! decision slots and a render plan, so callers can choose a replacement
 //! without re-reading policy for the same item.
 //! Interactive callers normally use this module directly: [`analyze_scan_item`]
 //! computes reasonableness, applies [`Policy`] only where policy is relevant,
-//! and stores the valid replacements in each [`Finding`].
+//! and stores the valid replacement plan in each [`Finding`].
 //!
 //! - [`crate::scanner`] decides structural item boundaries
-//! - [`analyze_scan_item`] turns policy-neutral reasonableness into findings and replacement choices
+//! - [`analyze_scan_item`] turns policy-neutral reasonableness into findings and replacement slots
 
 use std::ops::Range;
 
@@ -86,7 +86,7 @@ impl PrimaryViolation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PrimaryViolationKind {
-    /// Wrong or missing presentation selectors in a keycap or ZWJ sequence.
+    /// Wrong or missing presentation selectors in a keycap or ZWJ-related sequence.
     NotFullyQualifiedSequence,
     /// Sanctioned presentation selector that matches the bare side on a bare-preferred
     /// character. The requested presentation is valid, but the formatting policy
@@ -98,97 +98,140 @@ pub enum PrimaryViolationKind {
     BareNeedsResolution,
 }
 
-/// Replacement-producing decisions available for a finding.
+/// One selector-bearing presentation choice in a replacement decision vector.
+///
+/// A complete replacement decision is a slice of these choices, one per
+/// [`DecisionSlot`] reported by a finding. Fixed repairs have no presentation
+/// slots, so their complete decision vector is empty. In particular, choosing
+/// bare form is represented as a fixed repair rather than as a public decision
+/// slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ReplacementDecision {
-    /// Apply the unambiguous formatter repair.
-    Fix,
-    /// Resolve a bare standalone slot as text presentation.
+    /// Resolve this slot as text presentation.
     Text,
-    /// Resolve a bare standalone slot as emoji presentation.
+    /// Resolve this slot as emoji presentation.
     Emoji,
 }
 
-/// Valid replacement decisions and precomputed replacement strings for a finding.
-///
-/// This is a plan in the narrow sense: it interprets a later
-/// [`ReplacementDecision`] into the already-computed replacement text.
+impl ReplacementDecision {
+    const fn from_presentation(presentation: Presentation) -> Self {
+        match presentation {
+            Presentation::Text => Self::Text,
+            Presentation::Emoji => Self::Emoji,
+        }
+    }
+}
+
+/// One presentation slot in a finding's replacement decision vector.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum ReplacementPlan {
-    /// Finding with one unambiguous repair.
-    Repair {
-        /// Why the item is non-canonical.
-        violation: Violation,
-        /// Replacement for [`ReplacementDecision::Fix`].
-        fix_replacement: String,
-    },
-    /// Bare variation-sequence character that must be resolved explicitly.
-    ResolvePresentation {
-        /// Why the item is non-canonical.
-        violation: Violation,
-        /// The presentation selected by batch formatting.
-        default: Presentation,
-        /// Replacement for [`ReplacementDecision::Text`].
-        text_replacement: String,
-        /// Replacement for [`ReplacementDecision::Emoji`].
-        emoji_replacement: String,
-    },
+pub struct DecisionSlot {
+    choices: Vec<ReplacementDecision>,
+    default: ReplacementDecision,
+}
+
+impl DecisionSlot {
+    /// Valid choices for this slot.
+    #[must_use]
+    pub fn choices(&self) -> &[ReplacementDecision] {
+        &self.choices
+    }
+
+    /// The choice batch formatting applies to this slot by default.
+    #[must_use]
+    pub const fn default_decision(&self) -> ReplacementDecision {
+        self.default
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SlotReplacement {
+    decision: ReplacementDecision,
+    replacement: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReplacementSlotPlan {
+    public: DecisionSlot,
+    replacements: Vec<SlotReplacement>,
+}
+
+impl ReplacementSlotPlan {
+    fn replacement(&self, decision: ReplacementDecision) -> Option<&str> {
+        self.replacements
+            .iter()
+            .find(|replacement| replacement.decision == decision)
+            .map(|replacement| replacement.replacement.as_str())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ReplacementPiece {
+    Literal(String),
+    Slot(usize),
+}
+
+/// Valid replacement decision vector and render plan for a finding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReplacementPlan {
+    /// Why the item is non-canonical.
+    violation: Violation,
+    /// Public presentation slots in this finding's decision vector.
+    decision_slots: Vec<DecisionSlot>,
+    /// Presentation slots callers must decide to select a non-default
+    /// replacement. Empty means the finding is a fixed repair.
+    slots: Vec<ReplacementSlotPlan>,
+    /// Render plan for this finding's replacement. Slot references index into
+    /// `slots`; literal pieces already include fixed cleanup.
+    pieces: Vec<ReplacementPiece>,
+    /// The replacement batch formatting applies by default.
+    default_replacement: String,
 }
 
 impl ReplacementPlan {
-    const REPAIR_CHOICES: [ReplacementDecision; 1] = [ReplacementDecision::Fix];
-    const PRESENTATION_CHOICES: [ReplacementDecision; 2] =
-        [ReplacementDecision::Text, ReplacementDecision::Emoji];
-
     /// Why the analyzed item is non-canonical.
     #[must_use]
     const fn violation(&self) -> Violation {
-        match self {
-            Self::Repair { violation, .. } | Self::ResolvePresentation { violation, .. } => {
-                *violation
-            }
-        }
+        self.violation
     }
 
-    /// Valid replacement decisions for this finding.
+    /// Presentation slots in this finding's replacement decision vector.
     #[must_use]
-    const fn choices(&self) -> &'static [ReplacementDecision] {
-        match self {
-            Self::Repair { .. } => &Self::REPAIR_CHOICES,
-            Self::ResolvePresentation { .. } => &Self::PRESENTATION_CHOICES,
-        }
+    fn decision_slots(&self) -> &[DecisionSlot] {
+        &self.decision_slots
     }
 
     /// The replacement decision batch formatting applies by default.
     #[must_use]
-    const fn default_decision(&self) -> ReplacementDecision {
-        match self {
-            Self::Repair { .. } => ReplacementDecision::Fix,
-            Self::ResolvePresentation { default, .. } => match *default {
-                Presentation::Text => ReplacementDecision::Text,
-                Presentation::Emoji => ReplacementDecision::Emoji,
-            },
-        }
+    fn default_decision(&self) -> Vec<ReplacementDecision> {
+        self.slots
+            .iter()
+            .map(|slot| slot.public.default_decision())
+            .collect()
     }
 
     /// The replacement batch formatting applies by default.
     #[must_use]
     fn default_replacement(&self) -> &str {
-        match self {
-            Self::Repair {
-                fix_replacement, ..
-            } => fix_replacement,
-            Self::ResolvePresentation {
-                default,
-                text_replacement,
-                emoji_replacement,
-                ..
-            } => match *default {
-                Presentation::Text => text_replacement,
-                Presentation::Emoji => emoji_replacement,
-            },
+        &self.default_replacement
+    }
+
+    fn render_replacement(&self, decisions: &[ReplacementDecision]) -> Option<String> {
+        if decisions.len() != self.slots.len() {
+            return None;
         }
+
+        let mut out = String::new();
+        for piece in &self.pieces {
+            match piece {
+                ReplacementPiece::Literal(text) => out.push_str(text),
+                ReplacementPiece::Slot(slot_index) => {
+                    let decision = decisions.get(*slot_index).copied()?;
+                    out.push_str(self.slots.get(*slot_index)?.replacement(decision)?);
+                }
+            }
+        }
+        Some(out)
     }
 }
 
@@ -210,15 +253,18 @@ impl Finding<'_> {
         self.replacement_plan.violation()
     }
 
-    /// Valid replacement decisions for this finding.
+    /// Presentation slots in this finding's replacement decision vector.
+    ///
+    /// A fixed repair has no presentation slots. Call [`Finding::replacement`]
+    /// with an empty decision slice to apply that repair.
     #[must_use]
-    pub const fn choices(&self) -> &'static [ReplacementDecision] {
-        self.replacement_plan.choices()
+    pub fn decision_slots(&self) -> &[DecisionSlot] {
+        self.replacement_plan.decision_slots()
     }
 
     /// The replacement decision batch formatting applies by default.
     #[must_use]
-    pub const fn default_decision(&self) -> ReplacementDecision {
+    pub fn default_decision(&self) -> Vec<ReplacementDecision> {
         self.replacement_plan.default_decision()
     }
 
@@ -236,51 +282,27 @@ impl Finding<'_> {
     ///     .find_map(|item| analyze_scan_item(&item, &policy))
     ///     .unwrap();
     ///
-    /// finding.replacement(finding.default_decision()).unwrap();
+    /// finding.replacement(&finding.default_decision()).unwrap();
     /// ```
     ///
-    /// The default decision is always one of this finding's valid replacement
-    /// choices. Call [`str::to_owned`] when the replacement must be stored as
-    /// an owned [`String`].
+    /// The default decision vector is always valid for this finding.
     #[must_use]
     pub fn default_replacement(&self) -> &str {
         self.replacement_plan.default_replacement()
     }
 
-    /// Return the replacement text for a valid replacement decision.
+    /// Return the replacement text for a valid replacement decision vector.
     ///
-    /// Valid replacement decisions return the replacement computed when this
-    /// finding was created, so callers do not need to consult [`Policy`] again.
-    /// The returned string is borrowed from this finding. Returns `None` when
-    /// the decision is not one of this finding's valid replacement choices.
+    /// The decision slice must contain exactly one choice for each
+    /// [`DecisionSlot`] returned by [`Finding::decision_slots`]. Fixed repairs
+    /// have no slots and therefore use an empty decision slice.
+    ///
+    /// Returns `None` when the decision vector has the wrong length or contains
+    /// a choice that is not valid for its slot.
     /// Callers that want to skip a finding can keep [`Finding::raw`].
     #[must_use]
-    pub fn replacement(&self, decision: ReplacementDecision) -> Option<&str> {
-        match (&self.replacement_plan, decision) {
-            (
-                ReplacementPlan::Repair {
-                    fix_replacement, ..
-                },
-                ReplacementDecision::Fix,
-            ) => Some(fix_replacement),
-            (
-                ReplacementPlan::ResolvePresentation {
-                    text_replacement, ..
-                },
-                ReplacementDecision::Text,
-            ) => Some(text_replacement),
-            (
-                ReplacementPlan::ResolvePresentation {
-                    emoji_replacement, ..
-                },
-                ReplacementDecision::Emoji,
-            ) => Some(emoji_replacement),
-            (
-                ReplacementPlan::Repair { .. },
-                ReplacementDecision::Text | ReplacementDecision::Emoji,
-            )
-            | (ReplacementPlan::ResolvePresentation { .. }, ReplacementDecision::Fix) => None,
-        }
+    pub fn replacement(&self, decision: &[ReplacementDecision]) -> Option<String> {
+        self.replacement_plan.render_replacement(decision)
     }
 }
 
@@ -307,8 +329,9 @@ pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Fin
             // - single-component `EmojiHeaded`: use the ordinary
             //   singleton/flag rules for that component, and preserve any
             //   trailing ZWJ links in the same scanned item
-            // - joined `EmojiHeaded`: use ZWJ fully-qualified component rules,
-            //   never standalone policy
+            // - joined `EmojiHeaded`: preserve ZWJ links but resolve each
+            //   component with the same component-local policy/fixed cleanup
+            //   it would use outside the surrounding ZWJ links
             //
             // This is the findings-side implementation of the ZWJ-related
             // sequence contract in
@@ -323,7 +346,7 @@ pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Fin
                 first,
                 joined,
                 trailing_links,
-            } => analyze_multi_emoji_zwj_sequence(item, first, joined, trailing_links),
+            } => analyze_multi_emoji_zwj_sequence(item, first, joined, trailing_links, policy),
         },
     }
 }
@@ -500,29 +523,58 @@ fn analyze_multi_emoji_zwj_sequence<'a>(
     first: &EmojiLike,
     joined: &[ZwjJoinedEmoji],
     trailing_links: &[ZwjLink],
+    policy: &Policy,
 ) -> Option<Finding<'a>> {
-    let has_unsanctioned_selectors = joined
-        .iter()
-        .any(|joined| zwj_link_has_selectors(&joined.link))
-        || trailing_links.iter().any(zwj_link_has_selectors);
-    let needs_repair = !zwj_component_is_canonical(first)
-        || joined
-            .iter()
-            .any(|joined| !zwj_component_is_canonical(&joined.emoji))
-        || has_unsanctioned_selectors;
+    let mut builder = ReplacementPlanBuilder::new();
+    let mut has_unsanctioned_selectors = false;
+    let mut has_noncanonical_component = false;
+    let mut has_resolution_slot = false;
 
-    if !needs_repair {
+    let first_outcome = zwj_component_outcome(first, policy);
+    has_unsanctioned_selectors |= first_outcome.has_unsanctioned_selectors;
+    has_noncanonical_component |= first_outcome.is_noncanonical;
+    has_resolution_slot |= first_outcome.has_resolution_slot;
+    builder.extend(first_outcome.pieces, first_outcome.slots);
+
+    for joined in joined {
+        if zwj_link_has_selectors(&joined.link) {
+            has_unsanctioned_selectors = true;
+        }
+        builder.push_literal(unicode::ZWJ.to_string());
+
+        let joined_outcome = zwj_component_outcome(&joined.emoji, policy);
+        has_unsanctioned_selectors |= joined_outcome.has_unsanctioned_selectors;
+        has_noncanonical_component |= joined_outcome.is_noncanonical;
+        has_resolution_slot |= joined_outcome.has_resolution_slot;
+        builder.extend(joined_outcome.pieces, joined_outcome.slots);
+    }
+
+    if trailing_links.iter().any(zwj_link_has_selectors) {
+        has_unsanctioned_selectors = true;
+    }
+    for _ in trailing_links {
+        builder.push_literal(unicode::ZWJ.to_string());
+    }
+
+    if !has_noncanonical_component && !has_unsanctioned_selectors {
         return None;
     }
 
-    Some(unambiguous_finding(
-        item,
+    let violation = if has_resolution_slot {
+        Violation::primary(
+            PrimaryViolationKind::BareNeedsResolution,
+            has_unsanctioned_selectors,
+        )
+    } else if has_noncanonical_component {
         Violation::primary(
             PrimaryViolationKind::NotFullyQualifiedSequence,
             has_unsanctioned_selectors,
-        ),
-        render_forced_emoji_zwj_sequence(first, joined, trailing_links),
-    ))
+        )
+    } else {
+        Violation::UnsanctionedSelectorsOnly
+    };
+
+    Some(finding_from_builder(item, violation, builder))
 }
 
 // --- ZWJ sequence analysis helpers ---
@@ -531,64 +583,123 @@ fn zwj_link_has_selectors(link: &ZwjLink) -> bool {
     !link.presentation_selectors_after_link.is_empty()
 }
 
-fn zwj_component_is_canonical(emoji: &EmojiLike) -> bool {
+struct ZwjComponentOutcome {
+    pieces: Vec<ComponentReplacementPiece>,
+    slots: Vec<ReplacementSlotPlan>,
+    is_noncanonical: bool,
+    has_unsanctioned_selectors: bool,
+    has_resolution_slot: bool,
+}
+
+enum ComponentReplacementPiece {
+    Literal(String),
+    Slot(usize),
+}
+
+fn zwj_component_outcome(emoji: &EmojiLike, policy: &Policy) -> ZwjComponentOutcome {
     match &emoji.stem {
         EmojiStem::SingletonBase {
             base,
             presentation_selectors_after_base,
-        } => {
-            singleton_base_presentation_is_canonical(
-                presentation_selectors_after_base,
-                zwj_forced_singleton_presentation(*base, &emoji.modifiers),
-            ) && !has_trailing_modification_presentation_selectors(&emoji.modifiers)
-        }
+        } => zwj_singleton_component_outcome(
+            *base,
+            presentation_selectors_after_base,
+            &emoji.modifiers,
+            policy,
+        ),
         EmojiStem::Flag {
+            first_ri,
             presentation_selectors_after_first_ri,
+            second_ri,
             presentation_selectors_after_second_ri,
-            ..
         } => {
-            presentation_selectors_after_first_ri.is_empty()
-                && presentation_selectors_after_second_ri.is_empty()
-                && !emoji
-                    .modifiers
-                    .iter()
-                    .any(modification_has_trailing_presentation_selectors)
+            let has_unsanctioned_selectors = !presentation_selectors_after_first_ri.is_empty()
+                || !presentation_selectors_after_second_ri.is_empty()
+                || has_trailing_modification_presentation_selectors(&emoji.modifiers);
+            ZwjComponentOutcome {
+                pieces: vec![ComponentReplacementPiece::Literal(
+                    FixedEmojiLike::flag(*first_ri, *second_ri, &emoji.modifiers)
+                        .render_to_string(),
+                )],
+                slots: vec![],
+                is_noncanonical: has_unsanctioned_selectors,
+                has_unsanctioned_selectors,
+                has_resolution_slot: false,
+            }
         }
     }
 }
 
-fn zwj_forced_singleton_presentation(
+fn zwj_singleton_component_outcome(
     base: char,
+    presentation_selectors_after_base: &[Presentation],
     modifications: &[EmojiModification],
-) -> Option<Presentation> {
-    // An emoji modifier that immediately follows the base still forces a bare
-    // base. Otherwise, multi-component ZWJ context forces emoji presentation
-    // for non-emoji-default bases when that presentation selector is sanctioned.
-    if matches!(
-        modifications.first(),
-        Some(EmojiModification::EmojiModifier { .. })
-    ) || unicode::is_emoji_default(base)
-    {
-        None
-    } else {
-        sanctioned_presentation(base, Presentation::Emoji)
+    policy: &Policy,
+) -> ZwjComponentOutcome {
+    match singleton_analysis_outcome(
+        base,
+        presentation_selectors_after_base,
+        modifications,
+        policy,
+    ) {
+        SingletonAnalysisOutcome::Canonical => {
+            let presentation = presentation_selectors_after_base.first().copied();
+            ZwjComponentOutcome {
+                pieces: vec![ComponentReplacementPiece::Literal(render_singleton(
+                    base,
+                    presentation,
+                    modifications,
+                ))],
+                slots: vec![],
+                is_noncanonical: false,
+                has_unsanctioned_selectors: false,
+                has_resolution_slot: false,
+            }
+        }
+        SingletonAnalysisOutcome::Repair {
+            canonical_presentation,
+            violation,
+        } => ZwjComponentOutcome {
+            pieces: vec![ComponentReplacementPiece::Literal(render_singleton(
+                base,
+                canonical_presentation,
+                modifications,
+            ))],
+            slots: vec![],
+            is_noncanonical: true,
+            has_unsanctioned_selectors: matches!(violation, Violation::UnsanctionedSelectorsOnly)
+                || matches!(
+                    violation,
+                    Violation::Primary(PrimaryViolation {
+                        has_unsanctioned_selectors: true,
+                        ..
+                    })
+                ),
+            has_resolution_slot: false,
+        },
+        SingletonAnalysisOutcome::ResolvePresentation { default } => {
+            let slot = presentation_slot(
+                ReplacementDecision::from_presentation(default),
+                [
+                    (
+                        ReplacementDecision::Text,
+                        render_singleton(base, Some(Presentation::Text), modifications),
+                    ),
+                    (
+                        ReplacementDecision::Emoji,
+                        render_singleton(base, Some(Presentation::Emoji), modifications),
+                    ),
+                ],
+            );
+            ZwjComponentOutcome {
+                pieces: vec![ComponentReplacementPiece::Slot(0)],
+                slots: vec![slot],
+                is_noncanonical: true,
+                has_unsanctioned_selectors: false,
+                has_resolution_slot: true,
+            }
+        }
     }
-}
-
-/// Render every component according to multi-component ZWJ forced-emoji rules.
-fn render_forced_emoji_zwj_sequence(
-    first: &EmojiLike,
-    joined: &[ZwjJoinedEmoji],
-    trailing_links: &[ZwjLink],
-) -> String {
-    let mut out = String::new();
-    zwj_forced_emoji_like(first).render(&mut out);
-    for joined in joined {
-        out.push(unicode::ZWJ);
-        zwj_forced_emoji_like(&joined.emoji).render(&mut out);
-    }
-    render_zwj_links(&mut out, trailing_links);
-    out
 }
 
 fn render_zwj_links_only_sequence(links: &[ZwjLink]) -> String {
@@ -600,21 +711,6 @@ fn render_zwj_links_only_sequence(links: &[ZwjLink]) -> String {
 fn render_zwj_links(out: &mut String, links: &[ZwjLink]) {
     for _ in links {
         out.push(unicode::ZWJ);
-    }
-}
-
-fn zwj_forced_emoji_like(emoji: &EmojiLike) -> FixedEmojiLike<'_> {
-    match &emoji.stem {
-        EmojiStem::SingletonBase { base, .. } => FixedEmojiLike::singleton_base(
-            *base,
-            zwj_forced_singleton_presentation(*base, &emoji.modifiers),
-            &emoji.modifiers,
-        ),
-        EmojiStem::Flag {
-            first_ri,
-            second_ri,
-            ..
-        } => FixedEmojiLike::flag(*first_ri, *second_ri, &emoji.modifiers),
     }
 }
 
@@ -719,10 +815,7 @@ fn singleton_base_presentation_is_canonical(
     presentation_selectors_after_base: &[Presentation],
     presentation: Option<Presentation>,
 ) -> bool {
-    match presentation {
-        None => presentation_selectors_after_base.is_empty(),
-        Some(presentation) => presentation_selectors_after_base == [presentation],
-    }
+    presentation_selectors_after_base == presentation.as_slice()
 }
 
 fn standalone_singleton_analysis_outcome(
@@ -828,14 +921,9 @@ fn unambiguous_finding<'a>(
     violation: Violation,
     fix_replacement: String,
 ) -> Finding<'a> {
-    Finding {
-        span: item.span.clone(),
-        raw: item.raw,
-        replacement_plan: ReplacementPlan::Repair {
-            violation,
-            fix_replacement,
-        },
-    }
+    let mut builder = ReplacementPlanBuilder::new();
+    builder.push_literal(fix_replacement);
+    finding_from_builder(item, violation, builder)
 }
 
 fn resolve_presentation_finding<'a>(
@@ -844,16 +932,25 @@ fn resolve_presentation_finding<'a>(
     modifications: &[EmojiModification],
     default: Presentation,
 ) -> Finding<'a> {
-    Finding {
-        span: item.span.clone(),
-        raw: item.raw,
-        replacement_plan: ReplacementPlan::ResolvePresentation {
-            violation: Violation::primary(PrimaryViolationKind::BareNeedsResolution, false),
-            default,
-            text_replacement: render_singleton(base, Some(Presentation::Text), modifications),
-            emoji_replacement: render_singleton(base, Some(Presentation::Emoji), modifications),
-        },
-    }
+    let mut builder = ReplacementPlanBuilder::new();
+    builder.push_slot(presentation_slot(
+        ReplacementDecision::from_presentation(default),
+        [
+            (
+                ReplacementDecision::Text,
+                render_singleton(base, Some(Presentation::Text), modifications),
+            ),
+            (
+                ReplacementDecision::Emoji,
+                render_singleton(base, Some(Presentation::Emoji), modifications),
+            ),
+        ],
+    ));
+    finding_from_builder(
+        item,
+        Violation::primary(PrimaryViolationKind::BareNeedsResolution, false),
+        builder,
+    )
 }
 
 fn resolve_zwj_wrapper_presentation_finding<'a>(
@@ -868,28 +965,142 @@ fn resolve_zwj_wrapper_presentation_finding<'a>(
         !trailing_links.is_empty(),
         "ZWJ wrapper presentation resolution requires at least one trailing link"
     );
+    let mut builder = ReplacementPlanBuilder::new();
+    builder.push_slot(presentation_slot(
+        ReplacementDecision::from_presentation(default),
+        [
+            (
+                ReplacementDecision::Text,
+                render_singleton_with_links(
+                    base,
+                    Some(Presentation::Text),
+                    modifications,
+                    trailing_links,
+                ),
+            ),
+            (
+                ReplacementDecision::Emoji,
+                render_singleton_with_links(
+                    base,
+                    Some(Presentation::Emoji),
+                    modifications,
+                    trailing_links,
+                ),
+            ),
+        ],
+    ));
+    finding_from_builder(
+        item,
+        Violation::primary(
+            PrimaryViolationKind::BareNeedsResolution,
+            has_unsanctioned_selectors,
+        ),
+        builder,
+    )
+}
+
+fn presentation_slot<const N: usize>(
+    default: ReplacementDecision,
+    replacements: [(ReplacementDecision, String); N],
+) -> ReplacementSlotPlan {
+    let replacements: Vec<_> = replacements
+        .into_iter()
+        .map(|(decision, replacement)| SlotReplacement {
+            decision,
+            replacement,
+        })
+        .collect();
+    let choices = replacements
+        .iter()
+        .map(|replacement| replacement.decision)
+        .collect();
+    ReplacementSlotPlan {
+        public: DecisionSlot { choices, default },
+        replacements,
+    }
+}
+
+struct ReplacementPlanBuilder {
+    slots: Vec<ReplacementSlotPlan>,
+    pieces: Vec<ReplacementPiece>,
+}
+
+impl ReplacementPlanBuilder {
+    const fn new() -> Self {
+        Self {
+            slots: Vec::new(),
+            pieces: Vec::new(),
+        }
+    }
+
+    fn push_literal(&mut self, literal: String) {
+        self.pieces.push(ReplacementPiece::Literal(literal));
+    }
+
+    fn push_slot(&mut self, slot: ReplacementSlotPlan) {
+        let slot_index = self.slots.len();
+        self.slots.push(slot);
+        self.pieces.push(ReplacementPiece::Slot(slot_index));
+    }
+
+    fn extend(&mut self, pieces: Vec<ComponentReplacementPiece>, slots: Vec<ReplacementSlotPlan>) {
+        let slot_offset = self.slots.len();
+        self.slots.extend(slots);
+        self.pieces
+            .extend(pieces.into_iter().map(|piece| match piece {
+                ComponentReplacementPiece::Literal(literal) => ReplacementPiece::Literal(literal),
+                ComponentReplacementPiece::Slot(slot_index) => {
+                    ReplacementPiece::Slot(slot_offset + slot_index)
+                }
+            }));
+    }
+
+    fn build(self, violation: Violation) -> ReplacementPlan {
+        let default_replacement = render_default_replacement(&self.slots, &self.pieces);
+        let plan = ReplacementPlan {
+            violation,
+            decision_slots: self.slots.iter().map(|slot| slot.public.clone()).collect(),
+            slots: self.slots,
+            pieces: self.pieces,
+            default_replacement,
+        };
+        debug_assert_eq!(
+            plan.render_replacement(&plan.default_decision()),
+            Some(plan.default_replacement.clone())
+        );
+        plan
+    }
+}
+
+fn render_default_replacement(
+    slots: &[ReplacementSlotPlan],
+    pieces: &[ReplacementPiece],
+) -> String {
+    let mut out = String::new();
+    for piece in pieces {
+        match piece {
+            ReplacementPiece::Literal(text) => out.push_str(text),
+            ReplacementPiece::Slot(slot_index) => {
+                if let Some(slot) = slots.get(*slot_index)
+                    && let Some(replacement) = slot.replacement(slot.public.default_decision())
+                {
+                    out.push_str(replacement);
+                }
+            }
+        }
+    }
+    out
+}
+
+fn finding_from_builder<'a>(
+    item: &ScanItem<'a>,
+    violation: Violation,
+    builder: ReplacementPlanBuilder,
+) -> Finding<'a> {
     Finding {
         span: item.span.clone(),
         raw: item.raw,
-        replacement_plan: ReplacementPlan::ResolvePresentation {
-            violation: Violation::primary(
-                PrimaryViolationKind::BareNeedsResolution,
-                has_unsanctioned_selectors,
-            ),
-            default,
-            text_replacement: render_singleton_with_links(
-                base,
-                Some(Presentation::Text),
-                modifications,
-                trailing_links,
-            ),
-            emoji_replacement: render_singleton_with_links(
-                base,
-                Some(Presentation::Emoji),
-                modifications,
-                trailing_links,
-            ),
-        },
+        replacement_plan: builder.build(violation),
     }
 }
 

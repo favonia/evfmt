@@ -280,7 +280,7 @@ fn keycap_forms_match_formatter_contract() {
     assert_format("#\u{FE0E}\u{20E3}", &FormatResult::Unchanged);
     assert_format(
         "#\u{FE0E}\u{20E3}\u{200D}\u{1F525}",
-        &FormatResult::Changed("#\u{FE0F}\u{20E3}\u{200D}\u{1F525}".to_owned()),
+        &FormatResult::Unchanged,
     );
 }
 
