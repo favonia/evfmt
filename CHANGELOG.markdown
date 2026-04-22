@@ -14,6 +14,8 @@ Changes:
 - Changed the default policy to keep Unicode emoji-default characters bare, so redundant `FE0F` selectors are removed from those standalone characters by default.
 - Replaced the library's old string expression parser with typed `evfmt::variation_set` smart constructors.
 - Replaced the public `review` API with `findings` analysis APIs for scanned items.
+- Changed findings replacements to use per-slot decision vectors, and made ZWJ components resolve through the same component-local policy as standalone items.
+- Removed the unused bare replacement decision; bare canonicalization is exposed as a fixed repair with no decision slot.
 - Changed `scan` to return an iterator and exposed the `Scanner` type.
 - Reworked scanner recognition around emoji-like state-machine structure, including malformed ZWJ-related structures and unsanctioned presentation-selector runs.
 - Updated Unicode-derived classification to use emoji property ranges, regional indicators, and `Emoji_Presentation` data.

@@ -34,6 +34,14 @@ const fn primary_violation(
     })
 }
 
+fn decision_slot_choices(finding: &Finding<'_>) -> Vec<Vec<ReplacementDecision>> {
+    finding
+        .decision_slots()
+        .iter()
+        .map(|slot| slot.choices().to_vec())
+        .collect()
+}
+
 #[test]
 fn links_only_zwj_sequence_strips_link_selectors() {
     let finding = finding_for_first_item("\u{200D}\u{FE0F}\u{200D}");
@@ -53,12 +61,12 @@ fn repair_findings_offer_only_fix_decision() {
         finding.violation(),
         primary_violation(PrimaryViolationKind::RedundantSelector, false)
     );
-    assert_eq!(finding.choices(), [ReplacementDecision::Fix]);
-    assert_eq!(finding.default_decision(), ReplacementDecision::Fix);
+    assert!(finding.decision_slots().is_empty());
+    assert!(finding.default_decision().is_empty());
     assert_eq!(finding.default_replacement(), "#");
-    assert_eq!(finding.replacement(ReplacementDecision::Fix), Some("#"));
-    assert_eq!(finding.replacement(ReplacementDecision::Text), None);
-    assert_eq!(finding.replacement(ReplacementDecision::Emoji), None);
+    assert_eq!(finding.replacement(&[]), Some("#".to_owned()));
+    assert_eq!(finding.replacement(&[ReplacementDecision::Text]), None);
+    assert_eq!(finding.replacement(&[ReplacementDecision::Emoji]), None);
 }
 
 #[test]
@@ -69,20 +77,20 @@ fn standalone_bare_singleton_uses_plain_presentation_resolution() {
         primary_violation(PrimaryViolationKind::BareNeedsResolution, false)
     );
     assert_eq!(
-        finding.choices(),
-        [ReplacementDecision::Text, ReplacementDecision::Emoji]
+        decision_slot_choices(&finding),
+        [vec![ReplacementDecision::Text, ReplacementDecision::Emoji]]
     );
-    assert_eq!(finding.default_decision(), ReplacementDecision::Emoji);
+    assert_eq!(finding.default_decision(), [ReplacementDecision::Emoji]);
     assert_eq!(finding.default_replacement(), "\u{00A9}\u{FE0F}");
     assert_eq!(
-        finding.replacement(ReplacementDecision::Text),
-        Some("\u{00A9}\u{FE0E}")
+        finding.replacement(&[ReplacementDecision::Text]),
+        Some("\u{00A9}\u{FE0E}".to_owned())
     );
     assert_eq!(
-        finding.replacement(ReplacementDecision::Emoji),
-        Some("\u{00A9}\u{FE0F}")
+        finding.replacement(&[ReplacementDecision::Emoji]),
+        Some("\u{00A9}\u{FE0F}".to_owned())
     );
-    assert_eq!(finding.replacement(ReplacementDecision::Fix), None);
+    assert_eq!(finding.replacement(&[]), None);
 }
 
 #[test]
@@ -91,11 +99,11 @@ fn standalone_bare_singleton_can_default_to_text_resolution() {
         .with_prefer_bare(crate::variation_set::VariationSet::none())
         .with_bare_as_text(crate::variation_set::VariationSet::all());
     let finding = finding_for_first_item_with_policy("\u{00A9}", &policy);
-    assert_eq!(finding.default_decision(), ReplacementDecision::Text);
+    assert_eq!(finding.default_decision(), [ReplacementDecision::Text]);
     assert_eq!(finding.default_replacement(), "\u{00A9}\u{FE0E}");
     assert_eq!(
-        finding.replacement(ReplacementDecision::Emoji),
-        Some("\u{00A9}\u{FE0F}")
+        finding.replacement(&[ReplacementDecision::Emoji]),
+        Some("\u{00A9}\u{FE0F}".to_owned())
     );
 }
 
@@ -148,12 +156,12 @@ fn single_emoji_zwj_wrapper_uses_singleton_resolution_but_preserves_link() {
         primary_violation(PrimaryViolationKind::BareNeedsResolution, false)
     );
     assert_eq!(
-        finding.replacement(ReplacementDecision::Text),
-        Some("\u{00A9}\u{FE0E}\u{200D}")
+        finding.replacement(&[ReplacementDecision::Text]),
+        Some("\u{00A9}\u{FE0E}\u{200D}".to_owned())
     );
     assert_eq!(
-        finding.replacement(ReplacementDecision::Emoji),
-        Some("\u{00A9}\u{FE0F}\u{200D}")
+        finding.replacement(&[ReplacementDecision::Emoji]),
+        Some("\u{00A9}\u{FE0F}\u{200D}".to_owned())
     );
 }
 
@@ -172,8 +180,8 @@ fn single_emoji_keycap_wrapper_repairs_without_dropping_link() {
     );
     assert_eq!(finding.default_replacement(), "#\u{FE0E}\u{20E3}\u{200D}");
     assert_eq!(
-        finding.replacement(ReplacementDecision::Emoji),
-        Some("#\u{FE0F}\u{20E3}\u{200D}")
+        finding.replacement(&[ReplacementDecision::Emoji]),
+        Some("#\u{FE0F}\u{20E3}\u{200D}".to_owned())
     );
 }
 
@@ -202,11 +210,20 @@ fn tag_modifier_on_emoji_default_base_does_not_add_base_selector() {
 }
 
 #[test]
-fn multi_emoji_zwj_sequence_forces_text_default_component_to_emoji() {
+fn multi_emoji_zwj_sequence_resolves_bare_components_with_component_policy() {
     let finding = finding_for_first_item("\u{2764}\u{200D}\u{1F525}");
     assert_eq!(
         finding.violation(),
-        primary_violation(PrimaryViolationKind::NotFullyQualifiedSequence, false)
+        primary_violation(PrimaryViolationKind::BareNeedsResolution, false)
+    );
+    assert_eq!(
+        decision_slot_choices(&finding),
+        [vec![ReplacementDecision::Text, ReplacementDecision::Emoji]]
+    );
+    assert_eq!(finding.default_decision(), [ReplacementDecision::Emoji]);
+    assert_eq!(
+        finding.replacement(&[ReplacementDecision::Text]),
+        Some("\u{2764}\u{FE0E}\u{200D}\u{1F525}".to_owned())
     );
     assert_eq!(
         finding.default_replacement(),
@@ -215,11 +232,31 @@ fn multi_emoji_zwj_sequence_forces_text_default_component_to_emoji() {
 }
 
 #[test]
-fn multi_emoji_zwj_sequence_repairs_noncanonical_joined_component() {
+fn multi_emoji_zwj_sequence_exposes_multiple_component_decision_slots() {
+    let finding = finding_for_first_item("\u{00A9}\u{200D}\u{00AE}");
+    assert_eq!(
+        decision_slot_choices(&finding),
+        [
+            vec![ReplacementDecision::Text, ReplacementDecision::Emoji],
+            vec![ReplacementDecision::Text, ReplacementDecision::Emoji],
+        ]
+    );
+    assert_eq!(
+        finding.default_decision(),
+        [ReplacementDecision::Emoji, ReplacementDecision::Emoji]
+    );
+    assert_eq!(
+        finding.replacement(&[ReplacementDecision::Text, ReplacementDecision::Emoji]),
+        Some("\u{00A9}\u{FE0E}\u{200D}\u{00AE}\u{FE0F}".to_owned())
+    );
+}
+
+#[test]
+fn multi_emoji_zwj_sequence_repairs_noncanonical_joined_component_by_policy() {
     let finding = finding_for_first_item("\u{1F525}\u{200D}\u{2764}");
     assert_eq!(
         finding.violation(),
-        primary_violation(PrimaryViolationKind::NotFullyQualifiedSequence, false)
+        primary_violation(PrimaryViolationKind::BareNeedsResolution, false)
     );
     assert_eq!(
         finding.default_replacement(),
@@ -228,12 +265,8 @@ fn multi_emoji_zwj_sequence_repairs_noncanonical_joined_component() {
 }
 
 #[test]
-fn multi_emoji_zwj_sequence_replaces_text_selector_with_emoji_selector() {
-    let finding = finding_for_first_item("\u{2764}\u{FE0E}\u{200D}\u{1F525}");
-    assert_eq!(
-        finding.default_replacement(),
-        "\u{2764}\u{FE0F}\u{200D}\u{1F525}"
-    );
+fn multi_emoji_zwj_sequence_keeps_explicit_text_component_request() {
+    no_finding_for_first_item("\u{2764}\u{FE0E}\u{200D}\u{1F525}");
 }
 
 #[test]
@@ -245,20 +278,14 @@ fn multi_emoji_zwj_sequence_removes_unsupported_component_selector() {
 #[test]
 fn multi_emoji_zwj_sequence_cleans_joined_link_selector_without_component_repair() {
     let finding = finding_for_first_item("\u{1F525}\u{200D}\u{FE0F}\u{1F600}");
-    assert_eq!(
-        finding.violation(),
-        primary_violation(PrimaryViolationKind::NotFullyQualifiedSequence, true)
-    );
+    assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
     assert_eq!(finding.default_replacement(), "\u{1F525}\u{200D}\u{1F600}");
 }
 
 #[test]
 fn multi_emoji_zwj_sequence_cleans_trailing_link_selector_without_component_repair() {
     let finding = finding_for_first_item("\u{1F525}\u{200D}\u{1F600}\u{200D}\u{FE0F}");
-    assert_eq!(
-        finding.violation(),
-        primary_violation(PrimaryViolationKind::NotFullyQualifiedSequence, true)
-    );
+    assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
     assert_eq!(
         finding.default_replacement(),
         "\u{1F525}\u{200D}\u{1F600}\u{200D}"
@@ -284,19 +311,15 @@ fn multi_emoji_zwj_sequence_repairs_flag_component_selectors() {
         let finding = finding_for_first_item(input);
         assert_eq!(
             finding.violation(),
-            primary_violation(PrimaryViolationKind::NotFullyQualifiedSequence, false)
+            primary_violation(PrimaryViolationKind::NotFullyQualifiedSequence, true)
         );
         assert_eq!(finding.default_replacement(), replacement);
     }
 }
 
 #[test]
-fn multi_emoji_zwj_keycap_component_uses_forced_emoji_rule() {
-    let finding = finding_for_first_item("#\u{FE0E}\u{20E3}\u{200D}\u{1F525}");
-    assert_eq!(
-        finding.default_replacement(),
-        "#\u{FE0F}\u{20E3}\u{200D}\u{1F525}"
-    );
+fn multi_emoji_zwj_keycap_component_uses_component_policy() {
+    no_finding_for_first_item("#\u{FE0E}\u{20E3}\u{200D}\u{1F525}");
 }
 
 #[test]
@@ -345,7 +368,7 @@ fn combo_dangling_zwj_after_canonical_singleton_only_cleans_link_selectors() {
 }
 
 #[test]
-fn combo_true_zwj_sequence_uses_forced_component_cleanup() {
+fn combo_true_zwj_sequence_uses_component_local_cleanup() {
     let finding =
         finding_for_first_item("\u{2764}\u{FE0E}\u{200D}\u{FE0F}\u{1F525}\u{FE0F}\u{200D}\u{FE0E}");
     assert_eq!(
@@ -354,6 +377,6 @@ fn combo_true_zwj_sequence_uses_forced_component_cleanup() {
     );
     assert_eq!(
         finding.default_replacement(),
-        "\u{2764}\u{FE0F}\u{200D}\u{1F525}\u{200D}"
+        "\u{2764}\u{FE0E}\u{200D}\u{1F525}\u{200D}"
     );
 }

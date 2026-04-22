@@ -111,15 +111,14 @@ fn keycap_cleanup_follows_current_sequence_contract() {
         format_text("#\u{20E3}", &policy),
         FormatResult::Changed("#\u{FE0E}\u{20E3}".to_owned())
     );
-    // Standalone text-styled keycaps are sanctioned and intentionally stay
-    // text-styled; true multi-component ZWJ context uses forced emoji cleanup.
+    // ZWJ context no longer overrides the component's own keycap policy.
     assert_eq!(
         format_text("#\u{FE0E}\u{20E3}", &policy),
         FormatResult::Unchanged
     );
     assert_eq!(
         format_text("#\u{FE0E}\u{20E3}\u{200D}\u{1F525}", &policy),
-        FormatResult::Changed("#\u{FE0F}\u{20E3}\u{200D}\u{1F525}".to_owned())
+        FormatResult::Unchanged
     );
     assert_eq!(
         format_text("\u{26A0}\u{20E3}", &policy),
@@ -167,7 +166,7 @@ fn keycap_policy_uses_first_modification_only() {
 }
 
 #[test]
-fn zwj_cleanup_uses_forced_component_rules() {
+fn zwj_cleanup_uses_component_local_rules() {
     let policy = default_policy();
 
     assert_eq!(
@@ -180,7 +179,7 @@ fn zwj_cleanup_uses_forced_component_rules() {
     );
     assert_eq!(
         format_text("\u{2764}\u{FE0E}\u{200D}\u{1F525}", &policy),
-        FormatResult::Changed("\u{2764}\u{FE0F}\u{200D}\u{1F525}".to_owned())
+        FormatResult::Unchanged
     );
     assert_eq!(
         format_text("\u{1F600}\u{FE0F}\u{200D}\u{1F525}", &policy),

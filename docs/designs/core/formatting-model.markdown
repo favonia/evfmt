@@ -61,7 +61,7 @@ This layer converts parsed structure into local slots. For each slot it computes
 - `FE0E`
 - `FE0F`
 
-This is the key reduction step. Fixed-cleanup cases such as modifier-defect and ZWJ discipline must resolve before policy runs. Standalone keycap-character slots can remain ambiguous and enter policy through the keycap-character domain.
+This is the key reduction step. Fixed-cleanup cases such as modifier defects, ZWJ-link selector cleanup, and unsanctioned selectors must resolve before policy runs. Ordinary and keycap-character slots can remain ambiguous and enter policy through their matching domains.
 
 ### Policy layer
 
@@ -125,8 +125,8 @@ For each slot, compute which of `none`, `FE0E`, and `FE0F` are reasonable format
 The following cases do not enter policy:
 
 - modifier defect canonicalizes by removing legacy `FE0F` before a modifier
-- standalone keycap-character handling uses policy when the base has variation-sequence data; keycap components inside multi-component ZWJ sequences follow ZWJ fully-qualified discipline
-- ZWJ generation follows fully-qualified discipline: `FE0E` on components is replaced (departing from [UTS #51](https://www.unicode.org/reports/tr51/tr51-29.html) to preserve the "only selectors change" invariant), required `FE0F` is inserted, and unsupported selectors are removed
+- keycap-character handling uses policy when the base has variation-sequence data
+- ZWJ links are preserved, selectors attached to ZWJ links are removed, and each component is resolved as if the surrounding ZWJ links were absent
 - unsanctioned or orphaned selectors are removed
 
 ### Policy resolution
@@ -159,6 +159,6 @@ Formatting only inserts, removes, or replaces `FE0E` and `FE0F`.
 
 ### Policy only sees ambiguous slots
 
-Modifier-defect and ZWJ cleanup must be resolved before policy. Standalone keycap-character slots that still have multiple reasonable selector states use keycap-character policy.
+Modifier defects, ZWJ-link selector cleanup, and unsanctioned selector cleanup must be resolved before policy. Keycap-character slots that still have multiple reasonable selector states use keycap-character policy.
 
 The evidence model for these invariants lives in [verification-strategy.markdown](../guides/verification-strategy.markdown).
