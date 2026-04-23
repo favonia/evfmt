@@ -177,6 +177,20 @@ By default, `evfmt` leaves bare ASCII characters and Unicode emoji-default chara
 
 Use these recipes when the default policy is close to what you want, but a small class of symbols needs different handling.
 
+#### Keep Emoji Presentation Selector for Emoji-Default Characters
+
+Use this when you want explicit emoji selectors on emoji-default characters for more uniform rendering across platforms:
+
+```sh
+evfmt format \
+  --remove-prefer-bare-for=emoji-default \
+  README.markdown
+```
+
+With that option, bare emoji-default characters normalize to explicit emoji forms. Explicit text forms such as `⚡︎` stay text.
+
+⚠️ This is not Unicode's recommended interchange form, but it may improve rendering consistency on some platforms.
+
 #### Keep Selected Symbols in Text Presentation
 
 Use this when rights marks, arrows, and card suits already render as text-style symbols, and you want explicit text selectors for portability:
