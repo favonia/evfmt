@@ -29,7 +29,7 @@ This document specifies the final formatting model. The sections below define pr
 - ZWJ-related contexts
 - malformed or unsanctioned selector usage that can be repaired or removed
 
-The formatter guarantees source-level canonicalization under its own policy. It does not guarantee identical rendering on every platform.
+The formatter guarantees source-level canonicalization under its own policy to improve consistency across current and future platforms. It does not guarantee identical rendering on every platform.
 
 ## Non-goals
 

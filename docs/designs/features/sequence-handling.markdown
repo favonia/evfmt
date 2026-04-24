@@ -30,7 +30,7 @@ Concrete scanner state shapes and local edge cases belong in scanner comments an
 
 ## Core decision boundary
 
-Policy is only for genuinely ambiguous standalone variation positions.
+Policy is only for genuinely ambiguous slots that remain after sequence-specific cleanup.
 
 Sequence-specific cleanup rules must resolve before policy.
 
@@ -40,7 +40,7 @@ Sequence-specific cleanup rules must resolve before policy.
 
 For a base with variation-sequence data, the formatter may need policy to choose among bare, `FE0E`, and `FE0F`.
 
-After context-aware cleanup, the only policy-ambiguous slots are variation-sequence slots and keycap-character slots.
+After context-aware cleanup, the only policy-ambiguous slots are ordinary and keycap-character slots.
 
 ### Fixed cleanup for singleton-base slots
 
@@ -143,10 +143,10 @@ Implementation APIs may surface these categories as findings with valid decision
 
 ## Relation to policy
 
-| Context                     | Policy applies?                           | Behavior                                                                  |
-| --------------------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
-| Ordinary variation sequence | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets                      |
-| Keycap-character slot       | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets in the keycap domain |
-| Modifier sequence defect    | No                                        | Remove legacy `FE0F` before the modifier                                  |
-| ZWJ link selectors          | No                                        | Remove selectors attached to ZWJ links                                    |
-| Not-a-slot                  | No                                        | Remove illegal selector usage                                             |
+| Context                  | Policy applies?                           | Behavior                                                                  |
+| ------------------------ | ----------------------------------------- | ------------------------------------------------------------------------- |
+| Ordinary slot            | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets                      |
+| Keycap-character slot    | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets in the keycap domain |
+| Modifier sequence defect | No                                        | Remove legacy `FE0F` before the modifier                                  |
+| ZWJ link selectors       | No                                        | Remove selectors attached to ZWJ links                                    |
+| Not-a-slot               | No                                        | Remove illegal selector usage                                             |

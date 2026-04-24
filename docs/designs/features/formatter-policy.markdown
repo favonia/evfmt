@@ -6,7 +6,7 @@ Defines: the public policy surface, CLI modes, and exit codes.
 
 ## Policy predicates
 
-`evfmt` resolves standalone ambiguity through two policy predicates:
+`evfmt` resolves policy ambiguity through two policy predicates:
 
 - the preferred-bare set
 - the bare-as-text set
@@ -65,7 +65,7 @@ The ignore flags are:
 
 ## Policy decision model
 
-For an ambiguous standalone slot, the two predicates determine the canonical result:
+For an ambiguous policy slot, the two predicates determine the canonical result:
 
 |                     | Treating bare as text            | Not treating bare as text         |
 | ------------------- | -------------------------------- | --------------------------------- |
