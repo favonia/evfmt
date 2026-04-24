@@ -21,9 +21,11 @@ jobs:
     name: Publish evfmt
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && !github.event.release.prerelease)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
       EXPECTED_TAG: ${{ github.event.release.tag_name || '' }}
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - name: 🛡️ Harden runner
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
@@ -38,6 +40,9 @@ jobs:
           toolchain: stable
       - name: ⚡️ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: 🔐 Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
       - name: 🔎 Detect crate version
         id: version
         shell: bash
@@ -59,7 +64,11 @@ jobs:
             exit 1
           fi
       - name: 🧪 Verify publishable package
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: cargo publish --package evfmt --locked --dry-run
       - name: 🚀 Publish to crates.io
         if: github.event_name == 'release'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: cargo publish --package evfmt --locked
