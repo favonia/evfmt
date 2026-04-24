@@ -38,7 +38,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 🔐 Authenticate with crates.io
         id: auth
