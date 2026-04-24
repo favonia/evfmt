@@ -20,7 +20,7 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 🧪 Run rustfmt
         run: cargo fmt --check
@@ -35,7 +35,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
-      - name: 📦️ Install TOML tools
+      - name: 📦 Install TOML tools
         uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
         with:
           tool: taplo-cli,cargo-sort
@@ -54,7 +54,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 🧪 Run evfmt
         run: cargo run -p evfmt -- check .
@@ -162,7 +162,7 @@ jobs:
           python-version: "3.14"
           cache: pip
           cache-dependency-path: .github/workflows/mdformat-requirements.txt
-      - name: 📦️ Install mdformat
+      - name: 📦 Install mdformat
         run: python -m pip install --require-hashes --requirement .github/workflows/mdformat-requirements.txt
       - name: 🧪 Run mdformat
         run: git ls-files -z '*.md' '*.markdown' | xargs -0r python -m mdformat --check

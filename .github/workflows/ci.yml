@@ -32,7 +32,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 🧪 Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -52,7 +52,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 📝 Build documentation
         run: cargo doc --workspace --no-deps
@@ -78,9 +78,9 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - name: 📦️ Install cargo-nextest
+      - name: 📦 Install cargo-nextest
         uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
         with:
           tool: cargo-nextest
@@ -103,9 +103,9 @@ jobs:
         with:
           toolchain: stable
           components: llvm-tools-preview
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - name: 📦️ Install coverage tools
+      - name: 📦 Install coverage tools
         uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
         with:
           tool: cargo-llvm-cov,cargo-nextest
@@ -147,7 +147,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
-      - name: 📦️ Install cargo-vet
+      - name: 📦 Install cargo-vet
         uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
         with:
           tool: cargo-vet
@@ -169,9 +169,9 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - name: 📦️ Install cargo-semver-checks
+      - name: 📦 Install cargo-semver-checks
         uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
         with:
           tool: cargo-semver-checks
@@ -193,7 +193,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
-      - name: 📦️ Install cargo-machete
+      - name: 📦 Install cargo-machete
         uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
         with:
           tool: cargo-machete
@@ -235,7 +235,7 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
-      - name: ⚡️ Cache Rust artifacts
+      - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 🧪 Run cargo check
         run: cargo check --workspace
