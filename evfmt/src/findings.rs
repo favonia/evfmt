@@ -35,7 +35,7 @@
 //! assert_eq!(repaired, "A\u{00A9}\u{FE0F}");
 //! ```
 
-use std::ops::Range;
+use std::ops::{Add, AddAssign, Range};
 
 use crate::policy::{Policy, SingletonRule};
 use crate::scanner::{
@@ -51,125 +51,103 @@ use fixed::FixedEmojiLike;
 #[cfg(test)]
 mod tests;
 
-// --- Public violation / decision types ---
+// --- Public non-canonicality / decision types ---
 
-/// Reason a scanned item is non-canonical.
+/// Count summary for why a scanned item is non-canonical.
 ///
-/// Unsanctioned presentation selectors are tracked as a separate axis because
-/// they can be the whole problem, or they can appear alongside a primary
-/// sequence/policy violation.
+/// These axes are compositional rather than mutually exclusive. A finding may
+/// simultaneously include selector cleanup, deterministic sequence defects,
+/// redundant selectors, and policy-driven bare-base resolution.
 ///
 /// # Examples
 ///
 /// ```rust
 /// use evfmt::{Policy, scan};
-/// use evfmt::findings::{Violation, analyze_scan_item};
+/// use evfmt::findings::{NonCanonicality, analyze_scan_item};
 ///
 /// let policy = Policy::default();
 /// let finding = scan("A\u{FE0F}")
 ///     .find_map(|item| analyze_scan_item(&item, &policy))
 ///     .unwrap();
 ///
-/// assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
+/// assert_eq!(
+///     finding.non_canonicality(),
+///     NonCanonicality::new(1, 0, 0, 0)
+/// );
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum Violation {
-    /// The finding only contains unsanctioned presentation selectors.
-    ///
-    /// This can happen either as an isolated selector run or inside an
-    /// otherwise canonical emoji-shaped item.
-    UnsanctionedSelectorsOnly,
-    /// The finding has a primary violation, and may also contain unsanctioned
-    /// presentation selectors.
-    Primary(PrimaryViolation),
+pub struct NonCanonicality {
+    /// Count of presentation selectors removed as unsanctioned cleanup.
+    pub unsanctioned_selectors: usize,
+    /// Count of deterministic sequence defects that need repair but do not
+    /// expose a policy choice.
+    pub defective_sequences: usize,
+    /// Count of sanctioned selectors dropped because the active policy prefers
+    /// bare form.
+    pub redundant_selectors: usize,
+    /// Count of bare base slots that the active policy asks callers to resolve.
+    pub bases_to_resolve: usize,
 }
 
-impl Violation {
-    const fn primary(kind: PrimaryViolationKind, has_unsanctioned_selectors: bool) -> Self {
-        Self::Primary(PrimaryViolation::new(kind, has_unsanctioned_selectors))
-    }
-
-    const fn with_unsanctioned_selectors(self) -> Self {
-        match self {
-            Self::UnsanctionedSelectorsOnly => Self::UnsanctionedSelectorsOnly,
-            Self::Primary(primary) => Self::Primary(PrimaryViolation {
-                has_unsanctioned_selectors: true,
-                ..primary
-            }),
-        }
-    }
-}
-
-/// A primary sequence or policy violation, plus any attached selector cleanup.
-///
-/// # Examples
-///
-/// ```rust
-/// use evfmt::{Policy, scan};
-/// use evfmt::findings::{PrimaryViolationKind, Violation, analyze_scan_item};
-///
-/// let policy = Policy::default();
-/// let finding = scan("\u{00A9}")
-///     .find_map(|item| analyze_scan_item(&item, &policy))
-///     .unwrap();
-///
-/// let Violation::Primary(primary) = finding.violation() else {
-///     panic!("bare copyright should need policy resolution");
-/// };
-/// assert_eq!(primary.kind, PrimaryViolationKind::BareNeedsResolution);
-/// assert!(!primary.has_unsanctioned_selectors);
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub struct PrimaryViolation {
-    /// The primary reason this item is non-canonical.
-    pub kind: PrimaryViolationKind,
-    /// Whether the same item also contains unsanctioned presentation selectors.
-    pub has_unsanctioned_selectors: bool,
-}
-
-impl PrimaryViolation {
-    const fn new(kind: PrimaryViolationKind, has_unsanctioned_selectors: bool) -> Self {
+impl NonCanonicality {
+    /// Create an explicit non-canonicality summary.
+    #[must_use]
+    pub const fn new(
+        unsanctioned_selectors: usize,
+        defective_sequences: usize,
+        redundant_selectors: usize,
+        bases_to_resolve: usize,
+    ) -> Self {
         Self {
-            kind,
-            has_unsanctioned_selectors,
+            unsanctioned_selectors,
+            defective_sequences,
+            redundant_selectors,
+            bases_to_resolve,
+        }
+    }
+
+    const fn unsanctioned(count: usize) -> Self {
+        Self::new(count, 0, 0, 0)
+    }
+
+    const fn defective() -> Self {
+        Self::new(0, 1, 0, 0)
+    }
+
+    const fn redundant() -> Self {
+        Self::new(0, 0, 1, 0)
+    }
+
+    const fn resolve() -> Self {
+        Self::new(0, 0, 0, 1)
+    }
+
+    const fn is_empty(self) -> bool {
+        self.unsanctioned_selectors == 0
+            && self.defective_sequences == 0
+            && self.redundant_selectors == 0
+            && self.bases_to_resolve == 0
+    }
+}
+
+impl Add for NonCanonicality {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            unsanctioned_selectors: self.unsanctioned_selectors + rhs.unsanctioned_selectors,
+            defective_sequences: self.defective_sequences + rhs.defective_sequences,
+            redundant_selectors: self.redundant_selectors + rhs.redundant_selectors,
+            bases_to_resolve: self.bases_to_resolve + rhs.bases_to_resolve,
         }
     }
 }
 
-/// Primary sequence or policy category for a non-canonical scanned item.
-///
-/// # Examples
-///
-/// ```rust
-/// use evfmt::{Policy, scan};
-/// use evfmt::findings::{PrimaryViolationKind, Violation, analyze_scan_item};
-///
-/// let policy = Policy::default();
-/// let finding = scan("#\u{FE0E}")
-///     .find_map(|item| analyze_scan_item(&item, &policy))
-///     .unwrap();
-///
-/// assert!(matches!(
-///     finding.violation(),
-///     Violation::Primary(primary)
-///         if primary.kind == PrimaryViolationKind::RedundantSelector
-/// ));
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum PrimaryViolationKind {
-    /// Wrong or missing presentation selectors in a keycap or ZWJ-related sequence.
-    NotFullyQualifiedSequence,
-    /// Sanctioned presentation selector that matches the bare side on a bare-preferred
-    /// character. The requested presentation is valid, but the formatting policy
-    /// prefers bare form.
-    RedundantSelector,
-    /// Bare variation-sequence character that the formatting policy wants to resolve
-    /// with a presentation selector. The bare form is valid, but the policy prefers an
-    /// explicit presentation selector.
-    BareNeedsResolution,
+impl AddAssign for NonCanonicality {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
 }
 
 /// One selector-bearing presentation choice in a replacement decision vector.
@@ -286,7 +264,7 @@ enum ReplacementPiece {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ReplacementPlan {
     /// Why the item is non-canonical.
-    violation: Violation,
+    non_canonicality: NonCanonicality,
     /// Public presentation slots in this finding's decision vector.
     decision_slots: Vec<DecisionSlot>,
     /// Presentation slots callers must decide to select a non-default
@@ -302,8 +280,8 @@ struct ReplacementPlan {
 impl ReplacementPlan {
     /// Why the analyzed item is non-canonical.
     #[must_use]
-    const fn violation(&self) -> Violation {
-        self.violation
+    const fn non_canonicality(&self) -> NonCanonicality {
+        self.non_canonicality
     }
 
     /// Presentation slots in this finding's replacement decision vector.
@@ -314,7 +292,7 @@ impl ReplacementPlan {
 
     /// The replacement decision batch formatting applies by default.
     #[must_use]
-    fn default_decision(&self) -> Vec<ReplacementDecision> {
+    fn default_decisions(&self) -> Vec<ReplacementDecision> {
         self.slots
             .iter()
             .map(|slot| slot.public.default_decision())
@@ -379,8 +357,8 @@ pub struct Finding<'a> {
 impl Finding<'_> {
     /// Why the analyzed item is non-canonical.
     #[must_use]
-    pub const fn violation(&self) -> Violation {
-        self.replacement_plan.violation()
+    pub const fn non_canonicality(&self) -> NonCanonicality {
+        self.replacement_plan.non_canonicality()
     }
 
     /// Presentation slots in this finding's replacement decision vector.
@@ -394,8 +372,8 @@ impl Finding<'_> {
 
     /// The replacement decision batch formatting applies by default.
     #[must_use]
-    pub fn default_decision(&self) -> Vec<ReplacementDecision> {
-        self.replacement_plan.default_decision()
+    pub fn default_decisions(&self) -> Vec<ReplacementDecision> {
+        self.replacement_plan.default_decisions()
     }
 
     /// The replacement text for the decision batch formatting applies by default.
@@ -412,7 +390,7 @@ impl Finding<'_> {
     ///     .find_map(|item| analyze_scan_item(&item, &policy))
     ///     .unwrap();
     ///
-    /// finding.replacement(&finding.default_decision()).unwrap();
+    /// finding.replacement(&finding.default_decisions()).unwrap();
     /// ```
     ///
     /// The default decision vector is always valid for this finding.
@@ -444,7 +422,7 @@ impl Finding<'_> {
 ///
 /// ```rust
 /// use evfmt::{Policy, scan};
-/// use evfmt::findings::{Violation, analyze_scan_item};
+/// use evfmt::findings::{NonCanonicality, analyze_scan_item};
 ///
 /// let policy = Policy::default();
 ///
@@ -453,7 +431,10 @@ impl Finding<'_> {
 ///
 /// let selector_item = scan("\u{FE0F}").next().unwrap();
 /// let finding = analyze_scan_item(&selector_item, &policy).unwrap();
-/// assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
+/// assert_eq!(
+///     finding.non_canonicality(),
+///     NonCanonicality::new(1, 0, 0, 0)
+/// );
 /// assert_eq!(finding.replacement(&[]).unwrap(), "");
 /// ```
 #[must_use]
@@ -462,23 +443,21 @@ pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Fin
         ScanKind::Passthrough => None,
         ScanKind::UnsanctionedPresentationSelectors(_) => Some(unambiguous_finding(
             item,
-            Violation::UnsanctionedSelectorsOnly,
+            NonCanonicality::unsanctioned(count_presentation_selectors_in_item(item)),
             String::new(),
         )),
         ScanKind::EmojiSequence(sequence) => match sequence {
             // The scanner preserves malformed ZWJ-like shapes such as leading,
             // consecutive, or trailing ZWJ links. Finding analysis keeps that
             // non-selector structure intact: these paths only remove or
-            // normalize presentation selectors. The scanner's typed sequence
-            // shape determines which presentation rules apply:
+            // normalize presentation selectors.
             //
-            // - `LinksOnly`: only link-attached selectors can be cleaned
-            // - single-component `EmojiHeaded`: use the ordinary
-            //   singleton/flag rules for that component, and preserve any
-            //   trailing ZWJ links in the same scanned item
-            // - joined `EmojiHeaded`: preserve ZWJ links but resolve each
-            //   component with the same component-local policy/fixed cleanup
-            //   it would use outside the surrounding ZWJ links
+            // `LinksOnly` contributes only link cleanup. `EmojiHeaded` uses
+            // the same accumulation path regardless of whether the scanner
+            // found one component or a joined chain: analyze each component
+            // with the same component-local policy/fixed cleanup it would use
+            // outside surrounding ZWJ links, then stitch the literal ZWJ links
+            // back into the replacement plan in source order.
             //
             // This is the findings-side implementation of the ZWJ-related
             // sequence contract in
@@ -488,254 +467,61 @@ pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Fin
                 first,
                 joined,
                 trailing_links,
-            } if joined.is_empty() => analyze_single_emoji(item, first, trailing_links, policy),
-            EmojiSequence::EmojiHeaded {
-                first,
-                joined,
-                trailing_links,
-            } => analyze_multi_emoji_zwj_sequence(item, first, joined, trailing_links, policy),
+            } => analyze_emoji_headed_sequence(item, first, joined, trailing_links, policy),
         },
     }
 }
 
-// --- Case: single emoji, either standalone or wrapped in trailing ZWJ links ---
-
-fn analyze_single_emoji<'a>(
-    item: &ScanItem<'a>,
-    emoji: &EmojiLike,
-    trailing_links: &[ZwjLink],
-    policy: &Policy,
-) -> Option<Finding<'a>> {
-    match &emoji.stem {
-        EmojiStem::SingletonBase {
-            base,
-            presentation_selectors_after_base,
-        } => {
-            let outcome = singleton_analysis_outcome(
-                *base,
-                presentation_selectors_after_base,
-                &emoji.modifiers,
-                policy,
-            );
-            single_emoji_singleton_finding(
-                item,
-                *base,
-                presentation_selectors_after_base,
-                &emoji.modifiers,
-                trailing_links,
-                outcome,
-            )
-        }
-        EmojiStem::Flag {
-            first_ri,
-            presentation_selectors_after_first_ri,
-            second_ri,
-            presentation_selectors_after_second_ri,
-        } => analyze_single_flag(
-            item,
-            *first_ri,
-            presentation_selectors_after_first_ri,
-            *second_ri,
-            presentation_selectors_after_second_ri,
-            &emoji.modifiers,
-            trailing_links,
-        ),
-    }
-}
-
-/// Analyze a regional-indicator flag stem, with or without modifications.
-///
-/// Flag stems have no base-presentation slot. Regional indicators never carry
-/// a sanctioned presentation sequence, so every presentation selector attached
-/// to either RI is unsanctioned and removed under rule 1.
-///
-/// If greedy scanner grouping attaches modifiers, keycaps, or tags after a flag
-/// stem, their own trailing presentation selectors are also rule-1 cleanup:
-/// preserve the modification content and strip the unsanctioned selectors.
-fn analyze_single_flag<'a>(
-    item: &ScanItem<'a>,
-    first_ri: char,
-    presentation_selectors_after_first_ri: &[Presentation],
-    second_ri: char,
-    presentation_selectors_after_second_ri: &[Presentation],
-    modifications: &[EmojiModification],
-    trailing_links: &[ZwjLink],
-) -> Option<Finding<'a>> {
-    let has_ri_presentation_selectors = !presentation_selectors_after_first_ri.is_empty()
-        || !presentation_selectors_after_second_ri.is_empty();
-    let has_modification_presentation_selectors =
-        has_trailing_modification_presentation_selectors(modifications);
-    let has_link_presentation_selectors = trailing_links.iter().any(zwj_link_has_selectors);
-
-    if !has_ri_presentation_selectors
-        && !has_modification_presentation_selectors
-        && !has_link_presentation_selectors
-    {
-        return None;
-    }
-
-    Some(unambiguous_finding(
-        item,
-        Violation::UnsanctionedSelectorsOnly,
-        render_flag_with_links(first_ri, second_ri, modifications, trailing_links),
-    ))
-}
-
-fn analyze_links_only_zwj_sequence<'a>(
-    item: &ScanItem<'a>,
-    links: &[ZwjLink],
-) -> Option<Finding<'a>> {
-    let has_link_presentation_selectors = links.iter().any(zwj_link_has_selectors);
-    if !has_link_presentation_selectors {
-        return None;
-    }
-
-    Some(unambiguous_finding(
-        item,
-        Violation::UnsanctionedSelectorsOnly,
-        render_zwj_links_only_sequence(links),
-    ))
-}
-
-fn single_emoji_singleton_finding<'a>(
-    item: &ScanItem<'a>,
-    base: char,
-    presentation_selectors_after_base: &[Presentation],
-    modifications: &[EmojiModification],
-    trailing_links: &[ZwjLink],
-    outcome: SingletonAnalysisOutcome,
-) -> Option<Finding<'a>> {
-    let has_link_presentation_selectors = trailing_links.iter().any(zwj_link_has_selectors);
-
-    match outcome {
-        SingletonAnalysisOutcome::Canonical if !has_link_presentation_selectors => None,
-        SingletonAnalysisOutcome::Canonical => {
-            debug_assert!(
-                presentation_selectors_after_base.len() <= 1,
-                "canonical singleton base cannot carry multiple presentation selectors"
-            );
-            Some(unambiguous_finding(
-                item,
-                Violation::UnsanctionedSelectorsOnly,
-                render_singleton_with_links(
-                    base,
-                    presentation_selectors_after_base.first().copied(),
-                    modifications,
-                    trailing_links,
-                ),
-            ))
-        }
-        SingletonAnalysisOutcome::Repair {
-            canonical_presentation,
-            violation,
-        } => Some(unambiguous_finding(
-            item,
-            // Link-attached selectors are orthogonal cleanup. They should not
-            // hide a primary singleton/keycap violation in the wrapped emoji.
-            if has_link_presentation_selectors {
-                violation.with_unsanctioned_selectors()
-            } else {
-                violation
-            },
-            render_singleton_with_links(
-                base,
-                canonical_presentation,
-                modifications,
-                trailing_links,
-            ),
-        )),
-        SingletonAnalysisOutcome::ResolvePresentation { default } if trailing_links.is_empty() => {
-            Some(resolve_presentation_finding(
-                item,
-                base,
-                modifications,
-                default,
-            ))
-        }
-        SingletonAnalysisOutcome::ResolvePresentation { default } => {
-            Some(resolve_zwj_wrapper_presentation_finding(
-                item,
-                base,
-                modifications,
-                trailing_links,
-                default,
-                has_link_presentation_selectors,
-            ))
-        }
-    }
-}
-
-fn analyze_multi_emoji_zwj_sequence<'a>(
+fn analyze_emoji_headed_sequence<'a>(
     item: &ScanItem<'a>,
     first: &EmojiLike,
     joined: &[ZwjJoinedEmoji],
     trailing_links: &[ZwjLink],
     policy: &Policy,
 ) -> Option<Finding<'a>> {
-    let mut builder = ReplacementPlanBuilder::new();
-    let mut has_unsanctioned_selectors = false;
-    let mut has_noncanonical_component = false;
-    let mut has_resolution_slot = false;
-
-    let first_outcome = zwj_component_outcome(first, policy);
-    has_unsanctioned_selectors |= first_outcome.has_unsanctioned_selectors;
-    has_noncanonical_component |= first_outcome.is_noncanonical;
-    has_resolution_slot |= first_outcome.has_resolution_slot;
-    builder.extend(first_outcome.pieces, first_outcome.slots);
+    // Emoji-headed sequences now use one accumulation path regardless of
+    // whether the scanner found only one component or a full joined chain.
+    let mut builder = FindingBuilder::new();
+    builder.extend_component(component_outcome(first, policy));
 
     for joined in joined {
-        if zwj_link_has_selectors(&joined.link) {
-            has_unsanctioned_selectors = true;
-        }
-        builder.push_literal(unicode::ZWJ.to_string());
-
-        let joined_outcome = zwj_component_outcome(&joined.emoji, policy);
-        has_unsanctioned_selectors |= joined_outcome.has_unsanctioned_selectors;
-        has_noncanonical_component |= joined_outcome.is_noncanonical;
-        has_resolution_slot |= joined_outcome.has_resolution_slot;
-        builder.extend(joined_outcome.pieces, joined_outcome.slots);
+        builder.extend_link(&joined.link);
+        builder.extend_component(component_outcome(&joined.emoji, policy));
     }
 
-    if trailing_links.iter().any(zwj_link_has_selectors) {
-        has_unsanctioned_selectors = true;
-    }
-    for _ in trailing_links {
-        builder.push_literal(unicode::ZWJ.to_string());
+    for link in trailing_links {
+        builder.extend_link(link);
     }
 
-    if !has_noncanonical_component && !has_unsanctioned_selectors {
-        return None;
-    }
-
-    let violation = if has_resolution_slot {
-        Violation::primary(
-            PrimaryViolationKind::BareNeedsResolution,
-            has_unsanctioned_selectors,
-        )
-    } else if has_noncanonical_component {
-        Violation::primary(
-            PrimaryViolationKind::NotFullyQualifiedSequence,
-            has_unsanctioned_selectors,
-        )
-    } else {
-        Violation::UnsanctionedSelectorsOnly
-    };
-
-    Some(finding_from_builder(item, violation, builder))
+    builder.build(item)
 }
 
 // --- ZWJ sequence analysis helpers ---
 
-fn zwj_link_has_selectors(link: &ZwjLink) -> bool {
-    !link.presentation_selectors_after_link.is_empty()
+fn analyze_links_only_zwj_sequence<'a>(
+    item: &ScanItem<'a>,
+    links: &[ZwjLink],
+) -> Option<Finding<'a>> {
+    // Links-only sequences participate in the same builder flow as
+    // emoji-headed sequences: they simply contribute link cleanup and literal
+    // ZWJ output, but no emoji components.
+    let mut builder = FindingBuilder::new();
+    for link in links {
+        builder.extend_link(link);
+    }
+    builder.build(item)
 }
 
-struct ZwjComponentOutcome {
+/// Outcome for one emoji component before any surrounding ZWJ links are
+/// stitched back in.
+///
+/// This keeps component-local repair decisions compositional: callers can
+/// accumulate component outcomes and link cleanup in source order without
+/// re-analyzing policy.
+struct ComponentOutcome {
     pieces: Vec<ComponentReplacementPiece>,
     slots: Vec<ReplacementSlotPlan>,
-    is_noncanonical: bool,
-    has_unsanctioned_selectors: bool,
-    has_resolution_slot: bool,
+    non_canonicality: NonCanonicality,
 }
 
 enum ComponentReplacementPiece {
@@ -743,12 +529,12 @@ enum ComponentReplacementPiece {
     Slot(usize),
 }
 
-fn zwj_component_outcome(emoji: &EmojiLike, policy: &Policy) -> ZwjComponentOutcome {
+fn component_outcome(emoji: &EmojiLike, policy: &Policy) -> ComponentOutcome {
     match &emoji.stem {
         EmojiStem::SingletonBase {
             base,
             presentation_selectors_after_base,
-        } => zwj_singleton_component_outcome(
+        } => singleton_component_outcome(
             *base,
             presentation_selectors_after_base,
             &emoji.modifiers,
@@ -759,30 +545,26 @@ fn zwj_component_outcome(emoji: &EmojiLike, policy: &Policy) -> ZwjComponentOutc
             presentation_selectors_after_first_ri,
             second_ri,
             presentation_selectors_after_second_ri,
-        } => {
-            let has_unsanctioned_selectors = !presentation_selectors_after_first_ri.is_empty()
-                || !presentation_selectors_after_second_ri.is_empty()
-                || has_trailing_modification_presentation_selectors(&emoji.modifiers);
-            ZwjComponentOutcome {
-                pieces: vec![ComponentReplacementPiece::Literal(
-                    FixedEmojiLike::flag(*first_ri, *second_ri, &emoji.modifiers)
-                        .render_to_string(),
-                )],
-                slots: vec![],
-                is_noncanonical: has_unsanctioned_selectors,
-                has_unsanctioned_selectors,
-                has_resolution_slot: false,
-            }
-        }
+        } => ComponentOutcome {
+            pieces: vec![ComponentReplacementPiece::Literal(
+                FixedEmojiLike::flag(*first_ri, *second_ri, &emoji.modifiers).render_to_string(),
+            )],
+            slots: vec![],
+            non_canonicality: NonCanonicality::unsanctioned(
+                presentation_selectors_after_first_ri.len()
+                    + presentation_selectors_after_second_ri.len()
+                    + count_trailing_modification_presentation_selectors(&emoji.modifiers),
+            ),
+        },
     }
 }
 
-fn zwj_singleton_component_outcome(
+fn singleton_component_outcome(
     base: char,
     presentation_selectors_after_base: &[Presentation],
     modifications: &[EmojiModification],
     policy: &Policy,
-) -> ZwjComponentOutcome {
+) -> ComponentOutcome {
     match singleton_analysis_outcome(
         base,
         presentation_selectors_after_base,
@@ -791,38 +573,27 @@ fn zwj_singleton_component_outcome(
     ) {
         SingletonAnalysisOutcome::Canonical => {
             let presentation = presentation_selectors_after_base.first().copied();
-            ZwjComponentOutcome {
+            ComponentOutcome {
                 pieces: vec![ComponentReplacementPiece::Literal(render_singleton(
                     base,
                     presentation,
                     modifications,
                 ))],
                 slots: vec![],
-                is_noncanonical: false,
-                has_unsanctioned_selectors: false,
-                has_resolution_slot: false,
+                non_canonicality: NonCanonicality::new(0, 0, 0, 0),
             }
         }
         SingletonAnalysisOutcome::Repair {
             canonical_presentation,
-            violation,
-        } => ZwjComponentOutcome {
+            non_canonicality,
+        } => ComponentOutcome {
             pieces: vec![ComponentReplacementPiece::Literal(render_singleton(
                 base,
                 canonical_presentation,
                 modifications,
             ))],
             slots: vec![],
-            is_noncanonical: true,
-            has_unsanctioned_selectors: matches!(violation, Violation::UnsanctionedSelectorsOnly)
-                || matches!(
-                    violation,
-                    Violation::Primary(PrimaryViolation {
-                        has_unsanctioned_selectors: true,
-                        ..
-                    })
-                ),
-            has_resolution_slot: false,
+            non_canonicality,
         },
         SingletonAnalysisOutcome::ResolvePresentation { default } => {
             let slot = presentation_slot(
@@ -838,26 +609,12 @@ fn zwj_singleton_component_outcome(
                     ),
                 ],
             );
-            ZwjComponentOutcome {
+            ComponentOutcome {
                 pieces: vec![ComponentReplacementPiece::Slot(0)],
                 slots: vec![slot],
-                is_noncanonical: true,
-                has_unsanctioned_selectors: false,
-                has_resolution_slot: true,
+                non_canonicality: NonCanonicality::resolve(),
             }
         }
-    }
-}
-
-fn render_zwj_links_only_sequence(links: &[ZwjLink]) -> String {
-    let mut out = String::new();
-    render_zwj_links(&mut out, links);
-    out
-}
-
-fn render_zwj_links(out: &mut String, links: &[ZwjLink]) {
-    for _ in links {
-        out.push(unicode::ZWJ);
     }
 }
 
@@ -874,7 +631,7 @@ enum SingletonAnalysisOutcome {
     /// trailing presentation selectors.
     Repair {
         canonical_presentation: Option<Presentation>,
-        violation: Violation,
+        non_canonicality: NonCanonicality,
     },
     /// A bare standalone slot remains policy-ambiguous and needs an explicit
     /// text/emoji choice from the caller.
@@ -884,8 +641,15 @@ enum SingletonAnalysisOutcome {
 /// Decide how a singleton-base emoji-like unit should be analyzed.
 ///
 /// The fixed-cleanup precedence lives in
-/// `docs/designs/features/sequence-handling.markdown`. Rule 5 is the only
-/// path where policy may be consulted.
+/// `docs/designs/features/sequence-handling.markdown`. This helper still uses
+/// an internal outcome enum because singleton analysis needs to distinguish
+/// three replacement shapes before `ComponentOutcome` is built:
+///
+/// - already canonical
+/// - deterministic repair with a fixed rendered base presentation
+/// - policy-driven text/emoji resolution with a public decision slot
+///
+/// Rule 5 is the only path where policy may be consulted.
 fn singleton_analysis_outcome(
     base: char,
     presentation_selectors_after_base: &[Presentation],
@@ -948,7 +712,11 @@ fn singleton_fixed_cleanup_outcome(
 
     SingletonAnalysisOutcome::Repair {
         canonical_presentation,
-        violation: Violation::UnsanctionedSelectorsOnly,
+        non_canonicality: fixed_cleanup_non_canonicality(
+            presentation_selectors_after_base,
+            canonical_presentation,
+            modifications,
+        ),
     }
 }
 
@@ -985,7 +753,9 @@ fn standalone_singleton_analysis_outcome(
         } else {
             SingletonAnalysisOutcome::Repair {
                 canonical_presentation: None,
-                violation: Violation::UnsanctionedSelectorsOnly,
+                non_canonicality: NonCanonicality::unsanctioned(
+                    presentation_selectors_after_base.len(),
+                ),
             }
         };
     }
@@ -1001,7 +771,12 @@ fn standalone_singleton_analysis_outcome(
         | (SingletonRule::EmojiToBare, &[Presentation::Emoji, _, ..]) => {
             SingletonAnalysisOutcome::Repair {
                 canonical_presentation: None,
-                violation: Violation::primary(PrimaryViolationKind::RedundantSelector, true),
+                non_canonicality: NonCanonicality::new(
+                    presentation_selectors_after_base.len() - 1,
+                    0,
+                    1,
+                    0,
+                ),
             }
         }
         // More than one presentation selector but the first is meaningful
@@ -1009,7 +784,9 @@ fn standalone_singleton_analysis_outcome(
         // violation is the unsanctioned selector cleanup after it.
         (_, &[current_presentation, _, ..]) => SingletonAnalysisOutcome::Repair {
             canonical_presentation: Some(current_presentation),
-            violation: Violation::UnsanctionedSelectorsOnly,
+            non_canonicality: NonCanonicality::unsanctioned(
+                presentation_selectors_after_base.len() - 1,
+            ),
         },
         // Bare stem under a rule that resolves bare to a concrete presentation:
         // let the caller decide between text and emoji.
@@ -1025,7 +802,7 @@ fn standalone_singleton_analysis_outcome(
         | (SingletonRule::EmojiToBare, &[Presentation::Emoji]) => {
             SingletonAnalysisOutcome::Repair {
                 canonical_presentation: None,
-                violation: Violation::primary(PrimaryViolationKind::RedundantSelector, false),
+                non_canonicality: NonCanonicality::redundant(),
             }
         }
         // All remaining single-presentation-selector and no-presentation-selector
@@ -1040,19 +817,65 @@ fn standalone_singleton_analysis_outcome(
 
 // --- Shared selector predicates ---
 
-fn modification_has_trailing_presentation_selectors(m: &EmojiModification) -> bool {
+fn count_presentation_selectors_in_item(item: &ScanItem<'_>) -> usize {
+    match &item.kind {
+        ScanKind::UnsanctionedPresentationSelectors(selectors) => selectors.len(),
+        _ => 0,
+    }
+}
+
+fn count_modification_presentation_selectors(m: &EmojiModification) -> usize {
     match m {
         EmojiModification::EmojiModifier {
             presentation_selectors_after_modifier,
             ..
-        } => !presentation_selectors_after_modifier.is_empty(),
+        } => presentation_selectors_after_modifier.len(),
         EmojiModification::EnclosingKeycap {
             presentation_selectors_after_keycap,
-        } => !presentation_selectors_after_keycap.is_empty(),
+        } => presentation_selectors_after_keycap.len(),
         EmojiModification::TagModifier(runs) => runs
             .iter()
-            .any(|r| !r.presentation_selectors_after_tag.is_empty()),
+            .map(|run| run.presentation_selectors_after_tag.len())
+            .sum(),
     }
+}
+
+fn count_trailing_modification_presentation_selectors(
+    modifications: &[EmojiModification],
+) -> usize {
+    modifications
+        .iter()
+        .map(count_modification_presentation_selectors)
+        .sum()
+}
+
+fn fixed_cleanup_non_canonicality(
+    presentation_selectors_after_base: &[Presentation],
+    canonical_presentation: Option<Presentation>,
+    modifications: &[EmojiModification],
+) -> NonCanonicality {
+    let mut non_canonicality = NonCanonicality::unsanctioned(
+        count_trailing_modification_presentation_selectors(modifications),
+    );
+    let canonical = canonical_presentation.as_slice();
+
+    if presentation_selectors_after_base == canonical {
+        return non_canonicality;
+    }
+
+    if presentation_selectors_after_base.starts_with(canonical) {
+        non_canonicality.unsanctioned_selectors += presentation_selectors_after_base
+            .len()
+            .saturating_sub(canonical.len());
+    } else {
+        non_canonicality += NonCanonicality::defective();
+    }
+
+    non_canonicality
+}
+
+fn modification_has_trailing_presentation_selectors(m: &EmojiModification) -> bool {
+    count_modification_presentation_selectors(m) != 0
 }
 
 fn has_trailing_modification_presentation_selectors(modifications: &[EmojiModification]) -> bool {
@@ -1065,85 +888,12 @@ fn has_trailing_modification_presentation_selectors(modifications: &[EmojiModifi
 
 fn unambiguous_finding<'a>(
     item: &ScanItem<'a>,
-    violation: Violation,
+    non_canonicality: NonCanonicality,
     fix_replacement: String,
 ) -> Finding<'a> {
-    let mut builder = ReplacementPlanBuilder::new();
+    let mut builder = FindingBuilder::with_non_canonicality(non_canonicality);
     builder.push_literal(fix_replacement);
-    finding_from_builder(item, violation, builder)
-}
-
-fn resolve_presentation_finding<'a>(
-    item: &ScanItem<'a>,
-    base: char,
-    modifications: &[EmojiModification],
-    default: Presentation,
-) -> Finding<'a> {
-    let mut builder = ReplacementPlanBuilder::new();
-    builder.push_slot(presentation_slot(
-        ReplacementDecision::from_presentation(default),
-        [
-            (
-                ReplacementDecision::Text,
-                render_singleton(base, Some(Presentation::Text), modifications),
-            ),
-            (
-                ReplacementDecision::Emoji,
-                render_singleton(base, Some(Presentation::Emoji), modifications),
-            ),
-        ],
-    ));
-    finding_from_builder(
-        item,
-        Violation::primary(PrimaryViolationKind::BareNeedsResolution, false),
-        builder,
-    )
-}
-
-fn resolve_zwj_wrapper_presentation_finding<'a>(
-    item: &ScanItem<'a>,
-    base: char,
-    modifications: &[EmojiModification],
-    trailing_links: &[ZwjLink],
-    default: Presentation,
-    has_unsanctioned_selectors: bool,
-) -> Finding<'a> {
-    debug_assert!(
-        !trailing_links.is_empty(),
-        "ZWJ wrapper presentation resolution requires at least one trailing link"
-    );
-    let mut builder = ReplacementPlanBuilder::new();
-    builder.push_slot(presentation_slot(
-        ReplacementDecision::from_presentation(default),
-        [
-            (
-                ReplacementDecision::Text,
-                render_singleton_with_links(
-                    base,
-                    Some(Presentation::Text),
-                    modifications,
-                    trailing_links,
-                ),
-            ),
-            (
-                ReplacementDecision::Emoji,
-                render_singleton_with_links(
-                    base,
-                    Some(Presentation::Emoji),
-                    modifications,
-                    trailing_links,
-                ),
-            ),
-        ],
-    ));
-    finding_from_builder(
-        item,
-        Violation::primary(
-            PrimaryViolationKind::BareNeedsResolution,
-            has_unsanctioned_selectors,
-        ),
-        builder,
-    )
+    builder.finish(item)
 }
 
 fn presentation_slot<const N: usize>(
@@ -1167,14 +917,24 @@ fn presentation_slot<const N: usize>(
     }
 }
 
-struct ReplacementPlanBuilder {
+struct FindingBuilder {
+    non_canonicality: NonCanonicality,
     slots: Vec<ReplacementSlotPlan>,
     pieces: Vec<ReplacementPiece>,
 }
 
-impl ReplacementPlanBuilder {
+impl FindingBuilder {
     const fn new() -> Self {
         Self {
+            non_canonicality: NonCanonicality::new(0, 0, 0, 0),
+            slots: Vec::new(),
+            pieces: Vec::new(),
+        }
+    }
+
+    const fn with_non_canonicality(non_canonicality: NonCanonicality) -> Self {
+        Self {
+            non_canonicality,
             slots: Vec::new(),
             pieces: Vec::new(),
         }
@@ -1184,17 +944,15 @@ impl ReplacementPlanBuilder {
         self.pieces.push(ReplacementPiece::Literal(literal));
     }
 
-    fn push_slot(&mut self, slot: ReplacementSlotPlan) {
-        let slot_index = self.slots.len();
-        self.slots.push(slot);
-        self.pieces.push(ReplacementPiece::Slot(slot_index));
-    }
-
-    fn extend(&mut self, pieces: Vec<ComponentReplacementPiece>, slots: Vec<ReplacementSlotPlan>) {
+    // Component outcomes are already expressed in their own local slot space.
+    // When they are appended to the whole finding, slot references in their
+    // render pieces must be shifted to the current slot offset.
+    fn extend_component(&mut self, outcome: ComponentOutcome) {
+        self.non_canonicality += outcome.non_canonicality;
         let slot_offset = self.slots.len();
-        self.slots.extend(slots);
+        self.slots.extend(outcome.slots);
         self.pieces
-            .extend(pieces.into_iter().map(|piece| match piece {
+            .extend(outcome.pieces.into_iter().map(|piece| match piece {
                 ComponentReplacementPiece::Literal(literal) => ReplacementPiece::Literal(literal),
                 ComponentReplacementPiece::Slot(slot_index) => {
                     ReplacementPiece::Slot(slot_offset + slot_index)
@@ -1202,17 +960,45 @@ impl ReplacementPlanBuilder {
             }));
     }
 
-    fn build(self, violation: Violation) -> ReplacementPlan {
+    fn extend_link(&mut self, link: &ZwjLink) {
+        self.non_canonicality +=
+            NonCanonicality::unsanctioned(link.presentation_selectors_after_link.len());
+        self.push_literal(unicode::ZWJ.to_string());
+    }
+
+    // Empty builders correspond to fully canonical items, so they do not
+    // produce findings.
+    fn build<'a>(self, item: &ScanItem<'a>) -> Option<Finding<'a>> {
+        if self.non_canonicality.is_empty() {
+            None
+        } else {
+            Some(self.finish(item))
+        }
+    }
+
+    fn finish<'a>(self, item: &ScanItem<'a>) -> Finding<'a> {
+        debug_assert!(
+            !self.non_canonicality.is_empty(),
+            "finding builder finish requires a non-empty non-canonicality summary"
+        );
+        Finding {
+            span: item.span.clone(),
+            raw: item.raw,
+            replacement_plan: self.build_replacement_plan(),
+        }
+    }
+
+    fn build_replacement_plan(self) -> ReplacementPlan {
         let default_replacement = render_default_replacement(&self.slots, &self.pieces);
         let plan = ReplacementPlan {
-            violation,
+            non_canonicality: self.non_canonicality,
             decision_slots: self.slots.iter().map(|slot| slot.public.clone()).collect(),
             slots: self.slots,
             pieces: self.pieces,
             default_replacement,
         };
         debug_assert_eq!(
-            plan.render_replacement(&plan.default_decision()),
+            plan.render_replacement(&plan.default_decisions()),
             Some(plan.default_replacement.clone())
         );
         plan
@@ -1239,18 +1025,6 @@ fn render_default_replacement(
     out
 }
 
-fn finding_from_builder<'a>(
-    item: &ScanItem<'a>,
-    violation: Violation,
-    builder: ReplacementPlanBuilder,
-) -> Finding<'a> {
-    Finding {
-        span: item.span.clone(),
-        raw: item.raw,
-        replacement_plan: builder.build(violation),
-    }
-}
-
 // --- Fixed emoji-like rendering ---
 
 fn render_singleton(
@@ -1259,27 +1033,4 @@ fn render_singleton(
     modifications: &[EmojiModification],
 ) -> String {
     FixedEmojiLike::singleton_base(base, presentation, modifications).render_to_string()
-}
-
-fn render_singleton_with_links(
-    base: char,
-    presentation: Option<Presentation>,
-    modifications: &[EmojiModification],
-    trailing_links: &[ZwjLink],
-) -> String {
-    let mut out =
-        FixedEmojiLike::singleton_base(base, presentation, modifications).render_to_string();
-    render_zwj_links(&mut out, trailing_links);
-    out
-}
-
-fn render_flag_with_links(
-    first_ri: char,
-    second_ri: char,
-    modifications: &[EmojiModification],
-    trailing_links: &[ZwjLink],
-) -> String {
-    let mut out = FixedEmojiLike::flag(first_ri, second_ri, modifications).render_to_string();
-    render_zwj_links(&mut out, trailing_links);
-    out
 }

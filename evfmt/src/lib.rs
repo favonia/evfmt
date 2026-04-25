@@ -45,7 +45,7 @@
 //!
 //! ```rust
 //! use evfmt::{Policy, ScanKind, scan};
-//! use evfmt::findings::{Violation, analyze_scan_item};
+//! use evfmt::findings::{NonCanonicality, analyze_scan_item};
 //!
 //! let policy = Policy::default();
 //! let input = "A\u{FE0F}";
@@ -59,7 +59,10 @@
 //! ));
 //!
 //! let finding = analyze_scan_item(&item, &policy).unwrap();
-//! assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
+//! assert_eq!(
+//!     finding.non_canonicality(),
+//!     NonCanonicality::new(1, 0, 0, 0)
+//! );
 //! assert!(finding.decision_slots().is_empty());
 //!
 //! let repaired = finding.replacement(&[]).unwrap();
@@ -96,8 +99,8 @@
 //!   convenience analysis helpers
 //! - [`policy`] defines formatter policy configuration
 //! - [`formatter`] owns whole-text formatting
-//! - [`mod@findings`] analyzes scanned items under policy and reports violations
-//!   plus available replacements
+//! - [`mod@findings`] analyzes scanned items under policy and reports
+//!   non-canonicality plus available replacements
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
 //!   chains, standalone variation selector runs, and passthrough slices
 //! - [`variation_set`] defines the typed variation-set model used by the library
@@ -111,8 +114,7 @@ mod unicode;
 pub mod variation_set;
 
 pub use findings::{
-    DecisionSlot, Finding, PrimaryViolation, PrimaryViolationKind, ReplacementDecision, Violation,
-    analyze_scan_item,
+    DecisionSlot, Finding, NonCanonicality, ReplacementDecision, analyze_scan_item,
 };
 pub use formatter::{FormatResult, format_text};
 pub use policy::Policy;
