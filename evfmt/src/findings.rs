@@ -90,7 +90,17 @@ pub struct NonCanonicality {
     pub bases_to_resolve: usize,
 }
 
+impl Default for NonCanonicality {
+    fn default() -> Self {
+        Self::new(0, 0, 0, 0)
+    }
+}
+
 impl NonCanonicality {
+    const DEFECTIVE: Self = Self::new(0, 1, 0, 0);
+    const REDUNDANT: Self = Self::new(0, 0, 1, 0);
+    const RESOLVE: Self = Self::new(0, 0, 0, 1);
+
     /// Create an explicit non-canonicality summary.
     #[must_use]
     pub const fn new(
@@ -109,18 +119,6 @@ impl NonCanonicality {
 
     const fn unsanctioned(count: usize) -> Self {
         Self::new(count, 0, 0, 0)
-    }
-
-    const fn defective() -> Self {
-        Self::new(0, 1, 0, 0)
-    }
-
-    const fn redundant() -> Self {
-        Self::new(0, 0, 1, 0)
-    }
-
-    const fn resolve() -> Self {
-        Self::new(0, 0, 0, 1)
     }
 
     const fn is_empty(self) -> bool {
@@ -580,7 +578,7 @@ fn singleton_component_outcome(
                     modifications,
                 ))],
                 slots: vec![],
-                non_canonicality: NonCanonicality::new(0, 0, 0, 0),
+                non_canonicality: NonCanonicality::default(),
             }
         }
         SingletonAnalysisOutcome::Repair {
@@ -612,7 +610,7 @@ fn singleton_component_outcome(
             ComponentOutcome {
                 pieces: vec![ComponentReplacementPiece::Slot(0)],
                 slots: vec![slot],
-                non_canonicality: NonCanonicality::resolve(),
+                non_canonicality: NonCanonicality::RESOLVE,
             }
         }
     }
@@ -802,7 +800,7 @@ fn standalone_singleton_analysis_outcome(
         | (SingletonRule::EmojiToBare, &[Presentation::Emoji]) => {
             SingletonAnalysisOutcome::Repair {
                 canonical_presentation: None,
-                non_canonicality: NonCanonicality::redundant(),
+                non_canonicality: NonCanonicality::REDUNDANT,
             }
         }
         // All remaining single-presentation-selector and no-presentation-selector
@@ -868,7 +866,7 @@ fn fixed_cleanup_non_canonicality(
             .len()
             .saturating_sub(canonical.len());
     } else {
-        non_canonicality += NonCanonicality::defective();
+        non_canonicality += NonCanonicality::DEFECTIVE;
     }
 
     non_canonicality
@@ -924,15 +922,15 @@ struct FindingBuilder {
 }
 
 impl FindingBuilder {
-    const fn new() -> Self {
+    fn new() -> Self {
         Self {
-            non_canonicality: NonCanonicality::new(0, 0, 0, 0),
+            non_canonicality: NonCanonicality::default(),
             slots: Vec::new(),
             pieces: Vec::new(),
         }
     }
 
-    const fn with_non_canonicality(non_canonicality: NonCanonicality) -> Self {
+    fn with_non_canonicality(non_canonicality: NonCanonicality) -> Self {
         Self {
             non_canonicality,
             slots: Vec::new(),
