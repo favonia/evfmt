@@ -13,7 +13,7 @@ Its job is to produce the most stable, least surprising source spelling under:
 - a pinned Unicode version
 - a sequence-aware parser
 - a small set of explicit product assumptions
-- a formatter policy over genuinely ambiguous slots
+- a formatter policy over genuinely ambiguous selector contexts
 
 `evfmt` is a formatter first, not a general Unicode emoji validator.
 
@@ -47,21 +47,21 @@ This layer is data-driven and sequence-aware. It identifies:
 
 - what family a sequence belongs to
 - whether a selector pair is sanctioned
-- whether the slot is standalone, keycap-related, modifier-related, ZWJ-related, or not a slot
+- which selector-bearing context, if any, owns the selector state
 
 This layer is about Unicode-defined structure, not formatter preference.
 
 The layer must be permissive enough to preserve malformed selector and ZWJ-related structure for later diagnosis. Recognition does not imply validity.
 
-### Slot and reasonableness layer
+### Context and reasonableness layer
 
-This layer converts parsed structure into local slots. For each slot it computes which of the three selector states are reasonable outputs:
+This layer converts parsed structure into local selector contexts. For each context it computes which of the three selector states are reasonable outputs:
 
 - `none`
 - `FE0E`
 - `FE0F`
 
-This is the key reduction step. Fixed-cleanup cases such as modifier defects, ZWJ-link selector cleanup, and unsanctioned selectors must resolve before policy runs. Ordinary and keycap-character slots can remain ambiguous and enter policy through their matching domains.
+This is the key reduction step. Fixed-cleanup cases such as modifier defects, required deterministic selector insertion, ZWJ-link selector cleanup, and unsanctioned selectors must resolve before policy runs. Ordinary and keycap-character contexts can remain ambiguous and enter policy through their matching policy positions.
 
 ### Policy layer
 
@@ -70,9 +70,9 @@ This layer applies only when more than one reasonable state remains. The intende
 - `prefer_bare(position)`
 - `bare_as_text(position)`
 
-If a slot has zero or one reasonable states, policy does not apply.
+If a context has zero or one reasonable states, policy does not apply.
 
-Positions are divided into ordinary non-keycap positions and keycap-character positions. Both are indexed by variation-sequence base character, but policy membership is queried in the domain that matches the slot.
+Policy positions are divided into ordinary non-keycap positions and keycap-character positions. Both are indexed by variation-sequence base character, but policy membership is queried in the domain that matches the context.
 
 The public option surface for these predicates lives in [formatter-policy.markdown](../features/formatter-policy.markdown).
 
@@ -90,7 +90,7 @@ Unicode standards and pinned Unicode data define Unicode facts for this project;
 
 ### Domain-qualified base-indexability policy
 
-After slot classification and reasonableness filtering, genuinely ambiguous slots are expected to be indexable by base character plus domain. If a future Unicode version breaks this property, the design must move to richer policy keys.
+After context classification and reasonableness filtering, genuinely ambiguous contexts are expected to collapse to a policy position: a base character plus an ordinary/keycap domain. If a future Unicode version breaks this property, the design must move to richer policy keys.
 
 ## Core terminology
 
@@ -98,13 +98,17 @@ After slot classification and reasonableness filtering, genuinely ambiguous slot
 
 A base code point with sanctioned variation-sequence data in the pinned Unicode data set.
 
-### Slot
+### Selector context
 
-A local selector-bearing context after classification. A slot is not just a base character; it includes surrounding sequence structure.
+A local selector-bearing context after classification. A selector context is not just a base character; it includes the surrounding sequence structure needed to decide which selector states are sanctioned, reasonable, redundant, or defective.
+
+### Policy position
+
+The key used by formatter policy after a genuinely ambiguous selector context has survived fixed cleanup. A policy position is a variation-sequence base character plus an ordinary/keycap domain. `VariationSet` values contain policy positions, not arbitrary selector contexts.
 
 ### Reasonable state
 
-A selector state that `evfmt` accepts as a valid formatter output in a given slot.
+A selector state that `evfmt` accepts as a valid formatter output in a given selector context.
 
 ### Canonical state
 
@@ -118,26 +122,26 @@ Use sequence-aware recognition to classify selector-bearing contexts and nearby 
 
 ### Reasonable states
 
-For each slot, compute which of `none`, `FE0E`, and `FE0F` are reasonable formatter outputs.
+For each selector context, compute which of `none`, `FE0E`, and `FE0F` are reasonable formatter outputs.
 
 ### Fixed rules
 
 The following cases do not enter policy:
 
-- modifier defect canonicalizes by removing legacy `FE0F` before a modifier
+- modifier cleanup removes legacy defective `FE0F` before a modifier, while preserving sanctioned `FE0E` as text presentation on the base
 - keycap-character handling uses policy when the base has variation-sequence data
 - ZWJ links are preserved, selectors attached to ZWJ links are removed, and each component is resolved as if the surrounding ZWJ links were absent
 - unsanctioned or orphaned selectors are removed
 
 ### Policy resolution
 
-When multiple reasonable states remain, policy resolves them using the preferred-bare set and the bare-as-text set.
+When multiple reasonable states remain and the context collapses to a policy position, policy resolves it using the preferred-bare set and the bare-as-text set.
 
 ### Canonical replacements
 
 Return the text produced by applying the fixed-rule repairs and policy resolutions above. The returned text is the canonical result under this model.
 
-The concrete slot families and per-family rules live in [sequence-handling.markdown](../features/sequence-handling.markdown).
+The concrete context families and per-family rules live in [sequence-handling.markdown](../features/sequence-handling.markdown).
 
 ## Hard invariants
 
@@ -157,8 +161,8 @@ For the same input, same Unicode version, and same option values, output is iden
 
 Formatting only inserts, removes, or replaces `FE0E` and `FE0F`.
 
-### Policy only sees ambiguous slots
+### Policy only sees ambiguous contexts
 
-Modifier defects, ZWJ-link selector cleanup, and unsanctioned selector cleanup must be resolved before policy. Keycap-character slots that still have multiple reasonable selector states use keycap-character policy.
+Modifier defects, ZWJ-link selector cleanup, and unsanctioned selector cleanup must be resolved before policy. Keycap-character contexts that still have multiple reasonable selector states use keycap-character policy positions.
 
 The evidence model for these invariants lives in [verification-strategy.markdown](../guides/verification-strategy.markdown).

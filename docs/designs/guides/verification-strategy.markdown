@@ -20,11 +20,11 @@ Fast verification that depends only on those pinned local inputs belongs in the 
 
 A data-driven decision table where each row makes the semantic axes explicit:
 
-- slot kind
+- context kind
 - sanctioned selector set
 - no selector / `FE0E` / `FE0F`
-- preferred-bare matches slot true/false
-- bare-as-text matches slot true/false
+- preferred-bare matches the policy position true/false
+- bare-as-text matches the policy position true/false
 
 ### 2. Unicode-data conformance evidence
 
@@ -61,15 +61,16 @@ Randomized tests verify:
 
 Use a two-tier budget when needed: a quick randomized smoke run for every PR/push, and deeper or longer-running campaigns on a schedule.
 
-### 6. Scanner and slot invariants
+### 6. Scanner and context invariants
 
 - losslessness: `reconstruct(scan(input)) == input`
 - idempotent recognition: selector-only repairs must not reveal newly recognized emoji-related structure that needs a second formatting pass
 - cluster coherence for recognized emoji-related structure, including the `evfmt` broadening needed to keep valid flags and keycaps inside ZWJ-related scan items
-- recognized leading or malformed ZWJ-related clusters remain visible to findings analysis instead of disappearing into passthrough
+- recognized leading or malformed ZWJ-related clusters remain visible to item analysis instead of disappearing into passthrough
 - scanner and formatter agreement on singleton inputs
-- keycap slot invariant: keycaps follow keycap sequence rules
+- keycap-context invariant: keycaps follow keycap sequence rules
 - modifier-defect invariant: modifier defect leaves exactly one reasonable state, `none`
+- missing-selector invariant: deterministic insertion of a required presentation selector is tracked separately from sequence defects
 - standalone keycap-base invariant: as standalone variation-sequence bases, `#`, `*`, and digits may retain three reasonable states
 
 ### 7. Derived invariants for Unicode upgrades
@@ -79,7 +80,7 @@ These guard the product assumptions:
 - modifier context must not re-enter policy ambiguity
 - ZWJ link cleanup must not itself re-enter policy ambiguity
 - keycap cleanup can enter keycap policy when multiple states remain
-- after fixed rules, ambiguous policy slots must still collapse to base-indexed policy keys with only the ordinary/keycap domain as an added qualifier
+- after fixed rules, ambiguous contexts must still collapse to base-indexed policy positions with only the ordinary/keycap domain as an added qualifier
 
 ### 8. CLI contract evidence
 

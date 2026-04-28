@@ -1,5 +1,5 @@
 use super::*;
-use crate::findings::analyze_scan_item;
+use crate::analysis::{Finding, analyze_scan_item};
 use crate::scanner::scan;
 use crate::unicode;
 use crate::variation_set::VariationSet;
@@ -162,6 +162,20 @@ fn keycap_policy_uses_first_modification_only() {
     assert_eq!(
         format_text("#\u{20E3}\u{1F3FB}\u{FE0F}", &policy),
         FormatResult::Changed("#\u{FE0E}\u{20E3}\u{1F3FB}".to_owned())
+    );
+}
+
+#[test]
+fn modifier_context_preserves_sanctioned_text_presentation() {
+    let policy = default_policy();
+
+    assert_eq!(
+        format_text("\u{270C}\u{FE0E}\u{1F3FB}", &policy),
+        FormatResult::Unchanged
+    );
+    assert_eq!(
+        format_text("\u{270C}\u{FE0F}\u{1F3FB}", &policy),
+        FormatResult::Changed("\u{270C}\u{1F3FB}".to_owned())
     );
 }
 
@@ -333,6 +347,44 @@ fn strip_selectors(s: &str) -> String {
         .collect()
 }
 
+fn check_finding_length_invariants(finding: &Finding<'_>) -> Result<(), TestCaseError> {
+    let non_canonicality = finding.non_canonicality();
+    let replacement = finding.default_replacement();
+    let removed_chars = non_canonicality.unsanctioned_selectors
+        + non_canonicality.defective_sequences
+        + non_canonicality.redundant_selectors;
+    let inserted_chars =
+        non_canonicality.missing_required_selectors + non_canonicality.bases_to_resolve;
+    // The byte-length invariant below counts selector insertions and removals
+    // with one shared byte width. Keep that assumption explicit so it fails
+    // near the accounting if the selector constants ever change.
+    let selector_len = unicode::TEXT_PRESENTATION_SELECTOR.len_utf8();
+
+    prop_assert_eq!(
+        selector_len,
+        unicode::EMOJI_PRESENTATION_SELECTOR.len_utf8()
+    );
+
+    prop_assert_eq!(
+        finding.replacement_choices().count(),
+        non_canonicality.bases_to_resolve
+    );
+    prop_assert_eq!(
+        replacement.chars().count() + removed_chars,
+        finding.raw.chars().count() + inserted_chars,
+        "replacement char delta must match violation accounting for {:?}",
+        finding
+    );
+    prop_assert_eq!(
+        replacement.len() + removed_chars * selector_len,
+        finding.raw.len() + inserted_chars * selector_len,
+        "byte delta must be selector-width times char delta for {:?}",
+        finding
+    );
+
+    Ok(())
+}
+
 proptest! {
     #[test]
     fn prop_idempotent(input in interesting_string_strategy(), policy in policy_strategy()) {
@@ -341,7 +393,7 @@ proptest! {
     }
 
     #[test]
-    fn prop_no_findings_in_output(
+    fn prop_no_analysis_findings_in_output(
         input in interesting_string_strategy(),
         policy in policy_strategy(),
     ) {
@@ -361,4 +413,17 @@ proptest! {
         let output = formatted_output(&input, &policy);
         prop_assert_eq!(strip_selectors(&input), strip_selectors(&output));
     }
+
+    #[test]
+    fn prop_finding_lengths_match_violation_counts(
+        input in interesting_string_strategy(),
+        policy in policy_strategy(),
+    ) {
+        for item in scan(&input) {
+            if let Some(finding) = analyze_scan_item(&item, &policy) {
+                check_finding_length_invariants(&finding)?;
+            }
+        }
+    }
+
 }

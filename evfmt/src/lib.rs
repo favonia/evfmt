@@ -45,7 +45,7 @@
 //!
 //! ```rust
 //! use evfmt::{Policy, ScanKind, scan};
-//! use evfmt::findings::{NonCanonicality, analyze_scan_item};
+//! use evfmt::analysis::{NonCanonicality, analyze_scan_item};
 //!
 //! let policy = Policy::default();
 //! let input = "A\u{FE0F}";
@@ -61,18 +61,18 @@
 //! let finding = analyze_scan_item(&item, &policy).unwrap();
 //! assert_eq!(
 //!     finding.non_canonicality(),
-//!     NonCanonicality::new(1, 0, 0, 0)
+//!     NonCanonicality::new(1, 0, 0, 0, 0)
 //! );
-//! assert!(finding.decision_slots().is_empty());
+//! assert!(finding.replacement_choices().next().is_none());
 //!
 //! let repaired = finding.replacement(&[]).unwrap();
 //! assert_eq!(repaired, "");
 //! ```
 //!
-//! The [`mod@findings`] API is the usual entry point for interactive fixing.
+//! The [`mod@analysis`] API is the usual entry point for interactive fixing.
 //! It analyzes scanned items under the supplied [`Policy`] and returns the
-//! presentation slots that must be chosen for each finding. Fixed repairs have
-//! no slots and use the empty decision vector.
+//! replacement choices available for each finding. Fixed repairs have no choices
+//! and use the empty decision vector.
 //!
 //! Custom policies can be built from [`variation_set`] variation sets. In this example,
 //! `rights-marks` contains `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to
@@ -99,24 +99,26 @@
 //!   convenience analysis helpers
 //! - [`policy`] defines formatter policy configuration
 //! - [`formatter`] owns whole-text formatting
-//! - [`mod@findings`] analyzes scanned items under policy and reports
+//! - [`mod@analysis`] analyzes scanned items under policy and reports
 //!   non-canonicality plus available replacements
+//! - [`presentation`] defines the text/emoji presentation decision shared by
+//!   scanning and analysis
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
 //!   chains, standalone variation selector runs, and passthrough slices
 //! - [`variation_set`] defines the typed variation-set model used by the library
 //!   policy API
 
-pub mod findings;
+pub mod analysis;
 pub mod formatter;
 pub mod policy;
+pub mod presentation;
 pub mod scanner;
 mod unicode;
 pub mod variation_set;
 
-pub use findings::{
-    DecisionSlot, Finding, NonCanonicality, ReplacementDecision, analyze_scan_item,
-};
+pub use analysis::{Finding, NonCanonicality, ReplacementChoice, analyze_scan_item};
 pub use formatter::{FormatResult, format_text};
 pub use policy::Policy;
+pub use presentation::Presentation;
 pub use scanner::{ScanItem, ScanKind, Scanner, scan};
 pub use variation_set::VariationSet;

@@ -18,7 +18,7 @@
 //
 // formatter.rs — The core formatting engine.
 //
-// Uses the sequence-aware scanner to process text, then asks findings analysis
+// Uses the sequence-aware scanner to process text, then asks item analysis
 // for each policy-aware finding and applies the default replacement decision.
 //
 // AUDIT NOTE — Key properties maintained by this module:
@@ -33,7 +33,7 @@
 //    module's chosen boundary, not a spec requirement; output canonicality is
 //    verified by prop_no_violations_in_output.
 
-use crate::findings;
+use crate::analysis;
 use crate::policy::Policy;
 use crate::scanner;
 
@@ -80,8 +80,8 @@ pub fn format_text(input: &str, policy: &Policy) -> FormatResult {
     let mut output = String::with_capacity(input.len());
 
     for item in scanner::scan(input) {
-        if let Some(finding) = findings::analyze_scan_item(&item, policy) {
-            output.push_str(finding.default_replacement());
+        if let Some(finding) = analysis::analyze_scan_item(&item, policy) {
+            output.push_str(&finding.default_replacement());
         } else {
             output.push_str(item.raw);
         }

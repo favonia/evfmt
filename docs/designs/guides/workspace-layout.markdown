@@ -12,7 +12,7 @@ The project is a Cargo workspace with one crate:
 
 The library owns all sequence classification, rule-engine behavior, policy evaluation, and text rewriting. The binary (`main.rs`) is only the batch-oriented CLI surface over that library — it contains no formatting logic. The top-level entry point for formatting is `formatter::format_text()`.
 
-Within the library, module boundaries implement the conceptual algorithm rather than define it. `scanner` tokenizes structure, `findings` analyzes scanned items into policy-aware findings, and `formatter` applies the default finding decisions for non-interactive formatting. These are the current implementation boundaries, not extra requirements on every implementation that satisfies the formatting model.
+Within the library, module boundaries implement the conceptual algorithm rather than define it. `scanner` tokenizes structure, `analysis` analyzes scanned items into policy-aware findings, and `formatter` applies the default finding decisions for non-interactive formatting. These are the current implementation boundaries, not extra requirements on every implementation that satisfies the formatting model.
 
 The command family uses aligned subcommands: `evfmt format [options] FILES...` and `evfmt check [options] FILES...`. The `--` separator is only for option-like file operands, not for disambiguating subcommand names after a subcommand has already been selected.
 

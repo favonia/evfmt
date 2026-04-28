@@ -70,6 +70,24 @@ fn test_emoji_modifier_property() {
     assert!(!is_emoji_modifier('A'));
 }
 
+/// Drift watch for modification handling: emoji modifiers and the enclosing
+/// keycap are sequence suffixes, not bases with their own VS15/VS16 policies.
+#[test]
+fn test_modification_suffixes_have_no_variation_sequences() {
+    for &modifier in &EMOJI_MODIFIERS {
+        assert!(
+            !has_variation_sequence(modifier),
+            "emoji modifier U+{:04X} unexpectedly has a variation sequence",
+            modifier as u32,
+        );
+    }
+
+    assert!(
+        !has_variation_sequence(COMBINING_ENCLOSING_KEYCAP),
+        "combining enclosing keycap unexpectedly has a variation sequence",
+    );
+}
+
 #[test]
 fn test_emoji_property() {
     // Keycap bases

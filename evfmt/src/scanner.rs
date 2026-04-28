@@ -1,6 +1,6 @@
 //! Sequence-aware scanner for text/emoji variation sequences.
 //!
-//! The scanner groups input characters into structural units that the findings
+//! The scanner groups input characters into structural units that the analysis
 //! and formatting layers care about:
 //!
 //! - *emoji-like units*: singletons, flag pairs, optionally followed by
@@ -43,7 +43,7 @@
 //! assert!(matches!(items[2].kind, ScanKind::EmojiSequence(_)));
 //! ```
 //!
-//! The item model is also shaped for `evfmt`'s built-in findings and
+//! The item model is also shaped for `evfmt`'s built-in analysis and
 //! formatting pipeline: callers can analyze the scanned items and rebuild
 //! repaired output from the original items without rescanning after each
 //! replacement decision. This is a library API affordance, not a requirement
@@ -57,6 +57,7 @@ use std::iter::Peekable;
 use std::ops::Range;
 use std::str::CharIndices;
 
+use crate::presentation::Presentation;
 use crate::unicode;
 
 #[cfg(test)]
@@ -66,44 +67,6 @@ mod tests;
 // `docs/designs/features/sequence-handling.markdown`. Keep cross-module
 // contracts there; keep concrete scanner state shapes and local invariants in
 // comments near the code that enforces them.
-
-// --- Presentation selectors ---
-
-/// A presentation style requested by a variation selector.
-///
-/// Text presentation is requested by `U+FE0E` (VS15); emoji presentation by
-/// `U+FE0F` (VS16).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Presentation {
-    /// Text presentation, requested by `U+FE0E`.
-    Text,
-    /// Emoji presentation, requested by `U+FE0F`.
-    Emoji,
-}
-
-impl Presentation {
-    /// Return the variation selector character that requests this
-    /// presentation.
-    #[must_use]
-    pub(crate) fn as_selector(self) -> char {
-        match self {
-            Self::Text => unicode::TEXT_PRESENTATION_SELECTOR,
-            Self::Emoji => unicode::EMOJI_PRESENTATION_SELECTOR,
-        }
-    }
-
-    /// Parse a variation selector character into the presentation it requests.
-    ///
-    /// Returns `None` if the character is not `U+FE0E` or `U+FE0F`.
-    #[must_use]
-    pub const fn from_selector(ch: char) -> Option<Self> {
-        match ch {
-            unicode::TEXT_PRESENTATION_SELECTOR => Some(Self::Text),
-            unicode::EMOJI_PRESENTATION_SELECTOR => Some(Self::Emoji),
-            _ => None,
-        }
-    }
-}
 
 fn is_presentation_selector(ch: char) -> bool {
     Presentation::from_selector(ch).is_some()
@@ -152,7 +115,7 @@ pub enum EmojiModification {
     /// The scanner does not check whether the stem is a valid keycap base
     /// (`0`–`9`, `#`, `*`): applying `U+20E3` to any other emoji-eligible
     /// base still produces this variant. Semantic validity is a concern for
-    /// the findings layer, not the scanner. This keeps the enclosing-keycap
+    /// the analysis layer, not the scanner. This keeps the enclosing-keycap
     /// structure visible before selector-only cleanup decides whether the
     /// surrounding form is canonical.
     EnclosingKeycap {
@@ -219,7 +182,7 @@ pub enum EmojiStem {
 ///
 /// "Emoji-like" because the scanner is permissive — it groups structurally
 /// plausible sequences without validating that the result is a real Unicode
-/// emoji. Semantic validation is the findings layer's job.
+/// emoji. Semantic validation is the analysis layer's job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct EmojiLike {
@@ -234,7 +197,7 @@ pub struct EmojiLike {
 ///
 /// Any such trailing presentation selectors are unsanctioned — the canonical
 /// form attaches selectors to components, not to joiners — but the scanner
-/// preserves them so the findings layer can decide how to report and repair them.
+/// preserves them so the analysis layer can decide how to report and repair them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ZwjLink {
@@ -742,7 +705,7 @@ impl Scanner<'_> {
     fn prepare_next_item(&mut self) -> bool {
         while self.ready.is_empty() {
             // 1. ZWJ is recognized cluster structure even when malformed.
-            //    Preserve it for the findings layer instead of absorbing it
+            //    Preserve it for the analysis layer instead of absorbing it
             //    into passthrough.
             if let Some(selectors) = self.consume_zwj_link() {
                 self.fold_zwj_link(selectors);
