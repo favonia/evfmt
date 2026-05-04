@@ -65,7 +65,7 @@ The ignore flags are:
 
 ## Policy decision model
 
-For an ambiguous policy slot, the two predicates determine the canonical result:
+For an ambiguous selector context that has collapsed to a policy position, the two predicates determine the canonical result:
 
 |                     | Treating bare as text            | Not treating bare as text         |
 | ------------------- | -------------------------------- | --------------------------------- |

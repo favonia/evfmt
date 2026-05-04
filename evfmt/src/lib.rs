@@ -37,15 +37,15 @@
 //! For interactive repair or editor integrations, scan the input and then work
 //! item-by-item. In the next example, `A\u{FE0F}` contains an unsanctioned
 //! presentation selector after `A`, and the caller chooses to apply the
-//! formatter's fixed repair.
+//! formatter's fixed canonical replacement.
 //! For the built-in `evfmt` decisions, callers can build repaired output from
-//! the original scanned items without rescanning after each replacement choice.
+//! the original scanned items without rescanning after each selected decision.
 //! Walk the original items in order, keeping `item.raw` for unchanged items and
-//! substituting the selected replacement for findings.
+//! substituting the selected canonical replacement for findings.
 //!
 //! ```rust
 //! use evfmt::{Policy, ScanKind, scan};
-//! use evfmt::findings::{Violation, analyze_scan_item};
+//! use evfmt::analysis::{NonCanonicality, analyze_scan_item};
 //!
 //! let policy = Policy::default();
 //! let input = "A\u{FE0F}";
@@ -59,17 +59,21 @@
 //! ));
 //!
 //! let finding = analyze_scan_item(&item, &policy).unwrap();
-//! assert_eq!(finding.violation(), Violation::UnsanctionedSelectorsOnly);
-//! assert!(finding.decision_slots().is_empty());
+//! assert_eq!(
+//!     finding.non_canonicality(),
+//!     NonCanonicality::new(1, 0, 0, 0, 0)
+//! );
+//! assert_eq!(finding.default_decisions().len(), 0);
 //!
-//! let repaired = finding.replacement(&[]).unwrap();
+//! let repaired = finding.canonical_replacement_with_decisions(&[]).unwrap();
 //! assert_eq!(repaired, "");
 //! ```
 //!
-//! The [`mod@findings`] API is the usual entry point for interactive fixing.
+//! The [`mod@analysis`] API is the usual entry point for interactive fixing.
 //! It analyzes scanned items under the supplied [`Policy`] and returns the
-//! presentation slots that must be chosen for each finding. Fixed repairs have
-//! no slots and use the empty decision vector.
+//! whole-item canonical replacement available for each non-canonical finding.
+//! Ambiguous selector contexts are represented as source-order decision slots;
+//! fixed repairs have no slots and use the empty decision vector.
 //!
 //! Custom policies can be built from [`variation_set`] variation sets. In this example,
 //! `rights-marks` contains `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to
@@ -96,25 +100,26 @@
 //!   convenience analysis helpers
 //! - [`policy`] defines formatter policy configuration
 //! - [`formatter`] owns whole-text formatting
-//! - [`mod@findings`] analyzes scanned items under policy and reports violations
-//!   plus available replacements
+//! - [`mod@analysis`] analyzes scanned items under policy and reports
+//!   non-canonicality plus available replacements
+//! - [`presentation`] defines the text/emoji presentation decision shared by
+//!   scanning and analysis
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
 //!   chains, standalone variation selector runs, and passthrough slices
 //! - [`variation_set`] defines the typed variation-set model used by the library
 //!   policy API
 
-pub mod findings;
+pub mod analysis;
 pub mod formatter;
 pub mod policy;
+pub mod presentation;
 pub mod scanner;
 mod unicode;
 pub mod variation_set;
 
-pub use findings::{
-    DecisionSlot, Finding, PrimaryViolation, PrimaryViolationKind, ReplacementDecision, Violation,
-    analyze_scan_item,
-};
+pub use analysis::{Finding, NonCanonicality, analyze_scan_item};
 pub use formatter::{FormatResult, format_text};
 pub use policy::Policy;
+pub use presentation::Presentation;
 pub use scanner::{ScanItem, ScanKind, Scanner, scan};
 pub use variation_set::VariationSet;
