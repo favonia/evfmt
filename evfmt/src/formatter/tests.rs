@@ -260,6 +260,8 @@ fn expected_standalone(ch: char, selector: InputSelector, policy: PolicyFlags) -
 
 #[test]
 fn exhaustive_standalone_variation_sequence_policy_table() {
+    // This is an independent oracle for the standalone policy table: expected
+    // output is derived from the policy axes below, not from formatter helpers.
     let policies = [
         PolicyFlags {
             prefer_bare: false,
