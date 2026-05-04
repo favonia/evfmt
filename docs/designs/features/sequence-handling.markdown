@@ -127,7 +127,7 @@ Each real selector context records:
 - whether extra variation selectors were present
 - which of `none`, `FE0E`, and `FE0F` remain reasonable after context-aware reduction
 
-## Violation model
+## Non-Canonicality Model
 
 The important split is:
 

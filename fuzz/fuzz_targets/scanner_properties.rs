@@ -12,7 +12,7 @@ fn formatted_output(input: &str, policy: &Policy) -> String {
 
 fn assert_finding_length_invariants(finding: &Finding<'_>) {
     let non_canonicality = finding.non_canonicality();
-    let replacement = finding.default_replacement();
+    let replacement = finding.default_canonical_replacement();
     let raw_chars = finding.raw.chars().count() as isize;
     let replacement_chars = replacement.chars().count() as isize;
     let char_delta = replacement_chars - raw_chars;
@@ -23,13 +23,13 @@ fn assert_finding_length_invariants(finding: &Finding<'_>) {
         - non_canonicality.redundant_selectors as isize;
 
     assert_eq!(
-        finding.replacement_choices().count(),
+        finding.default_decisions().len(),
         non_canonicality.bases_to_resolve,
-        "replacement choices must match bases_to_resolve"
+        "decision slots must match bases_to_resolve"
     );
     assert_eq!(
         char_delta, expected_char_delta,
-        "replacement char delta must match violation accounting for {finding:?}"
+        "replacement char delta must match non-canonicality accounting for {finding:?}"
     );
     assert_eq!(
         replacement.len() as isize - finding.raw.len() as isize,

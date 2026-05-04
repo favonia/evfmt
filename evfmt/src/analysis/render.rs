@@ -5,7 +5,7 @@ use crate::unicode;
 /// Render scanner structures after analysis has decided which selectors survive.
 ///
 /// This module does not choose presentation, count non-canonicality, or build
-/// replacement fragments. It only renders the already-analyzed emoji-like
+/// replacement assembly elements. It only renders the already-analyzed emoji-like
 /// replacement text.
 pub(super) fn render_singleton(
     base: char,

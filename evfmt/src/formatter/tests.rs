@@ -349,7 +349,7 @@ fn strip_selectors(s: &str) -> String {
 
 fn check_finding_length_invariants(finding: &Finding<'_>) -> Result<(), TestCaseError> {
     let non_canonicality = finding.non_canonicality();
-    let replacement = finding.default_replacement();
+    let replacement = finding.default_canonical_replacement();
     let removed_chars = non_canonicality.unsanctioned_selectors
         + non_canonicality.defective_sequences
         + non_canonicality.redundant_selectors;
@@ -366,13 +366,13 @@ fn check_finding_length_invariants(finding: &Finding<'_>) -> Result<(), TestCase
     );
 
     prop_assert_eq!(
-        finding.replacement_choices().count(),
+        finding.default_decisions().len(),
         non_canonicality.bases_to_resolve
     );
     prop_assert_eq!(
         replacement.chars().count() + removed_chars,
         finding.raw.chars().count() + inserted_chars,
-        "replacement char delta must match violation accounting for {:?}",
+        "replacement char delta must match non-canonicality accounting for {:?}",
         finding
     );
     prop_assert_eq!(
@@ -415,7 +415,7 @@ proptest! {
     }
 
     #[test]
-    fn prop_finding_lengths_match_violation_counts(
+    fn prop_finding_lengths_match_non_canonicality_counts(
         input in interesting_string_strategy(),
         policy in policy_strategy(),
     ) {

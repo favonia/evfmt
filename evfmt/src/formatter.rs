@@ -19,19 +19,19 @@
 // formatter.rs — The core formatting engine.
 //
 // Uses the sequence-aware scanner to process text, then asks item analysis
-// for each policy-aware finding and applies the default replacement decision.
+// for each policy-aware finding and applies the default canonical replacement.
 //
 // AUDIT NOTE — Key properties maintained by this module:
 //
 // 1. IDEMPOTENCY: format(format(x)) == format(x). Verified by prop_idempotent.
 // 2. LOSSLESSNESS: only FE0E/FE0F are inserted/removed; all other content is
 //    preserved. Verified by prop_only_modifies_selectors.
-// 3. NO VIOLATIONS: re-scanning the output produces zero violations under
-//    the same policy. Verified by prop_no_violations_in_output.
+// 3. CANONICAL OUTPUT: re-scanning the output produces no findings under the
+//    same policy. Verified by prop_no_analysis_findings_in_output.
 // 4. CURRENT IMPLEMENTATION SHAPE: format_text scans the input once, analyzes
-//    each item, and applies the default replacement decision. This is this
+//    each item, and applies the default canonical replacement. This is this
 //    module's chosen boundary, not a spec requirement; output canonicality is
-//    verified by prop_no_violations_in_output.
+//    verified by prop_no_analysis_findings_in_output.
 
 use crate::analysis;
 use crate::policy::Policy;
@@ -81,7 +81,7 @@ pub fn format_text(input: &str, policy: &Policy) -> FormatResult {
 
     for item in scanner::scan(input) {
         if let Some(finding) = analysis::analyze_scan_item(&item, policy) {
-            output.push_str(&finding.default_replacement());
+            output.push_str(&finding.default_canonical_replacement());
         } else {
             output.push_str(item.raw);
         }

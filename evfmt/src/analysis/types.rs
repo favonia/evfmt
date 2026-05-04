@@ -1,4 +1,5 @@
 use std::ops::{Add, AddAssign, Range};
+use std::slice;
 
 use crate::presentation::Presentation;
 
@@ -9,8 +10,8 @@ use crate::presentation::Presentation;
 /// redundant selectors, deterministic selector insertion, and policy-driven
 /// bare-base resolution.
 ///
-/// The scalar-length effect of a finding's default replacement is derived from
-/// these selector-level counters:
+/// The scalar-length effect of a finding's default canonical replacement is
+/// derived from these selector-level counters:
 ///
 /// ```text
 /// replacement.chars().count() - raw.chars().count()
@@ -117,12 +118,12 @@ impl AddAssign for NonCanonicality {
     }
 }
 
-/// One fixed or caller-selectable part of a finding's replacement.
+/// One fixed or caller-selectable replacement assembly piece.
 ///
-/// These replacement types are the analysis API's render representation after
-/// the semantic formatter model has already resolved selector contexts and
-/// policy positions. They should not be treated as the design-spec vocabulary
-/// for selector classification; see `docs/designs/core/formatting-model.markdown`
+/// These elements are a private renderer representation after the semantic
+/// formatter model has already resolved selector contexts and policy
+/// positions. They should not be treated as the design-spec vocabulary for
+/// selector classification; see `docs/designs/core/formatting-model.markdown`
 /// for that model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum ReplacementElement<D> {
@@ -130,32 +131,13 @@ pub(super) enum ReplacementElement<D> {
     Choice(ReplacementChoice<D>),
 }
 
-/// One caller-selectable replacement choice.
+/// One internally caller-selectable replacement assembly option.
 ///
-/// Each valid decision selects a complete replacement string for this choice.
-/// That string may include surrounding characters needed to keep the choice
-/// renderable after local cleanup.
-///
-/// # Examples
-///
-/// ```rust
-/// use evfmt::{Policy, Presentation, scan};
-/// use evfmt::analysis::analyze_scan_item;
-///
-/// let policy = Policy::default();
-/// let finding = scan("\u{00A9}")
-///     .find_map(|item| analyze_scan_item(&item, &policy))
-///     .unwrap();
-///
-/// let choice = finding.replacement_choices().next().unwrap();
-/// assert_eq!(
-///     choice.decisions().collect::<Vec<_>>(),
-///     [Presentation::Text, Presentation::Emoji]
-/// );
-/// assert_eq!(choice.default_decision(), Presentation::Emoji);
-/// ```
+/// Each valid decision selects a complete replacement string for this assembly
+/// piece. That string may include surrounding characters needed to keep the
+/// whole finding renderable after local cleanup.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplacementChoice<D> {
+pub(super) struct ReplacementChoice<D> {
     pub(super) default: D,
     pub(super) options: Vec<ReplacementOption<D>>,
 }
@@ -167,15 +149,7 @@ pub(super) struct ReplacementOption<D> {
 }
 
 impl<D: Copy> ReplacementChoice<D> {
-    /// Valid decisions for this replacement choice.
-    #[must_use]
-    pub fn decisions(&self) -> impl ExactSizeIterator<Item = D> + '_ {
-        self.options.iter().map(|option| option.decision)
-    }
-
-    /// The decision batch formatting applies to this choice by default.
-    #[must_use]
-    pub const fn default_decision(&self) -> D {
+    pub(super) const fn default_decision(&self) -> D {
         self.default
     }
 }
@@ -213,13 +187,13 @@ impl<D: PartialEq> ReplacementChoice<D> {
     }
 
     #[allow(clippy::expect_used)] // ReplacementChoice::new validates that the default decision is one of the options.
-    fn default_replacement(&self) -> &str {
+    fn default_canonical_replacement(&self) -> &str {
         self.replacement(&self.default)
             .expect("replacement choice constructor validates its default decision")
     }
 }
 
-/// Replacement fragment and non-canonicality accounting before source location
+/// Replacement assembly and non-canonicality accounting before source location
 /// is attached.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ReplacementAnalysis {
@@ -254,8 +228,21 @@ impl ReplacementAnalysis {
         }
     }
 
-    pub(super) const fn is_empty(&self) -> bool {
+    /// Whether this assembled analysis would leave the scanned item canonical.
+    ///
+    /// This is determined only by the non-canonicality counters. Replacement
+    /// elements can still be present because sequence-level analysis may need
+    /// them to preserve surrounding structure when another part of the same
+    /// item is non-canonical.
+    pub(super) const fn is_canonical(&self) -> bool {
         self.non_canonicality.is_empty()
+    }
+
+    fn decision_count(&self) -> usize {
+        self.elements
+            .iter()
+            .filter(|element| matches!(element, ReplacementElement::Choice(_)))
+            .count()
     }
 
     pub(super) fn push_fixed(&mut self, text: String) {
@@ -279,7 +266,11 @@ impl AddAssign for ReplacementAnalysis {
     }
 }
 
-/// A single non-canonical scanned item with its valid replacement choices.
+/// A single non-canonical scanned item with its valid replacement decisions.
+///
+/// `Finding` values are returned only for items that are non-canonical under
+/// the policy passed to [`crate::analysis::analyze_scan_item`]. Their
+/// [`NonCanonicality`] is guaranteed to be non-empty.
 ///
 /// # Examples
 ///
@@ -293,9 +284,9 @@ impl AddAssign for ReplacementAnalysis {
 ///     .unwrap();
 ///
 /// assert_eq!(finding.raw, "\u{00A9}");
-/// assert_eq!(finding.default_replacement(), "\u{00A9}\u{FE0F}");
+/// assert_eq!(finding.default_canonical_replacement(), "\u{00A9}\u{FE0F}");
 /// assert_eq!(
-///     finding.replacement(&[Presentation::Text]).unwrap(),
+///     finding.canonical_replacement_with_decisions(&[Presentation::Text]).unwrap(),
 ///     "\u{00A9}\u{FE0E}"
 /// );
 /// ```
@@ -315,51 +306,57 @@ impl Finding<'_> {
         self.analysis.non_canonicality
     }
 
-    /// Caller-selectable replacement choices in this finding's decision vector.
+    /// The decision vector formatting applies to this finding by default.
     ///
-    /// A fixed repair has no replacement choices. Call [`Finding::replacement`]
-    /// with an empty decision slice to apply that repair.
-    pub fn replacement_choices(
-        &self,
-    ) -> impl Iterator<Item = &ReplacementChoice<Presentation>> + '_ {
-        self.analysis
-            .elements
-            .iter()
-            .filter_map(|element| match element {
-                ReplacementElement::Fixed(_) => None,
-                ReplacementElement::Choice(choice) => Some(choice),
-            })
+    /// Each decision slot is one ambiguous selector context in source order
+    /// within the scanned item. Every current slot accepts
+    /// [`Presentation::Text`] or [`Presentation::Emoji`]. Fixed cleanup
+    /// contributes no decision slot.
+    ///
+    /// The iterator length is equal to
+    /// [`NonCanonicality::bases_to_resolve`] for this finding.
+    pub fn default_decisions(&self) -> impl ExactSizeIterator<Item = Presentation> + '_ {
+        DefaultDecisions {
+            elements: self.analysis.elements.iter(),
+            remaining: self.analysis.decision_count(),
+        }
     }
 
-    /// The replacement text for the decision batch formatting applies by default.
+    /// The canonical replacement using the default decision vector.
     ///
-    /// This is infallible because each replacement choice stores its own default
-    /// decision next to the options it may select. The default is validated when
-    /// constructing the choice, so there is no separate default decision
-    /// vector for callers to keep in sync.
+    /// This is infallible because each decision slot stores its own default
+    /// next to the options it may select. The default is validated when
+    /// constructing the slot.
     #[must_use]
-    pub fn default_replacement(&self) -> String {
+    pub fn default_canonical_replacement(&self) -> String {
         let mut out = String::new();
         for element in &self.analysis.elements {
             match element {
                 ReplacementElement::Fixed(text) => out.push_str(text),
-                ReplacementElement::Choice(choice) => out.push_str(choice.default_replacement()),
+                ReplacementElement::Choice(choice) => {
+                    out.push_str(choice.default_canonical_replacement());
+                }
             }
         }
         out
     }
 
-    /// Return the replacement text for a valid replacement decision vector.
+    /// Return the canonical whole-item replacement for a valid decision vector.
     ///
-    /// The decision slice must contain exactly one choice for each
-    /// [`ReplacementChoice`] returned by [`Finding::replacement_choices`]. Fixed
-    /// repairs have no choices and therefore use an empty decision slice.
+    /// Each decision slot is one ambiguous selector context in source order
+    /// within the scanned item. Every current slot accepts
+    /// [`Presentation::Text`] or [`Presentation::Emoji`]. Fixed cleanup is
+    /// included in the whole replacement but contributes no decision slot.
     ///
     /// Returns `None` when the decision vector has the wrong length or contains
-    /// a choice that is not valid for its replacement choice. Callers that want
-    /// to skip a finding can keep [`Finding::raw`].
+    /// a decision value that is not valid for its slot. That `None` reports
+    /// invalid caller input; it does not mean this finding is canonical.
+    /// Callers that want to skip a finding can keep [`Finding::raw`].
     #[must_use]
-    pub fn replacement(&self, decisions: &[Presentation]) -> Option<String> {
+    pub fn canonical_replacement_with_decisions(
+        &self,
+        decisions: &[Presentation],
+    ) -> Option<String> {
         let mut decisions = decisions.iter();
         let mut out = String::new();
 
@@ -381,11 +378,45 @@ impl Finding<'_> {
     }
 }
 
+struct DefaultDecisions<'a> {
+    elements: slice::Iter<'a, ReplacementElement<Presentation>>,
+    remaining: usize,
+}
+
+impl Iterator for DefaultDecisions<'_> {
+    type Item = Presentation;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for element in self.elements.by_ref() {
+            if let ReplacementElement::Choice(choice) = element {
+                self.remaining -= 1;
+                return Some(choice.default_decision());
+            }
+        }
+        None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.remaining, Some(self.remaining))
+    }
+}
+
+impl ExactSizeIterator for DefaultDecisions<'_> {
+    fn len(&self) -> usize {
+        self.remaining
+    }
+}
+
 impl<'a> Finding<'a> {
     pub(super) fn new(item: &crate::scanner::ScanItem<'a>, analysis: ReplacementAnalysis) -> Self {
         assert!(
-            !analysis.is_empty(),
-            "finding construction requires a non-empty replacement analysis"
+            !analysis.is_canonical(),
+            "finding construction requires non-empty non-canonicality"
+        );
+        assert_eq!(
+            analysis.decision_count(),
+            analysis.non_canonicality.bases_to_resolve,
+            "finding decision count must match bases_to_resolve"
         );
         Self {
             span: item.span.clone(),

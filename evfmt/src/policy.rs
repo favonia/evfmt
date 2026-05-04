@@ -45,7 +45,7 @@ use crate::variation_set::{self, VariationSet};
 /// policy is needed, `evfmt` uses the variation-sequence base character to
 /// query either the ordinary or keycap domain of the `prefer_bare` and
 /// `bare_as_text` sets. The pair of answers determines the canonical
-/// replacement choices:
+/// replacement outcomes:
 ///
 /// - in both sets: `FE0E` text presentation becomes bare, while bare stays bare
 /// - only in `prefer_bare`: `FE0F` emoji presentation becomes bare, while bare

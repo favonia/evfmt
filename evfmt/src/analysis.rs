@@ -1,18 +1,21 @@
 //! Policy-aware analysis for scanned emoji variation structures.
 //!
 //! This module implements the policy and fixed-rule analysis steps from the
-//! conceptual formatting algorithm. It produces findings with variable
-//! replacement choices, so callers can choose a replacement
-//! without re-reading policy for the same item.
+//! conceptual formatting algorithm. It produces findings with whole-item
+//! canonical replacements, so callers can apply the formatter's default
+//! decisions or supply a source-order decision vector for ambiguous selector
+//! contexts without re-reading policy for the same item.
 //! Interactive callers normally use this module directly: [`analyze_scan_item`]
 //! computes reasonableness, applies [`Policy`] only where policy is relevant,
-//! and stores valid replacement choices in each [`Finding`].
+//! and stores valid replacement decisions in each [`Finding`].
 //!
 //! - [`crate::scanner`] decides structural item boundaries
-//! - [`analyze_scan_item`] turns policy-neutral reasonableness into findings and replacement choices
+//! - [`analyze_scan_item`] turns policy-neutral reasonableness into findings
+//!   and whole-item canonical replacements
 //!
-//! Use this module when callers need to inspect or override repairs
-//! item-by-item; otherwise [`crate::format_text`] is the shorter path.
+//! Use this module when callers need to inspect or override canonical
+//! replacements item-by-item; otherwise [`crate::format_text`] is the shorter
+//! path.
 //!
 //! # Examples
 //!
@@ -27,7 +30,7 @@
 //!     .map(|item| {
 //!         analyze_scan_item(&item, &policy).map_or_else(
 //!             || item.raw.to_owned(),
-//!             |finding| finding.default_replacement(),
+//!             |finding| finding.default_canonical_replacement(),
 //!         )
 //!     })
 //!     .collect::<String>();
@@ -47,8 +50,8 @@ mod render;
 mod types;
 
 use render::{render_flag, render_singleton};
-use types::ReplacementAnalysis;
-pub use types::{Finding, NonCanonicality, ReplacementChoice};
+pub use types::{Finding, NonCanonicality};
+use types::{ReplacementAnalysis, ReplacementChoice};
 
 #[cfg(test)]
 mod tests;
@@ -56,6 +59,11 @@ mod tests;
 // --- Public API ---
 
 /// Analyze a scanned item under the current formatter policy.
+///
+/// Returns `None` when `item.raw` is already canonical under `policy`.
+/// Returns `Some(Finding)` when the item is non-canonical under `policy`;
+/// every returned finding has non-empty [`NonCanonicality`] and at least one
+/// valid whole-item canonical replacement.
 ///
 /// # Examples
 ///
@@ -74,7 +82,8 @@ mod tests;
 ///     finding.non_canonicality(),
 ///     NonCanonicality::new(1, 0, 0, 0, 0)
 /// );
-/// assert_eq!(finding.replacement(&[]).unwrap(), "");
+/// assert_eq!(finding.default_decisions().len(), 0);
+/// assert_eq!(finding.canonical_replacement_with_decisions(&[]).unwrap(), "");
 /// ```
 #[must_use]
 pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Finding<'a>> {
@@ -139,7 +148,7 @@ fn analyze_emoji_headed_sequence<'a>(
         analysis += analyze_link(link);
     }
 
-    if analysis.is_empty() {
+    if analysis.is_canonical() {
         None
     } else {
         Some(Finding::new(item, analysis))
@@ -161,7 +170,7 @@ fn analyze_links_only_zwj_sequence<'a>(
     for link in links {
         analysis += analyze_link(link);
     }
-    if analysis.is_empty() {
+    if analysis.is_canonical() {
         None
     } else {
         Some(Finding::new(item, analysis))
@@ -331,8 +340,8 @@ fn analyze_singleton_base_selectors(
     // executable copy of the fixed-cleanup table in the design document. Each
     // fixed-cleanup branch must construct the complete base outcome:
     // `canonical_presentation` and `NonCanonicality`. Do not move rule
-    // dispatch into helper functions or split output selection from violation
-    // accounting. Modification suffix cleanup belongs to
+    // dispatch into helper functions or split output selection from
+    // non-canonicality accounting. Modification suffix cleanup belongs to
     // `analyze_singleton_component`, not to this cascade.
     match first_modification {
         // Precedence 2: a sanctioned FE0E remains attached to the base as
@@ -437,8 +446,9 @@ fn analyze_policy_base_selectors(
         presentation_selectors_after_base,
     ) {
         // More than one presentation selector where the first matches the
-        // bare-side of the rule: the primary violation is the redundant first
-        // selector, and the extras are unsanctioned selector cleanup.
+        // bare-side of the rule: the primary non-canonicality is the
+        // redundant first selector, and the extras are unsanctioned selector
+        // cleanup.
         (SingletonRule::TextToBare, &[Presentation::Text, _, ..])
         | (SingletonRule::EmojiToBare, &[Presentation::Emoji, _, ..]) => {
             SingletonBaseSelectorOutcome::Deterministic {
@@ -454,7 +464,7 @@ fn analyze_policy_base_selectors(
         }
         // More than one presentation selector but the first is meaningful
         // under this rule: the first selector is canonical, so the only
-        // violation is the unsanctioned selector cleanup after it.
+        // non-canonicality is the unsanctioned selector cleanup after it.
         (_, &[current_presentation, _, ..]) => SingletonBaseSelectorOutcome::Deterministic {
             canonical_presentation: Some(current_presentation),
             non_canonicality: NonCanonicality::unsanctioned(
