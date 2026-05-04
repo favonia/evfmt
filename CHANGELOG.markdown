@@ -5,7 +5,7 @@
 Changes:
 
 - Renamed the `findings` module to `analysis` and replaced the interactive analysis API's `Violation` categories, `DecisionSlot`s, and `ReplacementDecision`s with compositional `NonCanonicality` summaries and `Presentation`-based replacement choices.
-- Renamed `Finding::default_replacement` to `Finding::default_canonical_replacement` and `Finding::replacement_with_decisions` to `Finding::canonical_replacement_with_decisions` to clarify that successful replacements are canonical under the selected decisions.
+- Renamed `Finding::default_replacement` to `Finding::default_canonical_replacement` and `Finding::replacement` to `Finding::canonical_replacement_with_decisions` to clarify that successful replacements are canonical under the selected decisions.
 - Moved the shared `Presentation` type from the scanner API to the crate root.
 - Preserved sanctioned text presentation before emoji modifiers while continuing to remove legacy defective emoji-presentation selectors before modifiers.
 
