@@ -50,14 +50,14 @@ Only the first `EmojiModification` after the base determines this base-presentat
 
 The base-presentation decision is resolved by this precedence:
 
-| Precedence | Context                                                  | Canonical base presentation |
-| ---------- | -------------------------------------------------------- | --------------------------- |
-| 1          | The chosen presentation would be unsanctioned            | bare                        |
-| 2          | First modification is an emoji modifier after `FE0E`     | text                        |
-| 3          | First modification is an emoji modifier sequence         | bare                        |
-| 4          | First modification is a tag, emoji-default base          | bare                        |
-| 5          | First modification is a tag, other base                  | emoji                       |
-| 6          | No fixed-cleanup context remains                         | use policy                  |
+| Precedence | Context                                              | Canonical base presentation |
+| ---------- | ---------------------------------------------------- | --------------------------- |
+| 1          | The chosen presentation would be unsanctioned        | bare                        |
+| 2          | First modification is an emoji modifier after `FE0E` | text                        |
+| 3          | First modification is an emoji modifier sequence     | bare                        |
+| 4          | First modification is a tag, emoji-default base      | bare                        |
+| 5          | First modification is a tag, other base              | emoji                       |
+| 6          | No fixed-cleanup context remains                     | use policy                  |
 
 Rule 6 is the boundary back to policy. Keycap-character contexts query the keycap-character domain, and ordinary contexts query the ordinary domain.
 
@@ -147,10 +147,10 @@ Implementation APIs may surface these categories as findings with valid decision
 
 ## Relation to policy
 
-| Context family            | Policy applies?                           | Behavior                                                                  |
-| ------------------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
-| Ordinary context          | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets                      |
-| Keycap-character context  | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets in the keycap domain |
-| Modifier sequence defect  | No                                        | Remove legacy `FE0F` before the modifier                                  |
-| ZWJ link selectors        | No                                        | Remove selectors attached to ZWJ links                                    |
-| Not a selector context    | No                                        | Remove illegal selector usage                                             |
+| Context family           | Policy applies?                           | Behavior                                                                  |
+| ------------------------ | ----------------------------------------- | ------------------------------------------------------------------------- |
+| Ordinary context         | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets                      |
+| Keycap-character context | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets in the keycap domain |
+| Modifier sequence defect | No                                        | Remove legacy `FE0F` before the modifier                                  |
+| ZWJ link selectors       | No                                        | Remove selectors attached to ZWJ links                                    |
+| Not a selector context   | No                                        | Remove illegal selector usage                                             |
