@@ -261,6 +261,16 @@ fn tag_modifier_missing_emoji_selector_is_counted() {
 }
 
 #[test]
+fn tag_modifier_extra_selector_after_required_emoji_selector_is_unsanctioned() {
+    let finding = finding_for_first_item("\u{00A9}\u{FE0F}\u{FE0E}\u{E0067}");
+    assert_eq!(finding.non_canonicality(), non_canonicality(1, 0, 0, 0, 0));
+    assert_eq!(
+        finding.default_canonical_replacement(),
+        "\u{00A9}\u{FE0F}\u{E0067}"
+    );
+}
+
+#[test]
 fn tag_modifier_wrong_base_presentation_counts_cleanup_and_missing_selector() {
     let finding = finding_for_first_item("\u{00A9}\u{FE0E}\u{E0067}");
     assert_eq!(finding.non_canonicality(), non_canonicality(1, 0, 0, 1, 0));

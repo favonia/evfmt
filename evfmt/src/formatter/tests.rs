@@ -166,7 +166,7 @@ fn keycap_policy_uses_first_modification_only() {
 }
 
 #[test]
-fn modifier_context_preserves_sanctioned_text_presentation() {
+fn emoji_modifier_context_preserves_sanctioned_text_presentation() {
     let policy = default_policy();
 
     assert_eq!(
@@ -176,6 +176,10 @@ fn modifier_context_preserves_sanctioned_text_presentation() {
     assert_eq!(
         format_text("\u{270C}\u{FE0F}\u{1F3FB}", &policy),
         FormatResult::Changed("\u{270C}\u{1F3FB}".to_owned())
+    );
+    assert_eq!(
+        format_text("A\u{FE0E}\u{1F3FB}", &policy),
+        FormatResult::Changed("A\u{1F3FB}".to_owned())
     );
 }
 

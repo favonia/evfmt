@@ -69,7 +69,8 @@ Use a two-tier budget when needed: a quick randomized smoke run for every PR/pus
 - recognized leading or malformed ZWJ-related clusters remain visible to item analysis instead of disappearing into passthrough
 - scanner and formatter agreement on singleton inputs
 - keycap-context invariant: keycaps follow keycap sequence rules
-- modifier-defect invariant: modifier defect leaves exactly one reasonable state, `none`
+- modifier-context invariant: sanctioned `base FE0E modifier` is preserved as text presentation on the base, while legacy defective `base FE0F modifier` leaves exactly one reasonable base state, `none`
+- modifier-boundary invariant: sanctioned `base FE0E modifier` remains one extended grapheme cluster under UAX #29 but is not a UTS #51 emoji modifier sequence; `FE0E` before a modifier is preserved only when it is a sanctioned text variation sequence for the base
 - missing-selector invariant: deterministic insertion of a required presentation selector is tracked separately from sequence defects
 - standalone keycap-base invariant: as standalone variation-sequence bases, `#`, `*`, and digits may retain three reasonable states
 

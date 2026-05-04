@@ -250,15 +250,6 @@ impl ReplacementAnalysis {
     }
 }
 
-impl Add for ReplacementAnalysis {
-    type Output = Self;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
 impl AddAssign for ReplacementAnalysis {
     fn add_assign(&mut self, rhs: Self) {
         self.non_canonicality += rhs.non_canonicality;
@@ -315,6 +306,7 @@ impl Finding<'_> {
     ///
     /// The iterator length is equal to
     /// [`NonCanonicality::bases_to_resolve`] for this finding.
+    #[must_use]
     pub fn default_decisions(&self) -> impl ExactSizeIterator<Item = Presentation> + '_ {
         DefaultDecisions {
             elements: self.analysis.elements.iter(),
