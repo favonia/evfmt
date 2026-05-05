@@ -102,6 +102,8 @@ A base code point with sanctioned variation-sequence data in the pinned Unicode 
 
 A local selector-bearing context after classification. A selector context is not just a base character; it includes the surrounding sequence structure needed to decide which selector states are sanctioned, reasonable, redundant, or defective.
 
+The durable context families are ordinary variation-sequence context, keycap-character context, fixed-cleanup sequence context, and not a selector context. A real selector context records the current variation-selector state, whether extra variation selectors were present, and which of `none`, `FE0E`, and `FE0F` remain reasonable after context-aware reduction.
+
 ### Policy position
 
 The key used by formatter policy after a genuinely ambiguous selector context has survived fixed cleanup. A policy position is a variation-sequence base character plus an ordinary/keycap domain. `VariationSet` values contain policy positions, not arbitrary selector contexts.

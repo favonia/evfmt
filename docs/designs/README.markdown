@@ -24,6 +24,13 @@ Use this file as a retrieval map. Each design note has "Read when:" and "Defines
 - [`features/variation-set-api.markdown`](features/variation-set-api.markdown) — typed policy variation-set API, named sets, and set operations
 - [`features/sequence-handling.markdown`](features/sequence-handling.markdown) — durable sequence-family contracts and policy boundaries
 
+## Rationale Archive
+
+Rationale files are non-normative records of evidence, tradeoffs, rejected alternatives, and revisit triggers. Read them when auditing, challenging, or replacing a design decision; do not treat them as behavior contracts.
+
+- [`../rationale/README.markdown`](../rationale/README.markdown) — rationale archive index
+- [`../rationale/sequence-handling.markdown`](../rationale/sequence-handling.markdown) — sequence-handling policy boundary and tradeoff rationale
+
 ## Directory Scope
 
 Use `docs/designs/` only for durable design information that is broader than one local edit.

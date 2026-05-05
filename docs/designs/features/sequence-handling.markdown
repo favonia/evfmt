@@ -2,11 +2,11 @@
 
 Read when: changing selector handling across sequence families, or changing which contexts are fixed cleanup versus policy.
 
-Defines: the durable sequence-family contracts for variation-selector handling.
+Defines: observable sequence-family contracts for `FE0E` / `FE0F` handling.
 
 ## Scope
 
-`evfmt` is responsible for `FE0E` / `FE0F` handling in the selector-bearing contexts that matter to canonical source text:
+`evfmt` is responsible for `FE0E` / `FE0F` handling in selector-bearing contexts that matter to canonical source text:
 
 - standalone variation-sequence contexts
 - keycap sequences
@@ -28,21 +28,31 @@ The scanner must preserve enough recognized structure for item analysis to apply
 
 Concrete scanner state shapes and local edge cases belong in scanner comments and scanner/analysis tests. This note records the cross-module contract those comments implement.
 
-## Core decision boundary
+## Policy Boundary
 
 Policy is only for genuinely ambiguous selector contexts that remain after sequence-specific cleanup and collapse to a policy position.
 
 Sequence-specific cleanup rules must resolve before policy.
 
-## Sequence-family contracts
+| Context family           | Policy applies?                           | Behavior                                                                  |
+| ------------------------ | ----------------------------------------- | ------------------------------------------------------------------------- |
+| Ordinary context         | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets                      |
+| Keycap-character context | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets in the keycap domain |
+| Modifier sequence defect | No                                        | Remove legacy `FE0F` before the modifier                                  |
+| ZWJ link selectors       | No                                        | Remove selectors attached to ZWJ links                                    |
+| Not a selector context   | No                                        | Remove unsanctioned selector usage                                        |
 
-### Variation-sequence contexts
+Policy defaults and public option behavior live in [formatter-policy.markdown](formatter-policy.markdown). This note mentions defaults only where a sequence-family contract needs an observable default spelling.
+
+## Contracts By Family
+
+### Variation-Sequence Contexts
 
 For a base with variation-sequence data, the formatter may need policy to choose among bare, `FE0E`, and `FE0F`.
 
 After context-aware cleanup, the only policy-ambiguous contexts are ordinary variation-sequence contexts and keycap-character contexts.
 
-### Fixed cleanup for singleton-base contexts
+### Singleton Fixed Cleanup
 
 When the first modification after a singleton base is an emoji modifier or a tag specification, selector handling is fixed cleanup rather than policy. A singleton base whose first modification is `U+20E3` uses keycap-character policy when the base has variation-sequence data.
 
@@ -63,9 +73,9 @@ Rule 6 is the boundary back to policy. Keycap-character contexts query the keyca
 
 Every `[0-9#*]` keycap base has standardized text and emoji presentation sequences and is text-default in the pinned Unicode data. Scanner grouping is broader than RGI keycaps, so policy queries outside that standardized base set may still collapse to selector cleanup when the base lacks variation-sequence data.
 
-### Keycap sequences
+### Keycap Sequences
 
-In true keycap context, the RGI emoji keycap form (UTS #51 §1.4.5) is:
+In true keycap context, the RGI emoji keycap form is:
 
 ```text
 [0-9#*] FE0F 20E3
@@ -77,21 +87,17 @@ Bare keycap inputs (`[0-9#*] 20E3`) use keycap-character policy. The default pol
 [0-9#*] FE0E 20E3
 ```
 
-Explicit `FE0E` in the same keycap-character context is preserved. `[0-9#*] FE0E` is a standardized text variation sequence (`StandardizedVariants.txt`), and per the Unicode Standard Chapter 23 a variation selector's effect on the base may propagate to subsequent combining marks. `[0-9#*] FE0E 20E3` therefore has a well-defined compositional meaning: a text-styled digit enclosed by a keycap mark inheriting that appearance.
+Explicit `FE0E` and explicit `FE0F` in keycap-character contexts are preserved when they match the active keycap-character policy.
 
-Explicit `FE0F` in a keycap-character context is preserved under the default policy.
+### Modifier Sequences
 
-### Modifier sequences
-
-Legacy `FE0F` immediately before an emoji modifier is non-canonical and must be removed. UTS #51 treats this as old defective emoji modifier sequence data where the emoji presentation selector is ignored.
+Legacy `FE0F` immediately before an emoji modifier is a defective modifier sequence and must be removed.
 
 Modifier handling is fixed cleanup, not policy.
 
-### ZWJ-related sequences
+### ZWJ-Related Sequences
 
 ZWJ-related selector handling is component-local after structural recognition.
-
-Under the structural recognition contract above, recognized ZWJ-related structure is preserved before cleanup. The analysis/formatting layer then decides which selectors are valid, repairable, or removable under the formatter invariants.
 
 For cleanup, the relevant ZWJ-like shapes are:
 
@@ -101,56 +107,13 @@ For cleanup, the relevant ZWJ-like shapes are:
 
 In canonical output:
 
-- `FE0E` on a ZWJ component is honored as that component's text-presentation request; per [UTS #51](https://www.unicode.org/reports/tr51/tr51-29.html), this may break the combined emoji image in renderers
+- `FE0E` on a ZWJ component is honored as that component's text-presentation request
 - bare component contexts are resolved by the active formatter policy
 - selectors attached to ZWJ links are removed
 - selectors that are redundant or unsupported under component-local cleanup are removed
 
 ZWJ-link cleanup is fixed; component contexts use the ordinary policy boundary above.
 
-### Orphaned or unsanctioned selectors
+### Orphaned Or Unsanctioned Selectors
 
 Selectors that are not part of a sanctioned local selector-bearing context are removed.
-
-## Selector context model
-
-The durable context distinction is:
-
-- ordinary variation-sequence context
-- keycap-character context
-- fixed-cleanup sequence context
-- not a selector context
-
-Each real selector context records:
-
-- current variation selector state
-- whether extra variation selectors were present
-- which of `none`, `FE0E`, and `FE0F` remain reasonable after context-aware reduction
-
-## Non-Canonicality Model
-
-The important split is:
-
-- unsanctioned or structurally broken selector usage
-- fixed-cleanup sequence defects
-- deterministic insertion of a required presentation selector
-- variation-selector state mismatches that are already non-canonical under the current policy
-- genuinely ambiguous contexts that need policy
-
-A redundant variation selector belongs to the third class, not the first. It is still sanctioned Unicode structure; it is simply non-canonical under the active formatter policy because the same context canonically stays bare.
-
-A missing required selector is separate from a sequence defect. For example, when tag context deterministically requires emoji presentation, inserting `FE0F` is fixed cleanup but is not a UTS #51 defective emoji modifier sequence.
-
-This split matters because only the last class is a real policy choice. The other classes already have a canonical repair.
-
-Implementation APIs may surface these categories as findings with valid decisions. That API shape does not change the sequence-family contracts here.
-
-## Relation to policy
-
-| Context family           | Policy applies?                           | Behavior                                                                  |
-| ------------------------ | ----------------------------------------- | ------------------------------------------------------------------------- |
-| Ordinary context         | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets                      |
-| Keycap-character context | Yes, if multiple reasonable states remain | Governed by the preferred-bare and bare-as-text sets in the keycap domain |
-| Modifier sequence defect | No                                        | Remove legacy `FE0F` before the modifier                                  |
-| ZWJ link selectors       | No                                        | Remove selectors attached to ZWJ links                                    |
-| Not a selector context   | No                                        | Remove illegal selector usage                                             |

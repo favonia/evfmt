@@ -10,6 +10,24 @@ use crate::presentation::Presentation;
 /// redundant selectors, deterministic selector insertion, and policy-driven
 /// bare-base resolution.
 ///
+/// The categories describe how non-canonical selector usage is repaired or
+/// exposed to callers:
+///
+/// - unsanctioned or structurally broken selector usage is removed
+/// - fixed-cleanup sequence defects are repaired without policy
+/// - redundant sanctioned selectors are removed when the active policy prefers
+///   the bare form
+/// - missing required presentation selectors are inserted by deterministic
+///   cleanup rather than by policy choice
+/// - genuinely ambiguous bare bases become caller-resolvable policy decisions
+///
+/// A redundant variation selector is not unsanctioned. It belongs to a
+/// sanctioned Unicode structure but is non-canonical under the active
+/// formatter policy because the same context canonically stays bare. Likewise,
+/// a missing required selector is separate from a defective sequence: inserting
+/// `FE0F` for a deterministic tag context is fixed cleanup, not a UTS #51
+/// defective emoji modifier repair.
+///
 /// The scalar-length effect of a finding's default canonical replacement is
 /// derived from these selector-level counters:
 ///
