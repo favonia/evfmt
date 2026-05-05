@@ -65,32 +65,16 @@ This is the key reduction step. Fixed-cleanup cases such as modifier defects, re
 
 ### Policy layer
 
-This layer applies only when more than one reasonable state remains. The intended public policy is base-indexed with an ordinary/keycap domain qualifier and uses two `VariationSet` membership predicates:
+This layer applies only when more than one reasonable state remains. The current public policy is base-indexed within the ordinary non-keycap and keycap-character domains and uses two `VariationSet` membership predicates:
 
 - `prefer_bare(position)`
 - `bare_as_text(position)`
 
 If a context has zero or one reasonable states, policy does not apply.
 
-Policy positions are divided into ordinary non-keycap positions and keycap-character positions. Both are indexed by variation-sequence base character, but policy membership is queried in the domain that matches the context.
+A policy position is a variation-sequence base in one of the currently accepted policy domains: ordinary non-keycap or keycap-character. Other selector contexts are not public policy positions under the current model.
 
 The public option surface for these predicates lives in [formatter-policy.markdown](../features/formatter-policy.markdown).
-
-## Product assumptions
-
-Unicode standards and pinned Unicode data define Unicode facts for this project; they do not by themselves establish how real renderers, keyboards, editors, terminals, fonts, or users behave. Questions about user expectation or implementation behavior need platform/user evidence. Check real implementations when feasible; otherwise state that evidence is missing.
-
-### Omitted-state policy
-
-`evfmt` does not claim that omitted presentation is literally identical to `FE0E` or `FE0F`. Instead it adopts a weaker product assumption:
-
-- for formatter purposes, omitted presentation is treated as either text-like or emoji-like
-- if omitted rendering is stable enough to keep, it becomes a reasonable bare output
-- if omitted rendering is too unstable, the formatter must emit an explicit selector instead
-
-### Domain-qualified base-indexability policy
-
-After context classification and reasonableness filtering, genuinely ambiguous contexts are expected to collapse to a policy position: a base character plus an ordinary/keycap domain. If a future Unicode version breaks this property, the design must move to richer policy keys.
 
 ## Core terminology
 
@@ -102,9 +86,11 @@ A base code point with sanctioned variation-sequence data in the pinned Unicode 
 
 A local selector-bearing context after classification. A selector context is not just a base character; it includes the surrounding sequence structure needed to decide which selector states are sanctioned, reasonable, redundant, or defective.
 
+The durable context families are ordinary variation-sequence context, keycap-character context, fixed-cleanup sequence context, and not a selector context. A real selector context records the current variation-selector state, whether extra variation selectors were present, and which of `none`, `FE0E`, and `FE0F` remain reasonable after context-aware reduction.
+
 ### Policy position
 
-The key used by formatter policy after a genuinely ambiguous selector context has survived fixed cleanup. A policy position is a variation-sequence base character plus an ordinary/keycap domain. `VariationSet` values contain policy positions, not arbitrary selector contexts.
+The key used by formatter policy after a genuinely ambiguous selector context has survived fixed cleanup. A policy position is a variation-sequence base character plus one of the currently accepted policy domains. `VariationSet` values contain policy positions, not arbitrary selector contexts.
 
 ### Reasonable state
 
@@ -126,10 +112,10 @@ For each selector context, compute which of `none`, `FE0E`, and `FE0F` are reaso
 
 ### Fixed rules
 
-The following cases do not enter policy:
+Apply deterministic cleanup before policy:
 
 - modifier cleanup removes legacy defective `FE0F` before a modifier, while preserving sanctioned `FE0E` as text presentation on the base
-- keycap-character handling uses policy when the base has variation-sequence data
+- keycap-character contexts use policy only when the base has variation-sequence data; otherwise selector cleanup is deterministic
 - ZWJ links are preserved, selectors attached to ZWJ links are removed, and each component is resolved as if the surrounding ZWJ links were absent
 - unsanctioned or orphaned selectors are removed
 

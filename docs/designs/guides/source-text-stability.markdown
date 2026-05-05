@@ -2,15 +2,11 @@
 
 Read when: editing any repository text that may contain dual-presentation Unicode characters, including `README.markdown`, design notes, code comments, tests, operator messages, and other checked-in prose.
 
-Defines: how repository text should balance clear rendered meaning with `evfmt`-stable source bytes, and how that choice follows from [Project Principles](../core/project-principles.markdown).
+Defines: how repository text should balance clear rendered meaning with `evfmt`-stable source bytes.
 
 Does not define: feature semantics, README-specific writing rules, local message wording, or a general writing style guide.
 
-This note applies the project principles to repository text:
-
-- `Correctness`: checked-in source should remain stable under the formatter instead of relying on platform-dependent rendering or accidental byte choices.
-- `Usability`: readers should see the explanation that best helps them act correctly, even when the source spelling uses explicit selectors or escaped code points.
-- `Maintainability Improvements`: editors should have a predictable rule for when to prefer raw glyphs, explicit selectors, or escaped code points.
+The rationale for these tradeoffs lives in [source-text-stability.markdown](../../rationale/source-text-stability.markdown).
 
 ## Core Rule
 
