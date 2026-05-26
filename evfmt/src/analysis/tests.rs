@@ -89,8 +89,8 @@ fn unsanctioned_singleton_context_cleans_base_and_modification_selectors() {
 fn standalone_bare_singleton_uses_plain_presentation_resolution() {
     let finding = finding_for_first_item("\u{00A9}");
     assert_eq!(finding.non_canonicality(), non_canonicality(0, 0, 0, 0, 1));
-    assert_eq!(default_choice_decisions(&finding), [Presentation::Emoji]);
-    assert_eq!(finding.default_canonical_replacement(), "\u{00A9}\u{FE0F}");
+    assert_eq!(default_choice_decisions(&finding), [Presentation::Text]);
+    assert_eq!(finding.default_canonical_replacement(), "\u{00A9}\u{FE0E}");
     assert_eq!(
         finding.canonical_replacement_with_decisions(&[Presentation::Text]),
         Some("\u{00A9}\u{FE0E}".to_owned())
@@ -294,14 +294,14 @@ fn tag_modifier_extra_selectors_after_wrong_presentation_are_unsanctioned() {
 fn multi_emoji_zwj_sequence_resolves_bare_components_with_component_policy() {
     let finding = finding_for_first_item("\u{2764}\u{200D}\u{1F525}");
     assert_eq!(finding.non_canonicality(), non_canonicality(0, 0, 0, 0, 1));
-    assert_eq!(default_choice_decisions(&finding), [Presentation::Emoji]);
+    assert_eq!(default_choice_decisions(&finding), [Presentation::Text]);
     assert_eq!(
         finding.canonical_replacement_with_decisions(&[Presentation::Text]),
         Some("\u{2764}\u{FE0E}\u{200D}\u{1F525}".to_owned())
     );
     assert_eq!(
         finding.default_canonical_replacement(),
-        "\u{2764}\u{FE0F}\u{200D}\u{1F525}"
+        "\u{2764}\u{FE0E}\u{200D}\u{1F525}"
     );
 }
 
@@ -311,7 +311,7 @@ fn multi_emoji_zwj_sequence_exposes_multiple_component_decision_slots() {
     assert_eq!(finding.non_canonicality(), non_canonicality(0, 0, 0, 0, 2));
     assert_eq!(
         default_choice_decisions(&finding),
-        [Presentation::Emoji, Presentation::Emoji]
+        [Presentation::Text, Presentation::Text]
     );
     assert_eq!(
         finding.canonical_replacement_with_decisions(&[Presentation::Text, Presentation::Emoji]),
@@ -325,7 +325,7 @@ fn multi_emoji_zwj_sequence_keeps_mixed_component_non_canonicality_counts() {
     assert_eq!(finding.non_canonicality(), non_canonicality(1, 0, 0, 0, 1));
     assert_eq!(
         finding.default_canonical_replacement(),
-        "\u{1F1E6}\u{1F1E8}\u{200D}\u{00A9}\u{FE0F}"
+        "\u{1F1E6}\u{1F1E8}\u{200D}\u{00A9}\u{FE0E}"
     );
 }
 
@@ -335,7 +335,7 @@ fn multi_emoji_zwj_sequence_repairs_noncanonical_joined_component_by_policy() {
     assert_eq!(finding.non_canonicality(), non_canonicality(0, 0, 0, 0, 1));
     assert_eq!(
         finding.default_canonical_replacement(),
-        "\u{1F525}\u{200D}\u{2764}\u{FE0F}"
+        "\u{1F525}\u{200D}\u{2764}\u{FE0E}"
     );
 }
 
@@ -424,7 +424,7 @@ fn combo_leading_zwj_run_does_not_attach_to_following_emoji() {
     );
     assert_eq!(
         emoji_finding.default_canonical_replacement(),
-        "\u{00A9}\u{FE0F}"
+        "\u{00A9}\u{FE0E}"
     );
 }
 
@@ -434,7 +434,7 @@ fn combo_dangling_zwj_after_one_emoji_uses_singleton_policy() {
     assert_eq!(finding.non_canonicality(), non_canonicality(1, 0, 0, 0, 1));
     assert_eq!(
         finding.default_canonical_replacement(),
-        "\u{00A9}\u{FE0F}\u{200D}\u{200D}"
+        "\u{00A9}\u{FE0E}\u{200D}\u{200D}"
     );
 }
 

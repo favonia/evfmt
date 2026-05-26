@@ -185,7 +185,7 @@ fn runtime_settings_start_with_documented_policy_defaults() {
     );
     assert_eq!(
         formatter::format_text("\u{00A9}", &settings.policy),
-        FormatResult::Changed("\u{00A9}\u{FE0F}".to_owned())
+        FormatResult::Changed("\u{00A9}\u{FE0E}".to_owned())
     );
 }
 

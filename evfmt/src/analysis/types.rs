@@ -293,7 +293,7 @@ impl AddAssign for ReplacementAnalysis {
 ///     .unwrap();
 ///
 /// assert_eq!(finding.raw, "\u{00A9}");
-/// assert_eq!(finding.default_canonical_replacement(), "\u{00A9}\u{FE0F}");
+/// assert_eq!(finding.default_canonical_replacement(), "\u{00A9}\u{FE0E}");
 /// assert_eq!(
 ///     finding.canonical_replacement_with_decisions(&[Presentation::Text]).unwrap(),
 ///     "\u{00A9}\u{FE0E}"

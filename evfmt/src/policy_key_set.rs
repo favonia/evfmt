@@ -4,7 +4,7 @@
 //! The public universe contains policy keys. Each key is one variation-sequence
 //! base plus one domain:
 //!
-//! - ordinary
+//! - ordinary, for non-keycap selector slots
 //! - keycap-character, where the same base is followed by
 //!   `U+20E3 COMBINING ENCLOSING KEYCAP`
 //!
@@ -73,7 +73,7 @@ pub const CARD_SUITS: PolicyKeySet = PolicyKeySet {
     },
     keycap_chars: CharSet::none(),
 };
-/// Every ordinary policy key for a variation-sequence base.
+/// Every non-keycap policy key for a variation-sequence base.
 pub const NON_KEYCAP_CHARS: PolicyKeySet = PolicyKeySet {
     chars: ALL_CHARS,
     keycap_chars: CharSet::none(),
@@ -104,7 +104,7 @@ enum NamedSet {
 
 /// A finite set of formatter policy keys.
 ///
-/// The universe has two domains: ordinary and keycap-character. Both domains
+/// The universe has two domains: non-keycap and keycap-character. Both domains
 /// are indexed by the generated variation-sequence base table. Characters
 /// outside that table never form policy keys, including in [`PolicyKeySet::all`].
 ///
@@ -153,7 +153,7 @@ pub fn is_variation_sequence_character(ch: char) -> bool {
 }
 
 impl PolicyKeySet {
-    /// Construct the set containing every eligible ordinary and keycap-character
+    /// Construct the set containing every eligible non-keycap and keycap-character
     /// policy key.
     #[must_use]
     pub const fn all() -> Self {
@@ -172,7 +172,7 @@ impl PolicyKeySet {
         }
     }
 
-    /// Construct a singleton set containing one eligible ordinary code point.
+    /// Construct a singleton set containing one eligible non-keycap code point.
     ///
     /// Returns the empty set when `ch` is outside the variation-sequence
     /// character universe checked by [`is_variation_sequence_character`].
@@ -197,7 +197,7 @@ impl PolicyKeySet {
         }
     }
 
-    /// Return whether the set contains the ordinary policy key for `ch`.
+    /// Return whether the set contains the non-keycap policy key for `ch`.
     #[must_use]
     pub fn contains(&self, ch: char) -> bool {
         self.chars.contains(ch)

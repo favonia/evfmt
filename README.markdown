@@ -171,7 +171,7 @@ evfmt format --remove-ignore=hidden .
 
 ### 📐 Presentation Policy Cookbook
 
-By default, `evfmt` leaves bare ASCII characters and Unicode emoji-default characters alone, while text-default non-ASCII characters with dual presentations get an explicit emoji selector. For example, `#` and bare sparkles (U+2728) stay bare, while a bare copyright sign (U+00A9) normalizes to `©️` (U+00A9 U+FE0F).
+By default, `evfmt` leaves bare ASCII characters and Unicode emoji-default characters alone, while text-default non-ASCII characters with dual presentations get an explicit text selector. For example, `#` and bare sparkles (U+2728) stay bare, while a bare copyright sign (U+00A9) normalizes to `©︎` (U+00A9 U+FE0E).
 
 ⚠️ `evfmt` is a formatter, not a presentation editor. If you want to change how the copyright sign looks on your platform—say, switching it from emoji presentation to text presentation—do that in your editor by adding or removing the presentation selector (`U+FE0E` or `U+FE0F`). Run `evfmt` only after you are happy with how your document renders.
 
@@ -234,12 +234,12 @@ The policy is shaped by two choices: how bare characters render on your _referen
 
 The CLI exposes those choices as two mutable sets:
 
-- `bare-as-text`: For which policy keys the reference platform shows bare spelling as text. Many modern platforms show bare non-ASCII, non-keycap characters as emoji, so the default set is `ascii,keycap-chars`.
-- `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is `ascii,emoji-defaults`, so characters with default emoji presentation in Unicode stay bare, while text-default non-ASCII characters still get explicit selectors.
+- `bare-as-text`: For which policy keys bare spelling should be treated as text when it must be interpreted. The default set is `text-defaults,keycap-chars`.
+- `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is `ascii,emoji-defaults`, so ASCII and emoji-default characters stay bare, while text-default non-ASCII characters still get explicit text selectors.
 
 To choose the right policy, first decide whether a character's bare form looks like text or emoji on your reference platform. Put it in `bare-as-text` if the bare form looks like text. Then decide whether the character should stay bare in the files you publish, as long as doing so preserves the intended presentation. Put it in `prefer-bare` if bare spelling is stable enough for your target platforms.
 
-The two choices determine how `evfmt` repairs each ambiguous standalone selector slot:
+The two choices determine how `evfmt` repairs each policy-resolved selector slot:
 
 | If a character is...                | `evfmt` does this                                   |
 | ----------------------------------- | --------------------------------------------------- |
@@ -248,7 +248,7 @@ The two choices determine how `evfmt` repairs each ambiguous standalone selector
 | in `prefer-bare` only               | changes explicit emoji to bare; leaves others alone |
 | in neither set                      | changes bare to explicit emoji; leaves others alone |
 
-With the default sets `bare-as-text = ascii,keycap-chars` and `prefer-bare = ascii,emoji-defaults`, ASCII bare forms and emoji-default bare forms stay bare, text-default non-ASCII bare forms get explicit emoji selectors, and bare keycap-character forms get explicit text selectors.
+With the default sets `bare-as-text = text-defaults,keycap-chars` and `prefer-bare = ascii,emoji-defaults`, ASCII bare forms and emoji-default bare forms stay bare, text-default non-ASCII bare forms in non-keycap selector slots get explicit text selectors, and bare keycap-character forms get explicit text selectors.
 
 #### Policy Flags
 
@@ -270,25 +270,25 @@ To update the `prefer-bare` set:
 | `--add-prefer-bare=<set>[,<set>...]`    | Add to the set      |
 | `--remove-prefer-bare=<set>[,<set>...]` | Remove from the set |
 
-The policy sets start as `prefer-bare = ascii,emoji-defaults` and `bare-as-text = ascii,keycap-chars`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
+The policy sets start as `prefer-bare = ascii,emoji-defaults` and `bare-as-text = text-defaults,keycap-chars`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
 
-Each `<set>` in the list can be either one of the named sets below, one code point with `u(HEX)`, such as `u(00A9)`, or one character, such as `#`, `*`, or `©️`. Presentation selectors are ignored when matching a single character. Except for sets whose names start with `keycap-`, named sets apply only to ordinary non-keycap positions.
+Each `<set>` in the list can be either one of the named sets below, one code point with `u(HEX)`, such as `u(00A9)`, or one character, such as `#`, `*`, or `©️`. Presentation selectors are ignored when matching a single character. Except for sets whose names start with `keycap-`, named sets apply only to non-keycap selector slots.
 
-| Set                | Meaning                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------- |
-| `ascii`            | Dual-presentation characters in the ASCII range, such as `#`, `*`, and digits          |
-| `text-defaults`    | Dual-presentation characters whose bare form defaults to text presentation in Unicode  |
-| `emoji-defaults`   | Dual-presentation characters whose bare form defaults to emoji presentation in Unicode |
-| `rights-marks`     | Copyright and registered/trademark-style marks with dual presentations                 |
-| `arrows`           | Arrow symbols with dual presentations                                                  |
-| `card-suits`       | Card suit symbols with dual presentations                                              |
-| `keycap-chars`     | Dual-presentation characters in keycap-character positions                             |
-| `non-keycap-chars` | Dual-presentation characters in ordinary non-keycap positions                          |
-| `keycap-emojis`    | Emoji keycap bases (`#`, `*`, `0`–`9`) in keycap-character positions                   |
+| Set                | Meaning                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `ascii`            | ASCII dual-presentation characters in non-keycap selector slots, such as `#`, `*`, and digits |
+| `text-defaults`    | Text-default dual-presentation characters in non-keycap selector slots                        |
+| `emoji-defaults`   | Emoji-default dual-presentation characters in non-keycap selector slots                       |
+| `rights-marks`     | Copyright and registered/trademark-style marks in non-keycap selector slots                   |
+| `arrows`           | Arrow symbols in non-keycap selector slots                                                    |
+| `card-suits`       | Card suit symbols in non-keycap selector slots                                                |
+| `keycap-chars`     | Dual-presentation characters in keycap-character positions                                    |
+| `non-keycap-chars` | Dual-presentation characters in non-keycap selector slots                                     |
+| `keycap-emojis`    | Emoji keycap bases (`#`, `*`, `0`–`9`) in keycap-character positions                          |
 
 The meaning of named sets may change as Unicode adds or revises dual-presentation characters.
 
-Use `all` by itself to select every policy key `evfmt` can resolve. For example, `--remove-prefer-bare=all` makes every policy-resolved selector slot require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII and bare keycap-character forms then normalize to explicit text form and ordinary bare non-ASCII normalizes to explicit emoji form.
+Use `all` by itself to select every policy key `evfmt` can resolve. For example, `--remove-prefer-bare=all` makes every policy-resolved selector slot require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII, bare text-default non-keycap forms, and bare keycap-character forms then normalize to explicit text form, while bare emoji-default non-keycap forms normalize to explicit emoji form.
 
 ## ⚖️ License
 

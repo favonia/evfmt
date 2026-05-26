@@ -4,6 +4,7 @@
 
 Changes:
 
+- Changed the default policy so bare text-default non-keycap characters normalize to explicit text presentation instead of explicit emoji presentation.
 - Renamed `VariationSet` and `evfmt::variation_set` to `PolicyKeySet` and `evfmt::policy_key_set` to make the policy-key domain explicit.
 - Renamed the `findings` module to `analysis` and replaced the interactive analysis API's `Violation` categories, `DecisionSlot`s, and `ReplacementDecision`s with compositional `NonCanonicality` summaries and `Presentation`-based replacement choices.
 - Renamed `Finding::default_replacement` to `Finding::default_canonical_replacement` and `Finding::replacement` to `Finding::canonical_replacement_with_decisions` to clarify that successful replacements are canonical under the selected decisions.

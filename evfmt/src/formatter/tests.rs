@@ -45,12 +45,12 @@ fn standalone_ascii_default_policy_prefers_bare_text_side() {
 }
 
 #[test]
-fn standalone_text_default_non_ascii_default_policy_resolves_bare_to_emoji() {
+fn standalone_text_default_non_ascii_default_policy_resolves_bare_to_text() {
     let policy = default_policy();
 
     assert_eq!(
         format_text("\u{00A9}", &policy),
-        FormatResult::Changed("\u{00A9}\u{FE0F}".to_owned())
+        FormatResult::Changed("\u{00A9}\u{FE0E}".to_owned())
     );
     assert_eq!(
         format_text("\u{00A9}\u{FE0E}", &policy),
@@ -189,7 +189,7 @@ fn zwj_cleanup_uses_component_local_rules() {
 
     assert_eq!(
         format_text("\u{2764}\u{200D}\u{1F525}", &policy),
-        FormatResult::Changed("\u{2764}\u{FE0F}\u{200D}\u{1F525}".to_owned())
+        FormatResult::Changed("\u{2764}\u{FE0E}\u{200D}\u{1F525}".to_owned())
     );
     assert_eq!(
         format_text("\u{2764}\u{FE0F}\u{200D}\u{1F525}", &policy),
@@ -211,7 +211,7 @@ fn mixed_content_formats_only_structural_items() {
 
     assert_eq!(
         format_text("Press # for \u{00A9}", &policy),
-        FormatResult::Changed("Press # for \u{00A9}\u{FE0F}".to_owned())
+        FormatResult::Changed("Press # for \u{00A9}\u{FE0E}".to_owned())
     );
 }
 

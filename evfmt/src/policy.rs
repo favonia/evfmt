@@ -1,7 +1,7 @@
 //! Formatter policy configuration.
 //!
 //! Policy applies only to selector slots whose state remains ambiguous after
-//! sequence-specific cleanup. Ordinary and keycap-character slots query the
+//! sequence-specific cleanup. Non-keycap and keycap-character slots query the
 //! corresponding domains of the same policy sets; ZWJ,
 //! malformed-selector, and other fixed-cleanup cases are repaired before
 //! policy is consulted.
@@ -15,11 +15,11 @@
 //!
 //! The default policy uses [`policy_key_set::ASCII`] plus
 //! [`policy_key_set::EMOJI_DEFAULTS`] for `prefer_bare` and
-//! [`policy_key_set::ASCII`] plus [`policy_key_set::KEYCAP_CHARS`] for
+//! [`policy_key_set::TEXT_DEFAULTS`] plus [`policy_key_set::KEYCAP_CHARS`] for
 //! `bare_as_text`. That keeps ASCII bare forms such as `#` canonical, removes
 //! redundant selectors such as the `FE0E` in `#\u{FE0E}`, keeps emoji-default
 //! bare forms such as `\u{2728}` canonical, resolves text-default bare forms
-//! such as `\u{00A9}` to emoji presentation by inserting `FE0F`, and resolves
+//! such as `\u{00A9}` to text presentation by inserting `FE0E`, and resolves
 //! bare keycap-character forms such as `#\u{20E3}` to text presentation by
 //! inserting `FE0E` before `U+20E3`.
 //!
@@ -33,7 +33,7 @@
 //! assert_eq!(format_text("#\u{FE0E}", &policy), FormatResult::Changed("#".into()));
 //! assert_eq!(
 //!     format_text("\u{00A9}", &policy),
-//!     FormatResult::Changed("\u{00A9}\u{FE0F}".into())
+//!     FormatResult::Changed("\u{00A9}\u{FE0E}".into())
 //! );
 //! ```
 
@@ -41,7 +41,7 @@ use crate::policy_key_set::{self, PolicyKeySet};
 
 /// Formatting policy for ambiguous selector slots.
 ///
-/// The policy is base-indexed with an ordinary/keycap domain qualifier. When
+/// The policy is base-indexed with a non-keycap/keycap domain qualifier. When
 /// policy is needed, `evfmt` builds a policy key from the variation-sequence
 /// base character and the selected domain, then queries the `prefer_bare` and
 /// `bare_as_text` sets with that key. The pair of answers determines the
@@ -71,7 +71,7 @@ use crate::policy_key_set::{self, PolicyKeySet};
 /// assert_eq!(format_text("#\u{FE0E}", &policy), FormatResult::Changed("#".into()));
 /// assert_eq!(
 ///     format_text("\u{00A9}", &policy),
-///     FormatResult::Changed("\u{00A9}\u{FE0F}".into())
+///     FormatResult::Changed("\u{00A9}\u{FE0E}".into())
 /// );
 /// assert_eq!(format_text("\u{2728}", &policy), FormatResult::Unchanged);
 ///
@@ -115,7 +115,7 @@ impl Policy {
     /// );
     ///
     /// assert_eq!(
-    ///     format_text("\u{00A9}\u{FE0F}", &policy),
+    ///     format_text("\u{00A9}\u{FE0E}", &policy),
     ///     FormatResult::Changed("\u{00A9}".into())
     /// );
     /// ```
@@ -140,7 +140,7 @@ impl Policy {
     /// });
     ///
     /// assert_eq!(
-    ///     format_text("\u{00A9}\u{FE0F}", &policy),
+    ///     format_text("\u{00A9}\u{FE0E}", &policy),
     ///     FormatResult::Changed("\u{00A9}".into())
     /// );
     /// ```
@@ -233,7 +233,7 @@ impl Default for Policy {
     fn default() -> Self {
         Self {
             prefer_bare: policy_key_set::ASCII | policy_key_set::EMOJI_DEFAULTS,
-            bare_as_text: policy_key_set::ASCII | policy_key_set::KEYCAP_CHARS,
+            bare_as_text: policy_key_set::TEXT_DEFAULTS | policy_key_set::KEYCAP_CHARS,
         }
     }
 }

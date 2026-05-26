@@ -127,14 +127,14 @@ fn check_help_describes_stateful_options() {
 #[test]
 fn format_rewrites_file() {
     let tmp = assert_fs::TempDir::new().unwrap();
-    // ©️ is eligible, text-default in Unicode, and not bare-preferred, so bare
-    // resolves to emoji under the default policy.
+    // U+00A9 is eligible, text-default in Unicode, and not bare-preferred, so
+    // bare resolves to text under the default policy.
     let file = tmp.child("test.txt");
     file.write_str("\u{00A9}").unwrap();
 
     format_command().arg(file.path()).assert().success().code(0);
 
-    file.assert("\u{00A9}\u{FE0F}");
+    file.assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -193,7 +193,7 @@ fn format_preserves_mode_bits() {
 
     format_command().arg(file.path()).assert().success().code(0);
 
-    file.assert("\u{00A9}\u{FE0F}");
+    file.assert("\u{00A9}\u{FE0E}");
     let mode = std::fs::metadata(file.path()).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o751);
 }
@@ -215,7 +215,7 @@ fn format_preserves_extended_attributes_when_supported() {
 
     format_command().arg(file.path()).assert().success().code(0);
 
-    file.assert("\u{00A9}\u{FE0F}");
+    file.assert("\u{00A9}\u{FE0E}");
     let value = xattr::get(file.path(), "user.evfmt-test").unwrap();
     assert_eq!(value.as_deref(), Some(b"kept".as_slice()));
 }
@@ -250,7 +250,7 @@ fn format_warns_when_extended_attributes_cannot_be_preserved() {
         .success()
         .stderr(predicates::str::contains("warning: xattr preserve error"));
 
-    file.assert("\u{00A9}\u{FE0F}");
+    file.assert("\u{00A9}\u{FE0E}");
 }
 
 // --- Check mode ---
@@ -309,7 +309,7 @@ fn stdin_stdout_via_dash() {
         .write_stdin("\u{00A9}")
         .assert()
         .success()
-        .stdout("\u{00A9}\u{FE0F}");
+        .stdout("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -318,7 +318,7 @@ fn format_without_files_reads_stdin() {
         .write_stdin("\u{00A9}")
         .assert()
         .success()
-        .stdout("\u{00A9}\u{FE0F}");
+        .stdout("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -369,7 +369,7 @@ fn repeated_dash_reads_same_stdin_stream_to_eof() {
         .write_stdin("\u{00A9}")
         .assert()
         .success()
-        .stdout("\u{00A9}\u{FE0F}");
+        .stdout("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -389,8 +389,8 @@ fn format_processes_file_stdin_file_operands() {
         .success()
         .stdout("#");
 
-    first.assert("\u{00A9}\u{FE0F}");
-    second.assert("\u{00AE}\u{FE0F}");
+    first.assert("\u{00A9}\u{FE0E}");
+    second.assert("\u{00AE}\u{FE0E}");
 }
 
 #[test]
@@ -431,7 +431,7 @@ fn dash_path_names_file_named_dash() {
         .success()
         .stdout("");
 
-    file.assert("\u{00A9}\u{FE0F}");
+    file.assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -440,7 +440,7 @@ fn stdin_preserves_missing_final_newline() {
         .write_stdin("\u{00A9}\n\u{00AE}")
         .assert()
         .success()
-        .stdout("\u{00A9}\u{FE0F}\n\u{00AE}\u{FE0F}");
+        .stdout("\u{00A9}\u{FE0E}\n\u{00AE}\u{FE0E}");
 }
 
 #[test]
@@ -451,7 +451,7 @@ fn file_formatting_preserves_crlf() {
 
     format_command().arg(file.path()).assert().success();
 
-    file.assert("\u{00A9}\u{FE0F}\r\n\u{00AE}\u{FE0F}\r\n");
+    file.assert("\u{00A9}\u{FE0E}\r\n\u{00AE}\u{FE0E}\r\n");
 }
 
 #[cfg(unix)]
@@ -542,7 +542,7 @@ fn format_subcommand_accepts_check_as_file_name() {
         .success()
         .code(0);
 
-    file.assert("\u{00A9}\u{FE0F}");
+    file.assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -589,7 +589,7 @@ fn option_like_file_allowed_after_separator_in_format_mode() {
         .success()
         .code(0);
 
-    file.assert("\u{00A9}\u{FE0F}");
+    file.assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -881,8 +881,8 @@ fn directory_walk_formats_recursively() {
 
     format_command().arg(tmp.path()).assert().success().code(0);
 
-    a.assert("\u{00A9}\u{FE0F}");
-    tmp.child("sub").child("b.txt").assert("\u{00A9}\u{FE0F}");
+    a.assert("\u{00A9}\u{FE0E}");
+    tmp.child("sub").child("b.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -895,7 +895,7 @@ fn evfmtignore_skips_matched_files() {
     format_command().arg(tmp.path()).assert().success();
 
     tmp.child("skip.txt").assert("\u{00A9}");
-    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -911,8 +911,8 @@ fn remove_ignore_evfmt_overrides_evfmtignore() {
         .assert()
         .success();
 
-    tmp.child("skip.txt").assert("\u{00A9}\u{FE0F}");
-    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("skip.txt").assert("\u{00A9}\u{FE0E}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -926,7 +926,7 @@ fn gitignore_skips_matched_files() {
     format_command().arg(tmp.path()).assert().success();
 
     tmp.child("skip.txt").assert("\u{00A9}");
-    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -943,8 +943,8 @@ fn remove_ignore_git_overrides_gitignore() {
         .assert()
         .success();
 
-    tmp.child("skip.txt").assert("\u{00A9}\u{FE0F}");
-    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("skip.txt").assert("\u{00A9}\u{FE0E}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -962,9 +962,9 @@ fn all_shortcut_applies_to_add_and_remove_ignore() {
         .assert()
         .success();
 
-    tmp.child(".hidden.txt").assert("\u{00A9}\u{FE0F}");
-    tmp.child("skip.txt").assert("\u{00A9}\u{FE0F}");
-    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child(".hidden.txt").assert("\u{00A9}\u{FE0E}");
+    tmp.child("skip.txt").assert("\u{00A9}\u{FE0E}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -983,8 +983,8 @@ fn set_ignore_none_then_add_hidden_reenables_only_hidden_filtering() {
         .success();
 
     tmp.child(".hidden.txt").assert("\u{00A9}");
-    tmp.child("skip.txt").assert("\u{00A9}\u{FE0F}");
-    tmp.child("keep.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("skip.txt").assert("\u{00A9}\u{FE0E}");
+    tmp.child("keep.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -1001,7 +1001,7 @@ fn ignore_labels_apply_left_to_right() {
         .success();
 
     tmp.child(".hidden.txt").assert("\u{00A9}");
-    tmp.child("visible.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("visible.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
@@ -1043,7 +1043,7 @@ fn hidden_files_skipped() {
 
     format_command().arg(tmp.path()).assert().success();
 
-    tmp.child("visible.txt").assert("\u{00A9}\u{FE0F}");
+    tmp.child("visible.txt").assert("\u{00A9}\u{FE0E}");
     tmp.child(".hidden.txt").assert("\u{00A9}");
 }
 
@@ -1061,8 +1061,8 @@ fn mixed_file_and_directory_operands() {
         .assert()
         .success();
 
-    solo.assert("\u{00A9}\u{FE0F}");
-    dir.child("a.txt").assert("\u{00A9}\u{FE0F}");
+    solo.assert("\u{00A9}\u{FE0E}");
+    dir.child("a.txt").assert("\u{00A9}\u{FE0E}");
 }
 
 #[test]
