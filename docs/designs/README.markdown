@@ -1,6 +1,6 @@
 # Design Documents
 
-This directory holds durable design notes for future developers, including AI agents.
+This directory holds durable design notes for future developers, including AI agents. Design notes are the home for binding contracts and frequently retrieved operating guidance. Use them when a future change needs the current rule, not only the historical reason for it.
 
 Use this file as a retrieval map. Each design note has "Read when:" and "Defines:" headers so you can decide whether to read it without opening the file.
 
@@ -9,7 +9,7 @@ Use this file as a retrieval map. Each design note has "Read when:" and "Defines
 ## Always Read
 
 - [`core/project-principles.markdown`](core/project-principles.markdown) — project-wide priorities for design tradeoffs
-- [`core/formatting-model.markdown`](core/formatting-model.markdown) — rule-engine layering, policy boundaries, canonicalization
+- [`core/formatting.markdown`](core/formatting.markdown) — abstract formatting model, selector slots, reasonable states, hard invariants
 
 ## Read When Needed
 
@@ -20,13 +20,21 @@ Use this file as a retrieval map. Each design note has "Read when:" and "Defines
 
 ### Feature models
 
-- [`features/formatter-policy.markdown`](features/formatter-policy.markdown) — policy defaults, warning semantics, exit codes
-- [`features/policy-key-set-api.markdown`](features/policy-key-set-api.markdown) — typed policy-key set API, named sets, and set operations
-- [`features/sequence-handling.markdown`](features/sequence-handling.markdown) — durable sequence-family contracts and policy boundaries
+- [`features/recognition.markdown`](features/recognition.markdown) — high-level scanner contract, recognition boundaries, selector visibility
+- [`features/classification.markdown`](features/classification.markdown) — selector-slot classification, fixed-cleanup conditions, policy domains
+- [`features/policy.markdown`](features/policy.markdown) — formatter policy predicates, decision table, defaults
+- [`features/cli.markdown`](features/cli.markdown) — CLI option grammar, modes, ignore filtering, exit codes
+- [`features/policy-key-set-api.markdown`](features/policy-key-set-api.markdown) — typed `PolicyKeySet` API, named sets, and set operations
+
+## Rationale Archive
+
+Rationale files are non-normative records of evidence, assumptions, tradeoffs, rejected alternatives, weak points, and revisit triggers. Read them when auditing, challenging, or replacing a design decision; do not treat them as behavior contracts or as the sole source for frequently used guidance.
+
+See [`../rationale/README.markdown`](../rationale/README.markdown) for the rationale archive index.
 
 ## Directory Scope
 
-Use `docs/designs/` only for durable design information that is broader than one local edit.
+Use `docs/designs/` only for durable design information that is broader than one local edit and likely to be retrieved while changing the project.
 
 - `core/` for project-wide principles and architecture
 - `features/` for durable feature contracts, invariants, and scope boundaries

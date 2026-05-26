@@ -4,7 +4,7 @@ Read when: changing the typed `PolicyKeySet` API, adding named sets, or modifyin
 
 Defines: the typed `PolicyKeySet` model exported through `evfmt::policy_key_set` and used by `evfmt::Policy`. The model describes finite sets of sanctioned formatter policy keys.
 
-Does not define: the CLI list grammar. The CLI uses ordered `set/add/remove` flags with comma-separated list items; see [formatter-policy.markdown](formatter-policy.markdown) for that surface.
+Does not define: the CLI list grammar. The CLI uses ordered `set/add/remove` flags with comma-separated list items; see [cli.markdown](cli.markdown) for that surface.
 
 ## Public Surface
 
@@ -36,7 +36,7 @@ The public typed surface is built from:
 
 Every `PolicyKeySet` contains policy keys. A policy key is one variation-sequence base plus one domain:
 
-- ordinary, queried with `contains(c)`
+- ordinary, queried with `contains(c)`, for non-keycap selector slots
 - keycap-character, queried with `contains_keycap(c)`, where the base is followed by `U+20E3 COMBINING ENCLOSING KEYCAP`
 
 Both domains are indexed by the same pinned `emoji-variation-sequences.txt` base-character table. Characters outside that table never form policy keys.
@@ -47,21 +47,21 @@ The internal bitset type is private. Public code should treat `PolicyKeySet` as 
 
 | Constructor                         | Meaning                                                                            |
 | ----------------------------------- | ---------------------------------------------------------------------------------- |
-| `PolicyKeySet::all()`               | Every ordinary and keycap-character policy key                                     |
+| `PolicyKeySet::all()`               | Every non-keycap and keycap-character policy key                                   |
 | `PolicyKeySet::none()`              | No policy key                                                                      |
-| `PolicyKeySet::singleton(c)`        | One ordinary policy key, or empty if `c` is outside the policy universe            |
+| `PolicyKeySet::singleton(c)`        | One non-keycap policy key, or empty if `c` is outside the policy universe          |
 | `PolicyKeySet::singleton_keycap(c)` | One keycap-character policy key, or empty if `c` is outside the policy universe    |
-| `policy_key_set::ASCII`             | ASCII variation-sequence bases as ordinary policy keys                             |
-| `policy_key_set::TEXT_DEFAULTS`     | Text-default variation-sequence bases as ordinary policy keys                      |
-| `policy_key_set::EMOJI_DEFAULTS`    | Emoji-default variation-sequence bases as ordinary policy keys                     |
+| `policy_key_set::ASCII`             | ASCII variation-sequence bases as non-keycap policy keys                           |
+| `policy_key_set::TEXT_DEFAULTS`     | Text-default variation-sequence bases as non-keycap policy keys                    |
+| `policy_key_set::EMOJI_DEFAULTS`    | Emoji-default variation-sequence bases as non-keycap policy keys                   |
 | `policy_key_set::RIGHTS_MARKS`      | The rights marks currently listed in Unicode's `emoji-variation-sequences.txt`     |
 | `policy_key_set::ARROWS`            | The arrow characters currently listed in Unicode's `emoji-variation-sequences.txt` |
 | `policy_key_set::CARD_SUITS`        | The card suits currently listed in Unicode's `emoji-variation-sequences.txt`       |
 | `policy_key_set::KEYCAP_CHARS`      | Every keycap-character policy key for a variation-sequence base                    |
-| `policy_key_set::NON_KEYCAP_CHARS`  | Every ordinary policy key for a variation-sequence base                            |
+| `policy_key_set::NON_KEYCAP_CHARS`  | Every non-keycap policy key for a variation-sequence base                          |
 | `policy_key_set::KEYCAP_EMOJIS`     | RGI emoji keycap bases (`#`, `*`, `0`-`9`) as keycap-character policy keys         |
 
-Semantic named sets such as `ASCII`, `RIGHTS_MARKS`, `ARROWS`, and `CARD_SUITS` affect ordinary policy keys only. Keycap-specific membership is expressed explicitly with `KEYCAP_CHARS`, `KEYCAP_EMOJIS`, or `PolicyKeySet::singleton_keycap(c)`.
+Semantic named sets such as `ASCII`, `TEXT_DEFAULTS`, `EMOJI_DEFAULTS`, `RIGHTS_MARKS`, `ARROWS`, and `CARD_SUITS` affect non-keycap policy keys only. Keycap-specific membership is expressed explicitly with `KEYCAP_CHARS`, `KEYCAP_EMOJIS`, or `PolicyKeySet::singleton_keycap(c)`.
 
 `PolicyKeySet::all()` is exactly:
 
@@ -79,7 +79,7 @@ policy_key_set::KEYCAP_CHARS | policy_key_set::NON_KEYCAP_CHARS
 | `set ^ other`  | Policy keys matched by exactly one set            |
 | `set - other`  | Policy keys in `set` but not in `other`           |
 
-Operators apply componentwise to ordinary and keycap-character domains. The assignment operators `|=`, `&=`, `^=`, and `-=` have the corresponding in-place meanings.
+Operators apply componentwise to non-keycap and keycap-character domains. The assignment operators `|=`, `&=`, `^=`, and `-=` have the corresponding in-place meanings.
 
 ## Display
 
@@ -94,7 +94,7 @@ Examples:
 | Query                                                | Meaning                                                       |
 | ---------------------------------------------------- | ------------------------------------------------------------- |
 | `policy_key_set::is_variation_sequence_character(c)` | Whether `c` is inside the eligible base-character table       |
-| `set.contains(c)`                                    | Whether the ordinary policy key for `c` is in the set         |
+| `set.contains(c)`                                    | Whether the non-keycap policy key for `c` is in the set       |
 | `set.contains_keycap(c)`                             | Whether the keycap-character policy key for `c` is in the set |
 
 ## Examples

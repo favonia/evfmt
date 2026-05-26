@@ -16,13 +16,13 @@ The routine gate should cover the load-bearing claims of the formatter with inde
 
 - spec-level semantic evidence for policy resolution, selector states, and fixed-cleanup boundaries
 - conformance evidence that parses pinned Unicode data and compares it with generated runtime tables
-- sequence-data evidence that checks the structural assumptions used by scanner recognition and sequence-family cleanup
+- sequence-data evidence that checks the structural assumptions used by scanner recognition and selector-slot classification
 - behavioral evidence over representative or exhaustive selector contexts, with expected output computed independently from formatter production logic
 - property-based string evidence for hard invariants such as idempotence, no remaining findings, and selector-only rewrites
 - scanner evidence for losslessness and one-pass recognition of selector-repairable structure
 - CLI integration evidence for the public batch-formatting contract
 
-This guide names evidence families, not a test inventory. Formatter-level invariants belong in [formatting-model.markdown](../core/formatting-model.markdown); sequence-family contracts and scanner-recognition boundaries belong in [sequence-handling.markdown](../features/sequence-handling.markdown); pinned Unicode inputs and generated-data wiring belong in [workspace-layout.markdown](workspace-layout.markdown).
+This guide names evidence families, not a test inventory. Formatter-level invariants belong in [formatting.markdown](../core/formatting.markdown); scanner-recognition boundaries belong in [recognition.markdown](../features/recognition.markdown); selector-slot classification belongs in [classification.markdown](../features/classification.markdown); pinned Unicode inputs and generated-data wiring belong in [workspace-layout.markdown](workspace-layout.markdown).
 
 ## Deeper evidence
 
