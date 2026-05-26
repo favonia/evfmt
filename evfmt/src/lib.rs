@@ -16,7 +16,7 @@
 //! In the example below, `#\u{FE0E}` is NUMBER SIGN followed by VS15, and
 //! `\u{00A9}` is a bare COPYRIGHT SIGN. Under the default policy,
 //! `#\u{FE0E}` loses the redundant variation selector, while bare `\u{00A9}` is
-//! canonicalized to `\u{00A9}\u{FE0F}` because it is text-default.
+//! canonicalized to `\u{00A9}\u{FE0E}` because it is text-default.
 //!
 //! ```rust
 //! use evfmt::{FormatResult, Policy, format_text};
@@ -29,7 +29,7 @@
 //! );
 //! assert_eq!(
 //!     format_text("\u{00A9}", &policy),
-//!     FormatResult::Changed("\u{00A9}\u{FE0F}".to_owned())
+//!     FormatResult::Changed("\u{00A9}\u{FE0E}".to_owned())
 //! );
 //! assert_eq!(format_text("\u{2728}", &policy), FormatResult::Unchanged);
 //! ```

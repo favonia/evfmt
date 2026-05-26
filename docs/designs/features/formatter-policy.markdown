@@ -81,7 +81,7 @@ You can also derive the predicates from the actions you want:
 
 ```sh
 --set-prefer-bare=ascii,emoji-defaults
---set-bare-as-text=ascii,keycap-chars
+--set-bare-as-text=text-defaults,keycap-chars
 --set-ignore=git,evfmt,hidden
 ```
 
@@ -89,15 +89,15 @@ This means:
 
 - ASCII ambiguous bare forms stay bare
 - emoji-default ambiguous bare forms stay bare
-- text-default non-ASCII ambiguous bare forms default to emoji presentation
+- text-default non-ASCII ambiguous bare forms default to text presentation
 - bare keycap-character forms default to text presentation
 
-With the default sets `bare-as-text = ascii,keycap-chars` and `preferred-bare = ascii,emoji-defaults`, the resulting actions are:
+With the default sets `bare-as-text = text-defaults,keycap-chars` and `preferred-bare = ascii,emoji-defaults`, the resulting actions are:
 
-|                                                     | Treating bare as text (`ascii,keycap-chars`)       | Not treating bare as text (except `ascii,keycap-chars`)   |
-| --------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------- |
-| Preferring bare (`ascii,emoji-defaults`)            | Change text to bare for ASCII                      | Change emoji to bare for emoji-default positions          |
-| Not preferring bare (except `ascii,emoji-defaults`) | Change bare to text for keycap-character positions | Change bare to emoji for text-default non-ASCII positions |
+|                                                     | Treating bare as text (`text-defaults,keycap-chars`)      | Not treating bare as text (except `text-defaults,keycap-chars`) |
+| --------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- |
+| Preferring bare (`ascii,emoji-defaults`)            | Change text to bare for ASCII                             | Change emoji to bare for emoji-default positions                |
+| Not preferring bare (except `ascii,emoji-defaults`) | Change bare to text for text-default and keycap positions | Change bare to emoji for remaining non-keycap positions         |
 
 ## Formatting modes
 

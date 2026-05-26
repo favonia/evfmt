@@ -288,11 +288,11 @@ fn keycap_forms_match_formatter_contract() {
 fn zwj_related_selector_cases_match_formatter_contract() {
     assert_format(
         "\u{2764}\u{200D}\u{1F525}",
-        &FormatResult::Changed("\u{2764}\u{FE0F}\u{200D}\u{1F525}".to_owned()),
+        &FormatResult::Changed("\u{2764}\u{FE0E}\u{200D}\u{1F525}".to_owned()),
     );
     assert_format(
         "\u{1F525}\u{200D}\u{FE0F}\u{2764}",
-        &FormatResult::Changed("\u{1F525}\u{200D}\u{2764}\u{FE0F}".to_owned()),
+        &FormatResult::Changed("\u{1F525}\u{200D}\u{2764}\u{FE0E}".to_owned()),
     );
     assert_format(
         "\u{00A1}\u{FE0E}\u{200D}",
