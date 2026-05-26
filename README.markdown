@@ -234,12 +234,12 @@ The policy is shaped by two choices: how bare characters render on your _referen
 
 The CLI exposes those choices as two mutable sets:
 
-- `bare-as-text`: Which variation positions the reference platform shows as text when bare. Many modern platforms show bare non-ASCII, non-keycap characters as emoji, so the default set is `ascii,keycap-chars`.
+- `bare-as-text`: For which policy keys the reference platform shows bare spelling as text. Many modern platforms show bare non-ASCII, non-keycap characters as emoji, so the default set is `ascii,keycap-chars`.
 - `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is `ascii,emoji-defaults`, so characters with default emoji presentation in Unicode stay bare, while text-default non-ASCII characters still get explicit selectors.
 
 To choose the right policy, first decide whether a character's bare form looks like text or emoji on your reference platform. Put it in `bare-as-text` if the bare form looks like text. Then decide whether the character should stay bare in the files you publish, as long as doing so preserves the intended presentation. Put it in `prefer-bare` if bare spelling is stable enough for your target platforms.
 
-The two choices determine how `evfmt` repairs each ambiguous standalone variation position:
+The two choices determine how `evfmt` repairs each ambiguous standalone selector slot:
 
 | If a character is...                | `evfmt` does this                                   |
 | ----------------------------------- | --------------------------------------------------- |
@@ -252,7 +252,7 @@ With the default sets `bare-as-text = ascii,keycap-chars` and `prefer-bare = asc
 
 #### Policy Flags
 
-Use these flags to update the policy sets. Each flag takes one or more comma-separated variation sets:
+Use these flags to update the policy sets. Each flag takes one or more comma-separated set items:
 
 To update the `bare-as-text` set:
 
@@ -288,7 +288,7 @@ Each `<set>` in the list can be either one of the named sets below, one code poi
 
 The meaning of named sets may change as Unicode adds or revises dual-presentation characters.
 
-Use `all` by itself to select every variation position `evfmt` can format. For example, `--remove-prefer-bare=all` makes every format-supported position require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII and bare keycap-character forms then normalize to explicit text form and ordinary bare non-ASCII normalizes to explicit emoji form.
+Use `all` by itself to select every policy key `evfmt` can resolve. For example, `--remove-prefer-bare=all` makes every policy-resolved selector slot require an explicit selector. Use `none` by itself with `--set-*` policy flags to clear that policy set. For example, `--set-prefer-bare=none` stops keeping any character bare just because it was in `prefer-bare`; with the default `bare-as-text` set, bare ASCII and bare keycap-character forms then normalize to explicit text form and ordinary bare non-ASCII normalizes to explicit emoji form.
 
 ## ⚖️ License
 

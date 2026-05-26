@@ -1,21 +1,21 @@
-//! Finite variation-position sets for formatter policy.
+//! Finite policy-key sets for formatter policy.
 //!
-//! This module owns the typed variation-set model used by policy configuration.
-//! The public universe has two domains, both indexed by the repository's
-//! pinned `emoji-variation-sequences.txt` base-character table:
+//! This module owns the typed `PolicyKeySet` model used by policy configuration.
+//! The public universe contains policy keys. Each key is one variation-sequence
+//! base plus one domain:
 //!
-//! - ordinary non-keycap variation positions
-//! - keycap-character positions, where the same base is followed by
+//! - ordinary
+//! - keycap-character, where the same base is followed by
 //!   `U+20E3 COMBINING ENCLOSING KEYCAP`
 //!
 //! # Examples
 //!
 //! ```rust
-//! use evfmt::{FormatResult, Policy, format_text, variation_set};
+//! use evfmt::{FormatResult, Policy, format_text, policy_key_set};
 //!
 //! let policy = Policy::default()
-//!     .with_prefer_bare(variation_set::ASCII | variation_set::RIGHTS_MARKS)
-//!     .with_bare_as_text(variation_set::ASCII | variation_set::RIGHTS_MARKS);
+//!     .with_prefer_bare(policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS)
+//!     .with_bare_as_text(policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS);
 //!
 //! assert_eq!(format_text("\u{00A9}", &policy), FormatResult::Unchanged);
 //! ```
@@ -32,59 +32,59 @@ const CHARSET_WORDS: usize = unicode::VARIATION_ENTRY_COUNT.div_ceil(WORD_BITS);
 const ALL_CHARS: CharSet = CharSet { bits: all_bits() };
 
 /// ASCII characters (U+0000-U+007F).
-pub const ASCII: VariationSet = VariationSet {
+pub const ASCII: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::Ascii),
     },
     keycap_chars: CharSet::none(),
 };
 /// Variation-sequence characters whose Unicode default side is text.
-pub const TEXT_DEFAULTS: VariationSet = VariationSet {
+pub const TEXT_DEFAULTS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::TextDefaults),
     },
     keycap_chars: CharSet::none(),
 };
 /// Variation-sequence characters whose Unicode default side is emoji.
-pub const EMOJI_DEFAULTS: VariationSet = VariationSet {
+pub const EMOJI_DEFAULTS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::EmojiDefaults),
     },
     keycap_chars: CharSet::none(),
 };
 /// ©️ (U+00A9), ®️ (U+00AE), ™️ (U+2122).
-pub const RIGHTS_MARKS: VariationSet = VariationSet {
+pub const RIGHTS_MARKS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::RightsMarks),
     },
     keycap_chars: CharSet::none(),
 };
 /// Arrow characters used by the formatter policy docs.
-pub const ARROWS: VariationSet = VariationSet {
+pub const ARROWS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::Arrows),
     },
     keycap_chars: CharSet::none(),
 };
 /// ♠️ (U+2660), ♣️ (U+2663), ♥️ (U+2665), ♦️ (U+2666).
-pub const CARD_SUITS: VariationSet = VariationSet {
+pub const CARD_SUITS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::CardSuits),
     },
     keycap_chars: CharSet::none(),
 };
-/// Every ordinary non-keycap variation-sequence base position.
-pub const NON_KEYCAP_CHARS: VariationSet = VariationSet {
+/// Every ordinary policy key for a variation-sequence base.
+pub const NON_KEYCAP_CHARS: PolicyKeySet = PolicyKeySet {
     chars: ALL_CHARS,
     keycap_chars: CharSet::none(),
 };
-/// Every keycap-character position for a variation-sequence base.
-pub const KEYCAP_CHARS: VariationSet = VariationSet {
+/// Every keycap-character policy key for a variation-sequence base.
+pub const KEYCAP_CHARS: PolicyKeySet = PolicyKeySet {
     chars: CharSet::none(),
     keycap_chars: ALL_CHARS,
 };
-/// RGI emoji keycap bases (`#`, `*`, `0`-`9`) in keycap-character positions.
-pub const KEYCAP_EMOJIS: VariationSet = VariationSet {
+/// RGI emoji keycap bases (`#`, `*`, `0`-`9`) as keycap-character policy keys.
+pub const KEYCAP_EMOJIS: PolicyKeySet = PolicyKeySet {
     chars: CharSet::none(),
     keycap_chars: CharSet {
         bits: named_bits(NamedSet::KeycapEmojis),
@@ -102,28 +102,27 @@ enum NamedSet {
     KeycapEmojis,
 }
 
-/// A finite set of formatter variation positions.
+/// A finite set of formatter policy keys.
 ///
-/// The universe has two domains: ordinary non-keycap positions and
-/// keycap-character positions. Both domains are indexed by the generated
-/// variation-sequence base table. Characters outside that table are never
-/// members, including in [`VariationSet::all`].
+/// The universe has two domains: ordinary and keycap-character. Both domains
+/// are indexed by the generated variation-sequence base table. Characters
+/// outside that table never form policy keys, including in [`PolicyKeySet::all`].
 ///
 /// # Examples
 ///
 /// ```rust
-/// use evfmt::{VariationSet, variation_set};
+/// use evfmt::{PolicyKeySet, policy_key_set};
 ///
-/// let rights_marks = variation_set::RIGHTS_MARKS;
+/// let rights_marks = policy_key_set::RIGHTS_MARKS;
 /// assert!(rights_marks.contains('\u{00A9}'));
 /// assert!(!rights_marks.contains_keycap('\u{00A9}'));
 ///
-/// let keycap_hash = VariationSet::singleton_keycap('#');
+/// let keycap_hash = PolicyKeySet::singleton_keycap('#');
 /// assert!(keycap_hash.contains_keycap('#'));
 /// assert!(!keycap_hash.contains('#'));
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct VariationSet {
+pub struct PolicyKeySet {
     chars: CharSet,
     keycap_chars: CharSet,
 }
@@ -143,7 +142,7 @@ struct CharSet {
 /// # Examples
 ///
 /// ```rust
-/// use evfmt::variation_set::is_variation_sequence_character;
+/// use evfmt::policy_key_set::is_variation_sequence_character;
 ///
 /// assert!(is_variation_sequence_character('\u{00A9}'));
 /// assert!(!is_variation_sequence_character('A'));
@@ -153,9 +152,9 @@ pub fn is_variation_sequence_character(ch: char) -> bool {
     has_variation_sequence(ch)
 }
 
-impl VariationSet {
-    /// Construct the set containing every eligible ordinary and keycap
-    /// variation position.
+impl PolicyKeySet {
+    /// Construct the set containing every eligible ordinary and keycap-character
+    /// policy key.
     #[must_use]
     pub const fn all() -> Self {
         Self {
@@ -186,7 +185,7 @@ impl VariationSet {
     }
 
     /// Construct a singleton set containing one eligible keycap-character
-    /// position.
+    /// policy key.
     ///
     /// Returns the empty set when `ch` is outside the variation-sequence
     /// character universe checked by [`is_variation_sequence_character`].
@@ -198,13 +197,13 @@ impl VariationSet {
         }
     }
 
-    /// Return whether the set contains the given ordinary character position.
+    /// Return whether the set contains the ordinary policy key for `ch`.
     #[must_use]
     pub fn contains(&self, ch: char) -> bool {
         self.chars.contains(ch)
     }
 
-    /// Return whether the set contains the given keycap-character position.
+    /// Return whether the set contains the keycap-character policy key for `ch`.
     #[must_use]
     pub fn contains_keycap(&self, ch: char) -> bool {
         self.keycap_chars.contains(ch)
@@ -296,13 +295,13 @@ const fn named_entry_matches(id: NamedSet, ch: char) -> bool {
     }
 }
 
-impl Default for VariationSet {
+impl Default for PolicyKeySet {
     fn default() -> Self {
         Self::none()
     }
 }
 
-impl Not for VariationSet {
+impl Not for PolicyKeySet {
     type Output = Self;
 
     fn not(self) -> Self::Output {
@@ -310,7 +309,7 @@ impl Not for VariationSet {
     }
 }
 
-impl BitOr for VariationSet {
+impl BitOr for PolicyKeySet {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
@@ -321,13 +320,13 @@ impl BitOr for VariationSet {
     }
 }
 
-impl BitOrAssign for VariationSet {
+impl BitOrAssign for PolicyKeySet {
     fn bitor_assign(&mut self, rhs: Self) {
         *self = *self | rhs;
     }
 }
 
-impl BitAnd for VariationSet {
+impl BitAnd for PolicyKeySet {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
@@ -338,13 +337,13 @@ impl BitAnd for VariationSet {
     }
 }
 
-impl BitAndAssign for VariationSet {
+impl BitAndAssign for PolicyKeySet {
     fn bitand_assign(&mut self, rhs: Self) {
         *self = *self & rhs;
     }
 }
 
-impl BitXor for VariationSet {
+impl BitXor for PolicyKeySet {
     type Output = Self;
 
     fn bitxor(self, rhs: Self) -> Self::Output {
@@ -355,13 +354,13 @@ impl BitXor for VariationSet {
     }
 }
 
-impl BitXorAssign for VariationSet {
+impl BitXorAssign for PolicyKeySet {
     fn bitxor_assign(&mut self, rhs: Self) {
         *self = *self ^ rhs;
     }
 }
 
-impl Sub for VariationSet {
+impl Sub for PolicyKeySet {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -372,13 +371,13 @@ impl Sub for VariationSet {
     }
 }
 
-impl SubAssign for VariationSet {
+impl SubAssign for PolicyKeySet {
     fn sub_assign(&mut self, rhs: Self) {
         *self = *self - rhs;
     }
 }
 
-impl fmt::Display for VariationSet {
+impl fmt::Display for PolicyKeySet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if *self == Self::none() {
             return write!(f, "none");

@@ -1,21 +1,21 @@
 //! Formatter policy configuration.
 //!
-//! Policy applies only to standalone variation positions whose selector state
-//! remains ambiguous after sequence-specific cleanup. Standalone
-//! keycap-character forms use the keycap domain of the same policy sets; ZWJ,
+//! Policy applies only to selector slots whose state remains ambiguous after
+//! sequence-specific cleanup. Ordinary and keycap-character slots query the
+//! corresponding domains of the same policy sets; ZWJ,
 //! malformed-selector, and other fixed-cleanup cases are repaired before
 //! policy is consulted.
 //!
-//! A policy is expressed with two [`VariationSet`] predicates:
+//! A policy is expressed with two [`PolicyKeySet`] predicates:
 //!
-//! - `prefer_bare`: positions whose bare form is canonical when bare can
+//! - `prefer_bare`: policy keys for which bare spelling is canonical when bare can
 //!   preserve the selected presentation
-//! - `bare_as_text`: positions whose bare form should be interpreted as text
+//! - `bare_as_text`: policy keys for which bare spelling should be interpreted as text
 //!   presentation, rather than emoji presentation
 //!
-//! The default policy uses [`variation_set::ASCII`] plus
-//! [`variation_set::EMOJI_DEFAULTS`] for `prefer_bare` and
-//! [`variation_set::ASCII`] plus [`variation_set::KEYCAP_CHARS`] for
+//! The default policy uses [`policy_key_set::ASCII`] plus
+//! [`policy_key_set::EMOJI_DEFAULTS`] for `prefer_bare` and
+//! [`policy_key_set::ASCII`] plus [`policy_key_set::KEYCAP_CHARS`] for
 //! `bare_as_text`. That keeps ASCII bare forms such as `#` canonical, removes
 //! redundant selectors such as the `FE0E` in `#\u{FE0E}`, keeps emoji-default
 //! bare forms such as `\u{2728}` canonical, resolves text-default bare forms
@@ -37,15 +37,15 @@
 //! );
 //! ```
 
-use crate::variation_set::{self, VariationSet};
+use crate::policy_key_set::{self, PolicyKeySet};
 
-/// Formatting policy for standalone variation positions.
+/// Formatting policy for ambiguous selector slots.
 ///
-/// The policy is base-indexed with an ordinary/keycap domain qualifier: when
-/// policy is needed, `evfmt` uses the variation-sequence base character to
-/// query either the ordinary or keycap domain of the `prefer_bare` and
-/// `bare_as_text` sets. The pair of answers determines the canonical
-/// replacement outcomes:
+/// The policy is base-indexed with an ordinary/keycap domain qualifier. When
+/// policy is needed, `evfmt` builds a policy key from the variation-sequence
+/// base character and the selected domain, then queries the `prefer_bare` and
+/// `bare_as_text` sets with that key. The pair of answers determines the
+/// canonical replacement outcomes:
 ///
 /// - in both sets: `FE0E` text presentation becomes bare, while bare stays bare
 /// - only in `prefer_bare`: `FE0F` emoji presentation becomes bare, while bare
@@ -64,7 +64,7 @@ use crate::variation_set::{self, VariationSet};
 /// # Examples
 ///
 /// ```rust
-/// use evfmt::{FormatResult, Policy, format_text, variation_set};
+/// use evfmt::{FormatResult, Policy, format_text, policy_key_set};
 ///
 /// let policy = Policy::default();
 ///
@@ -76,7 +76,7 @@ use crate::variation_set::{self, VariationSet};
 /// assert_eq!(format_text("\u{2728}", &policy), FormatResult::Unchanged);
 ///
 /// let rights_marks =
-///     variation_set::ASCII | variation_set::RIGHTS_MARKS;
+///     policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS;
 /// let policy = Policy::default()
 ///     .with_prefer_bare(rights_marks)
 ///     .with_bare_as_text(rights_marks);
@@ -86,10 +86,10 @@ use crate::variation_set::{self, VariationSet};
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Policy {
-    /// Positions whose bare form is canonical when it preserves presentation.
-    prefer_bare: VariationSet,
-    /// Positions whose bare form represents text presentation.
-    bare_as_text: VariationSet,
+    /// Policy keys for which bare spelling is canonical when it preserves presentation.
+    prefer_bare: PolicyKeySet,
+    /// Policy keys for which bare spelling represents text presentation.
+    bare_as_text: PolicyKeySet,
 }
 
 impl Policy {
@@ -108,10 +108,10 @@ impl Policy {
     /// # Examples
     ///
     /// ```rust
-    /// use evfmt::{FormatResult, Policy, format_text, variation_set};
+    /// use evfmt::{FormatResult, Policy, format_text, policy_key_set};
     ///
     /// let policy = Policy::default().with_prefer_bare(
-    ///     variation_set::ASCII | variation_set::RIGHTS_MARKS,
+    ///     policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS,
     /// );
     ///
     /// assert_eq!(
@@ -120,7 +120,7 @@ impl Policy {
     /// );
     /// ```
     #[must_use]
-    pub fn with_prefer_bare(mut self, prefer_bare: VariationSet) -> Self {
+    pub fn with_prefer_bare(mut self, prefer_bare: PolicyKeySet) -> Self {
         self.prefer_bare = prefer_bare;
         self
     }
@@ -133,10 +133,10 @@ impl Policy {
     /// # Examples
     ///
     /// ```rust
-    /// use evfmt::{FormatResult, Policy, format_text, variation_set};
+    /// use evfmt::{FormatResult, Policy, format_text, policy_key_set};
     ///
     /// let policy = Policy::default().modify_prefer_bare(|set| {
-    ///     set | variation_set::RIGHTS_MARKS
+    ///     set | policy_key_set::RIGHTS_MARKS
     /// });
     ///
     /// assert_eq!(
@@ -145,7 +145,7 @@ impl Policy {
     /// );
     /// ```
     #[must_use]
-    pub fn modify_prefer_bare(mut self, modify: impl FnOnce(VariationSet) -> VariationSet) -> Self {
+    pub fn modify_prefer_bare(mut self, modify: impl FnOnce(PolicyKeySet) -> PolicyKeySet) -> Self {
         self.prefer_bare = modify(self.prefer_bare);
         self
     }
@@ -164,11 +164,11 @@ impl Policy {
     /// # Examples
     ///
     /// ```rust
-    /// use evfmt::{FormatResult, Policy, VariationSet, format_text};
+    /// use evfmt::{FormatResult, Policy, PolicyKeySet, format_text};
     ///
     /// let policy = Policy::default()
-    ///     .with_prefer_bare(VariationSet::none())
-    ///     .with_bare_as_text(VariationSet::all());
+    ///     .with_prefer_bare(PolicyKeySet::none())
+    ///     .with_bare_as_text(PolicyKeySet::all());
     ///
     /// assert_eq!(
     ///     format_text("\u{00A9}", &policy),
@@ -176,7 +176,7 @@ impl Policy {
     /// );
     /// ```
     #[must_use]
-    pub fn with_bare_as_text(mut self, bare_as_text: VariationSet) -> Self {
+    pub fn with_bare_as_text(mut self, bare_as_text: PolicyKeySet) -> Self {
         self.bare_as_text = bare_as_text;
         self
     }
@@ -189,10 +189,10 @@ impl Policy {
     /// # Examples
     ///
     /// ```rust
-    /// use evfmt::{FormatResult, Policy, format_text, variation_set};
+    /// use evfmt::{FormatResult, Policy, format_text, policy_key_set};
     ///
     /// let policy = Policy::default()
-    ///     .modify_bare_as_text(|set| set | variation_set::RIGHTS_MARKS);
+    ///     .modify_bare_as_text(|set| set | policy_key_set::RIGHTS_MARKS);
     ///
     /// assert_eq!(
     ///     format_text("\u{00A9}", &policy),
@@ -202,7 +202,7 @@ impl Policy {
     #[must_use]
     pub fn modify_bare_as_text(
         mut self,
-        modify: impl FnOnce(VariationSet) -> VariationSet,
+        modify: impl FnOnce(PolicyKeySet) -> PolicyKeySet,
     ) -> Self {
         self.bare_as_text = modify(self.bare_as_text);
         self
@@ -232,8 +232,8 @@ impl Policy {
 impl Default for Policy {
     fn default() -> Self {
         Self {
-            prefer_bare: variation_set::ASCII | variation_set::EMOJI_DEFAULTS,
-            bare_as_text: variation_set::ASCII | variation_set::KEYCAP_CHARS,
+            prefer_bare: policy_key_set::ASCII | policy_key_set::EMOJI_DEFAULTS,
+            bare_as_text: policy_key_set::ASCII | policy_key_set::KEYCAP_CHARS,
         }
     }
 }

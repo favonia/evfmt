@@ -17,15 +17,15 @@ fn assert_finding_length_invariants(finding: &Finding<'_>) {
     let replacement_chars = replacement.chars().count() as isize;
     let char_delta = replacement_chars - raw_chars;
     let expected_char_delta = non_canonicality.missing_required_selectors as isize
-        + non_canonicality.bases_to_resolve as isize
+        + non_canonicality.presentation_decisions as isize
         - non_canonicality.unsanctioned_selectors as isize
         - non_canonicality.defective_sequences as isize
         - non_canonicality.redundant_selectors as isize;
 
     assert_eq!(
         finding.default_decisions().len(),
-        non_canonicality.bases_to_resolve,
-        "decision slots must match bases_to_resolve"
+        non_canonicality.presentation_decisions,
+        "decision slots must match presentation_decisions"
     );
     assert_eq!(
         char_delta, expected_char_delta,

@@ -4,7 +4,7 @@
 //! conceptual formatting algorithm. It produces findings with whole-item
 //! canonical replacements, so callers can apply the formatter's default
 //! decisions or supply a source-order decision vector for ambiguous selector
-//! contexts without re-reading policy for the same item.
+//! slots without re-reading policy for the same item.
 //! Interactive callers normally use this module directly: [`analyze_scan_item`]
 //! computes reasonableness, applies [`Policy`] only where policy is relevant,
 //! and stores valid replacement decisions in each [`Finding`].
@@ -109,7 +109,7 @@ pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Fin
             //
             // This is the analysis-side implementation of the ZWJ-related
             // sequence contract in
-            // `docs/designs/features/sequence-handling.markdown`.
+            // `docs/designs/features/classification.markdown`.
             EmojiSequence::LinksOnly(links) => analyze_links_only_zwj_sequence(item, links),
             EmojiSequence::EmojiHeaded {
                 first,
@@ -315,10 +315,11 @@ enum SingletonBaseSelectorOutcome {
 /// modifier/keycap/tag characters; those belong to
 /// [`analyze_singleton_component`].
 ///
-/// The fixed-cleanup precedence lives in
-/// `docs/designs/features/sequence-handling.markdown`.
+/// The classification rule order lives in
+/// `docs/designs/features/classification.markdown`.
 ///
-/// Rule 6 is the only path where policy may be consulted.
+/// Rules that yield one reasonable state become fixed cleanup. The remaining
+/// ordinary/keycap cases enter policy.
 fn analyze_singleton_base_selectors(
     base: char,
     presentation_selectors_after_base: &[Presentation],
@@ -336,9 +337,9 @@ fn analyze_singleton_base_selectors(
         };
     }
 
-    // AI MAINTAINER NOTE: keep this precedence cascade as the single
-    // executable copy of the fixed-cleanup table in the design document. Each
-    // fixed-cleanup branch must construct the complete base outcome:
+    // AI MAINTAINER NOTE: keep this cascade aligned with the classification
+    // rule order in the design document. Each deterministic branch must
+    // construct the complete base outcome:
     // `canonical_presentation` and `NonCanonicality`. Do not move rule
     // dispatch into helper functions or split output selection from
     // non-canonicality accounting. Modification suffix cleanup belongs to
@@ -360,7 +361,7 @@ fn analyze_singleton_base_selectors(
             }
         }
         // Precedence 3: with no leading sanctioned FE0E, the modifier attaches
-        // to the bare base. Legacy FE0F in that position is the UTS #51
+        // to the bare base. Legacy FE0F in that selector slot is the UTS #51
         // defective form and is removed.
         Some(EmojiModification::EmojiModifier { .. }) => {
             let non_canonicality = match presentation_selectors_after_base {
@@ -412,8 +413,8 @@ fn analyze_singleton_base_selectors(
                 non_canonicality,
             }
         }
-        // Precedence 6: no fixed-cleanup context remains. Ordinary and
-        // keycap-character contexts use the matching policy domain.
+        // Final classification case: no deterministic cleanup context remains.
+        // Ordinary and keycap-character contexts use the matching policy domain.
         first_modification => analyze_policy_base_selectors(
             base,
             presentation_selectors_after_base,
@@ -428,8 +429,8 @@ fn analyze_singleton_base_selectors(
 
 /// Apply ordinary/keycap policy to a singleton base selector run.
 ///
-/// This is Rule 6 of the fixed-cleanup table: all deterministic cleanup
-/// contexts have already been ruled out. The function only classifies
+/// This is the policy side of the classification rules: all deterministic
+/// cleanup contexts have already been ruled out. The function only classifies
 /// `presentation_selectors_after_base` under the active policy domain and
 /// returns the resulting base selector outcome. It does not handle modification
 /// suffix cleanup.
@@ -476,13 +477,13 @@ fn analyze_policy_base_selectors(
         (SingletonRule::BareToEmoji, &[]) => {
             SingletonBaseSelectorOutcome::NeedsPresentationDecision {
                 default: Presentation::Emoji,
-                non_canonicality: NonCanonicality::RESOLVE,
+                non_canonicality: NonCanonicality::PRESENTATION_DECISION,
             }
         }
         (SingletonRule::BareToText, &[]) => {
             SingletonBaseSelectorOutcome::NeedsPresentationDecision {
                 default: Presentation::Text,
-                non_canonicality: NonCanonicality::RESOLVE,
+                non_canonicality: NonCanonicality::PRESENTATION_DECISION,
             }
         }
         // Exactly one presentation selector that matches the bare-side of the

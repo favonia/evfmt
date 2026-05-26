@@ -65,7 +65,7 @@ This is the key reduction step. Fixed-cleanup cases such as modifier defects, re
 
 ### Policy layer
 
-This layer applies only when more than one reasonable state remains. The intended public policy is base-indexed with an ordinary/keycap domain qualifier and uses two `VariationSet` membership predicates:
+This layer applies only when more than one reasonable state remains. The intended public policy is base-indexed with an ordinary/keycap domain qualifier and uses two `PolicyKeySet` membership predicates:
 
 - `prefer_bare(position)`
 - `bare_as_text(position)`
@@ -104,7 +104,7 @@ A local selector-bearing context after classification. A selector context is not
 
 ### Policy position
 
-The key used by formatter policy after a genuinely ambiguous selector context has survived fixed cleanup. A policy position is a variation-sequence base character plus an ordinary/keycap domain. `VariationSet` values contain policy positions, not arbitrary selector contexts.
+The key used by formatter policy after a genuinely ambiguous selector context has survived fixed cleanup. A policy position is a variation-sequence base character plus an ordinary/keycap domain. `PolicyKeySet` values contain policy positions, not arbitrary selector contexts.
 
 ### Reasonable state
 

@@ -11,7 +11,7 @@ Defines: the public policy surface, CLI modes, and exit codes.
 - the preferred-bare set
 - the bare-as-text set
 
-The CLI manages those predicates through ordered set operations, while the library can still construct them directly with the typed [VariationSet API](variation-set-api.markdown).
+The CLI manages those predicates through ordered set operations, while the library can still construct them directly with the typed [PolicyKeySet API](policy-key-set-api.markdown).
 
 ### Preferred-bare set
 
