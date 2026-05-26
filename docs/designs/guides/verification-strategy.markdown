@@ -4,127 +4,53 @@ Read when: adding or restructuring tests, or evaluating what a test actually pro
 
 Defines: the evidence model for correctness verification and the independence-of-evidence principle.
 
-The guiding rule is independence of evidence: each test layer should prove a different claim, and no two layers should share hidden assumptions.
+## Core rule
 
-## Verification tiers
+Routine correctness checks must be local, reproducible, and based on pinned repository inputs. They must not depend on network access, live upstream data, external monitoring, or other mutable state.
 
-Not all evidence belongs in the same execution tier.
+This rule does not mean every correctness check must be fast. It means ordinary development must have a local evidence base strong enough to protect the formatter's core claims before slower or upgrade-specific evidence is considered.
 
-Core correctness evidence must be runnable locally from pinned repository inputs, without depending on network access or mutable upstream state.
+## Routine gate
 
-Fast verification that depends only on those pinned local inputs belongs in the routine verification gate. Slower runs, external monitoring, and upgrade-specific evidence belong in deeper verification tiers, but only after the routine gate already covers the core correctness claims needed for ordinary development.
+The routine gate should cover the load-bearing claims of the formatter with independent local evidence:
 
-## Evidence layers
+- spec-level semantic evidence for policy resolution, selector states, and fixed-cleanup boundaries
+- conformance evidence that parses pinned Unicode data and compares it with generated runtime tables
+- sequence-data evidence that checks the structural assumptions used by scanner recognition and sequence-family cleanup
+- behavioral evidence over representative or exhaustive selector contexts, with expected output computed independently from formatter production logic
+- property-based string evidence for hard invariants such as idempotence, no remaining findings, and selector-only rewrites
+- scanner evidence for losslessness and one-pass recognition of selector-repairable structure
+- CLI integration evidence for the public batch-formatting contract
 
-### 1. Spec-level semantic evidence
+This guide names evidence families, not a test inventory. Formatter-level invariants belong in [formatting-model.markdown](../core/formatting-model.markdown); sequence-family contracts and scanner-recognition boundaries belong in [sequence-handling.markdown](../features/sequence-handling.markdown); pinned Unicode inputs and generated-data wiring belong in [workspace-layout.markdown](workspace-layout.markdown).
 
-A data-driven decision table where each row makes the semantic axes explicit:
+## Deeper evidence
 
-- context kind
-- sanctioned selector set
-- no selector / `FE0E` / `FE0F`
-- preferred-bare matches the policy position true/false
-- bare-as-text matches the policy position true/false
+Slower exhaustive runs, larger property campaigns, external monitoring, and expensive cross-checks may live outside the routine gate. They are useful for increasing confidence, finding missed cases, and preparing upgrades.
 
-### 2. Unicode-data conformance evidence
-
-An independent test parses the pinned Unicode source files committed to the repository and compares them against the generated runtime tables. This verifies:
-
-- the variation-sequence base set
-- text and emoji variation-sequence membership
-- Unicode default presentation side
-
-### 3. Sequence-data conformance evidence
-
-Independent tests parse `emoji-sequences.txt`, `emoji-zwj-sequences.txt`, `emoji-test.txt`, and related pinned repository inputs to verify the structural assumptions the formatter depends on:
-
-- keycap bases are exactly `#`, `*`, `0`-`9`
-- keycap cleanup remains policy-driven
-- modifier-sequence cleanup remains compatible with pinned Unicode data
-- ZWJ-related rules preserve component-local presentation semantics
-- non-emoji or otherwise unsupported ZWJ-component selectors are removed
-- variation-selector bases are single code points where the data model requires that property
-- any `emoji-test.txt` usage remains a qualification and family cross-check, not the sole source of formatter truth
-
-### 4. Exhaustive behavioral evidence
-
-Every variation-sequence entry is exercised under all relevant policy combinations and selector inputs. The expected output is computed independently from the formatter implementation. This evidence should remain local and reproducible. If the full exhaustive suite becomes too costly for the routine gate, that gate must still retain enough local evidence to protect the same load-bearing correctness claims, while the full exhaustive run can move to a deeper verification tier.
-
-### 5. Property-based string evidence
-
-Randomized tests verify:
-
-- idempotence
-- no illegal selectors in output
-- no unresolved disallowed bare forms in output
-- only selectors change
-
-Use a two-tier budget when needed: a quick randomized smoke run for every PR/push, and deeper or longer-running campaigns on a schedule.
-
-### 6. Scanner and context invariants
-
-- losslessness: `reconstruct(scan(input)) == input`
-- idempotent recognition: selector-only repairs must not reveal newly recognized emoji-related structure that needs a second formatting pass
-- cluster coherence for recognized emoji-related structure, including the `evfmt` broadening needed to keep valid flags and keycaps inside ZWJ-related scan items
-- recognized leading or malformed ZWJ-related clusters remain visible to item analysis instead of disappearing into passthrough
-- scanner and formatter agreement on singleton inputs
-- keycap-context invariant: keycaps follow keycap sequence rules
-- modifier-context invariant: sanctioned `base FE0E modifier` is preserved as text presentation on the base, while legacy defective `base FE0F modifier` leaves exactly one reasonable base state, `none`
-- modifier-boundary invariant: sanctioned `base FE0E modifier` remains one extended grapheme cluster under UAX #29 but is not a UTS #51 emoji modifier sequence; `FE0E` before a modifier is preserved only when it is a sanctioned text variation sequence for the base
-- missing-selector invariant: deterministic insertion of a required presentation selector is tracked separately from sequence defects
-- standalone keycap-base invariant: as standalone variation-sequence bases, `#`, `*`, and digits may retain three reasonable states
-
-### 7. Derived invariants for Unicode upgrades
-
-These guard the product assumptions:
-
-- modifier context must not re-enter policy ambiguity
-- ZWJ link cleanup must not itself re-enter policy ambiguity
-- keycap cleanup can enter keycap policy when multiple states remain
-- after fixed rules, ambiguous contexts must still collapse to base-indexed policy positions with only the ordinary/keycap domain as an added qualifier
-
-### 8. CLI contract evidence
-
-Integration tests cover:
-
-- format rewrite success
-- already-canonical no-op success
-- `evfmt check` exit codes
-- stdin and stdout via `-`
-- ordered `set/add/remove` CLI behavior for policy and ignore filters
-- invalid UTF-8 exits `2`
-- partial failure exits `2` without rollback
+They cannot be the only evidence for core correctness. If an exhaustive or randomized check becomes too expensive for routine use, the routine gate must retain smaller local evidence that protects the same load-bearing claim, while the larger run moves to a deeper tier.
 
 ## Unicode upgrade gate
 
-Unicode upgrades are not validated only by data-file diffs. Repository-local copies of the relevant Unicode inputs are the primary evidence base; upstream change detection exists to reveal new versions or errata, not to substitute for local correctness checks. The full upgrade gate is:
+Unicode upgrade checks are upgrade evidence, not a substitute for local routine checks. Repository-local copies of Unicode data remain the primary correctness inputs for routine verification; upstream checks exist to reveal new versions, errata, and changed assumptions during an upgrade.
 
-- machine diff of parsed data and generated tables
-- machine diff of prose anchors that support product assumptions
-- derived invariants
-- human review when prose anchors move or assumptions become less obvious
+The upgrade gate should include:
 
-The minimum upgrade input set is:
+- machine diffs of parsed data and generated tables
+- machine diffs of upstream prose anchors that support product assumptions
+- derived invariants that protect formatter and sequence-family assumptions
+- human review when prose anchors move or product assumptions become unclear
 
-- `emoji-data.txt`
-- `emoji-variation-sequences.txt`
-- `emoji-sequences.txt`
-- `emoji-zwj-sequences.txt`
-- `emoji-test.txt`
-- the upstream prose sources that justify product assumptions and sequence-handling rules
-
-The prose-anchor diff should explicitly watch the normative or explanatory passages that support:
-
-- omitted/default-presentation framing
-- the limits of `possible_emoji`
-- modifier handling around legacy `FE0F`
-- ZWJ component qualification behavior and `FE0E` breakage
-- the absence of sanctioned `FE0E`/`FE0F` on non-emoji ZWJ components
-- `emoji-variation-sequences.txt` as the exact sanctioned EVS list
-- keycap interpretation for `#`, `*`, and digits before `U+20E3`
-
-The intended decision model is:
+Pinned data files, generated tables, and broader sequence inputs are described in [workspace-layout.markdown](workspace-layout.markdown). The upgrade decision model is:
 
 - green: prose anchors unchanged and invariants pass
 - yellow: invariants pass but prose anchors moved, requiring human review
 - red: invariants fail
+
+## Independence rule
+
+Each test should state or imply its oracle: what claim it proves, where the expected result comes from, and which assumptions it intentionally shares or avoids.
+
+Independent evidence is strongest when the test's expected output is derived from a different representation than the production path. Examples include parsing pinned Unicode files instead of trusting generated tables, using a decision table instead of calling formatter helpers to compute expected output, or checking scanner reconstruction directly from raw item slices.
+
+Avoid test layers that silently share the same hidden assumption. When shared assumptions are necessary, keep them narrow and explicit near the owning test helper or design note.
