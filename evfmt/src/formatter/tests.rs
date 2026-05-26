@@ -1,19 +1,19 @@
 use super::*;
 use crate::analysis::{Finding, analyze_scan_item};
+use crate::policy_key_set::PolicyKeySet;
 use crate::scanner::scan;
 use crate::unicode;
-use crate::variation_set::VariationSet;
 use proptest::prelude::*;
 
 fn default_policy() -> Policy {
     Policy::default()
 }
 
-fn bool_variation_set(matches: bool) -> VariationSet {
+fn bool_policy_key_set(matches: bool) -> PolicyKeySet {
     if matches {
-        VariationSet::all()
+        PolicyKeySet::all()
     } else {
-        VariationSet::none()
+        PolicyKeySet::none()
     }
 }
 
@@ -132,15 +132,15 @@ fn keycap_cleanup_follows_current_sequence_contract() {
 
 #[test]
 fn keycap_policy_can_select_bare_text_or_emoji_outputs() {
-    let emoji_policy = Policy::default().with_bare_as_text(VariationSet::none());
+    let emoji_policy = Policy::default().with_bare_as_text(PolicyKeySet::none());
     assert_eq!(
         format_text("#\u{20E3}", &emoji_policy),
         FormatResult::Changed("#\u{FE0F}\u{20E3}".to_owned())
     );
 
     let bare_text_policy = Policy::default()
-        .with_prefer_bare(crate::variation_set::KEYCAP_CHARS)
-        .with_bare_as_text(crate::variation_set::KEYCAP_CHARS);
+        .with_prefer_bare(crate::policy_key_set::KEYCAP_CHARS)
+        .with_bare_as_text(crate::policy_key_set::KEYCAP_CHARS);
     assert_eq!(
         format_text("#\u{FE0E}\u{20E3}", &bare_text_policy),
         FormatResult::Changed("#\u{20E3}".to_owned())
@@ -260,6 +260,8 @@ fn expected_standalone(ch: char, selector: InputSelector, policy: PolicyFlags) -
 
 #[test]
 fn exhaustive_standalone_variation_sequence_policy_table() {
+    // This is an independent oracle for the standalone policy table: expected
+    // output is derived from the policy axes below, not from formatter helpers.
     let policies = [
         PolicyFlags {
             prefer_bare: false,
@@ -287,8 +289,8 @@ fn exhaustive_standalone_variation_sequence_policy_table() {
     for ch in unicode::variation_sequence_chars() {
         for policy_flags in policies {
             let policy = Policy::default()
-                .with_prefer_bare(bool_variation_set(policy_flags.prefer_bare))
-                .with_bare_as_text(bool_variation_set(policy_flags.bare_as_text));
+                .with_prefer_bare(bool_policy_key_set(policy_flags.prefer_bare))
+                .with_bare_as_text(bool_policy_key_set(policy_flags.bare_as_text));
 
             for selector in selectors {
                 let input = build_input(ch, selector);
@@ -338,8 +340,8 @@ fn interesting_string_strategy() -> impl Strategy<Value = String> {
 fn policy_strategy() -> impl Strategy<Value = Policy> {
     (prop::bool::ANY, prop::bool::ANY).prop_map(|(prefer_bare, bare_as_text)| {
         Policy::default()
-            .with_prefer_bare(bool_variation_set(prefer_bare))
-            .with_bare_as_text(bool_variation_set(bare_as_text))
+            .with_prefer_bare(bool_policy_key_set(prefer_bare))
+            .with_bare_as_text(bool_policy_key_set(bare_as_text))
     })
 }
 
@@ -358,7 +360,7 @@ fn check_finding_length_invariants(finding: &Finding<'_>) -> Result<(), TestCase
         + non_canonicality.defective_sequences
         + non_canonicality.redundant_selectors;
     let inserted_chars =
-        non_canonicality.missing_required_selectors + non_canonicality.bases_to_resolve;
+        non_canonicality.missing_required_selectors + non_canonicality.presentation_decisions;
     // The byte-length invariant below counts selector insertions and removals
     // with one shared byte width. Keep that assumption explicit so it fails
     // near the accounting if the selector constants ever change.
@@ -371,7 +373,7 @@ fn check_finding_length_invariants(finding: &Finding<'_>) -> Result<(), TestCase
 
     prop_assert_eq!(
         finding.default_decisions().len(),
-        non_canonicality.bases_to_resolve
+        non_canonicality.presentation_decisions
     );
     prop_assert_eq!(
         replacement.chars().count() + removed_chars,

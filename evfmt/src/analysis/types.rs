@@ -8,14 +8,32 @@ use crate::presentation::Presentation;
 /// These axes are compositional rather than mutually exclusive. A finding may
 /// simultaneously include selector cleanup, deterministic sequence defects,
 /// redundant selectors, deterministic selector insertion, and policy-driven
-/// bare-base resolution.
+/// presentation decisions.
+///
+/// The categories describe how non-canonical selector usage is repaired or
+/// exposed to callers:
+///
+/// - unsanctioned or structurally broken selector usage is removed
+/// - fixed-cleanup sequence defects are repaired without policy
+/// - redundant sanctioned selectors are removed when the active policy prefers
+///   the bare form
+/// - missing required presentation selectors are inserted by deterministic
+///   cleanup rather than by policy choice
+/// - ambiguous selector slots become caller-resolvable presentation decisions
+///
+/// A redundant variation selector is not unsanctioned. It belongs to a
+/// sanctioned Unicode structure but is non-canonical under the active
+/// formatter policy because the same context canonically stays bare. Likewise,
+/// a missing required selector is separate from a defective sequence: inserting
+/// `FE0F` for a deterministic tag context is fixed cleanup, not a UTS #51
+/// defective emoji modifier repair.
 ///
 /// The scalar-length effect of a finding's default canonical replacement is
 /// derived from these selector-level counters:
 ///
 /// ```text
 /// replacement.chars().count() - raw.chars().count()
-///   = missing_required_selectors + bases_to_resolve
+///   = missing_required_selectors + presentation_decisions
 ///   - unsanctioned_selectors - defective_sequences - redundant_selectors
 /// ```
 ///
@@ -50,8 +68,8 @@ pub struct NonCanonicality {
     /// Count of required presentation selectors inserted by deterministic
     /// cleanup rather than policy choice.
     pub missing_required_selectors: usize,
-    /// Count of bare bases that the active policy asks callers to resolve.
-    pub bases_to_resolve: usize,
+    /// Count of policy presentation decisions callers may resolve.
+    pub presentation_decisions: usize,
 }
 
 impl Default for NonCanonicality {
@@ -64,7 +82,7 @@ impl NonCanonicality {
     pub(super) const DEFECTIVE: Self = Self::new(0, 1, 0, 0, 0);
     pub(super) const REDUNDANT: Self = Self::new(0, 0, 1, 0, 0);
     pub(super) const MISSING_REQUIRED: Self = Self::new(0, 0, 0, 1, 0);
-    pub(super) const RESOLVE: Self = Self::new(0, 0, 0, 0, 1);
+    pub(super) const PRESENTATION_DECISION: Self = Self::new(0, 0, 0, 0, 1);
 
     /// Create an explicit non-canonicality summary.
     #[must_use]
@@ -73,14 +91,14 @@ impl NonCanonicality {
         defective_sequences: usize,
         redundant_selectors: usize,
         missing_required_selectors: usize,
-        bases_to_resolve: usize,
+        presentation_decisions: usize,
     ) -> Self {
         Self {
             unsanctioned_selectors,
             defective_sequences,
             redundant_selectors,
             missing_required_selectors,
-            bases_to_resolve,
+            presentation_decisions,
         }
     }
 
@@ -93,7 +111,7 @@ impl NonCanonicality {
             && self.defective_sequences == 0
             && self.redundant_selectors == 0
             && self.missing_required_selectors == 0
-            && self.bases_to_resolve == 0
+            && self.presentation_decisions == 0
     }
 }
 
@@ -107,7 +125,7 @@ impl Add for NonCanonicality {
             redundant_selectors: self.redundant_selectors + rhs.redundant_selectors,
             missing_required_selectors: self.missing_required_selectors
                 + rhs.missing_required_selectors,
-            bases_to_resolve: self.bases_to_resolve + rhs.bases_to_resolve,
+            presentation_decisions: self.presentation_decisions + rhs.presentation_decisions,
         }
     }
 }
@@ -122,7 +140,7 @@ impl AddAssign for NonCanonicality {
 ///
 /// These elements are a private renderer representation after the semantic
 /// formatter model has already resolved selector contexts and policy
-/// positions. They should not be treated as the design-spec vocabulary for
+/// keys. They should not be treated as the design-spec vocabulary for
 /// selector classification; see `docs/designs/core/formatting-model.markdown`
 /// for that model.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -299,13 +317,13 @@ impl Finding<'_> {
 
     /// The decision vector formatting applies to this finding by default.
     ///
-    /// Each decision slot is one ambiguous selector context in source order
-    /// within the scanned item. Every current slot accepts
+    /// Each presentation decision is one ambiguous selector slot in source order
+    /// within the scanned item. Every current decision accepts
     /// [`Presentation::Text`] or [`Presentation::Emoji`]. Fixed cleanup
-    /// contributes no decision slot.
+    /// contributes no presentation decision.
     ///
     /// The iterator length is equal to
-    /// [`NonCanonicality::bases_to_resolve`] for this finding.
+    /// [`NonCanonicality::presentation_decisions`] for this finding.
     #[must_use]
     pub fn default_decisions(&self) -> impl ExactSizeIterator<Item = Presentation> + '_ {
         DefaultDecisions {
@@ -316,7 +334,7 @@ impl Finding<'_> {
 
     /// The canonical replacement using the default decision vector.
     ///
-    /// This is infallible because each decision slot stores its own default
+    /// This is infallible because each presentation decision stores its own default
     /// next to the options it may select. The default is validated when
     /// constructing the slot.
     #[must_use]
@@ -335,10 +353,10 @@ impl Finding<'_> {
 
     /// Return the canonical whole-item replacement for a valid decision vector.
     ///
-    /// Each decision slot is one ambiguous selector context in source order
-    /// within the scanned item. Every current slot accepts
+    /// Each presentation decision is one ambiguous selector slot in source order
+    /// within the scanned item. Every current decision accepts
     /// [`Presentation::Text`] or [`Presentation::Emoji`]. Fixed cleanup is
-    /// included in the whole replacement but contributes no decision slot.
+    /// included in the whole replacement but contributes no presentation decision.
     ///
     /// Returns `None` when the decision vector has the wrong length or contains
     /// a decision value that is not valid for its slot. That `None` reports
@@ -407,8 +425,8 @@ impl<'a> Finding<'a> {
         );
         assert_eq!(
             analysis.decision_count(),
-            analysis.non_canonicality.bases_to_resolve,
-            "finding decision count must match bases_to_resolve"
+            analysis.non_canonicality.presentation_decisions,
+            "finding decision count must match presentation_decisions"
         );
         Self {
             span: item.span.clone(),

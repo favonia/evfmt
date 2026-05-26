@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_contains_all() {
-    let set = VariationSet::all();
+    let set = PolicyKeySet::all();
     assert!(set.contains('#'));
     assert!(set.contains_keycap('#'));
     assert!(set.contains('\u{00A9}'));
@@ -13,23 +13,23 @@ fn test_contains_all() {
 
 #[test]
 fn test_all_matches_singleton_union_for_full_universe() {
-    let mut set = VariationSet::none();
+    let mut set = PolicyKeySet::none();
     for index in 0..unicode::VARIATION_ENTRY_COUNT {
-        set |= VariationSet::singleton(unicode::variation_entry(index));
-        set |= VariationSet::singleton_keycap(unicode::variation_entry(index));
+        set |= PolicyKeySet::singleton(unicode::variation_entry(index));
+        set |= PolicyKeySet::singleton_keycap(unicode::variation_entry(index));
     }
 
-    assert_eq!(set, VariationSet::all());
+    assert_eq!(set, PolicyKeySet::all());
 }
 
 #[test]
 fn test_all_matches_named_domains() {
-    assert_eq!(VariationSet::all(), NON_KEYCAP_CHARS | KEYCAP_CHARS);
+    assert_eq!(PolicyKeySet::all(), NON_KEYCAP_CHARS | KEYCAP_CHARS);
 }
 
 #[test]
 fn test_contains_none() {
-    let set = VariationSet::none();
+    let set = PolicyKeySet::none();
     assert!(!set.contains('#'));
     assert!(!set.contains('\u{00A9}'));
 }
@@ -107,14 +107,14 @@ fn test_named_card_suits() {
 
 #[test]
 fn test_remove_ascii_from_all() {
-    let set = VariationSet::all() - ASCII;
+    let set = PolicyKeySet::all() - ASCII;
     assert!(!set.contains('#'));
     assert!(set.contains('\u{00A9}'));
 }
 
 #[test]
 fn test_remove_multiple_named_sets() {
-    let set = VariationSet::all() - ASCII - EMOJI_DEFAULTS;
+    let set = PolicyKeySet::all() - ASCII - EMOJI_DEFAULTS;
     assert!(!set.contains('#'));
     assert!(!set.contains('\u{2728}'));
     assert!(set.contains('\u{00A9}'));
@@ -122,7 +122,7 @@ fn test_remove_multiple_named_sets() {
 
 #[test]
 fn test_add_singletons() {
-    let set = VariationSet::singleton('#') | VariationSet::singleton('*');
+    let set = PolicyKeySet::singleton('#') | PolicyKeySet::singleton('*');
     assert!(set.contains('#'));
     assert!(set.contains('*'));
     assert!(!set.contains('\u{00A9}'));
@@ -130,22 +130,22 @@ fn test_add_singletons() {
 
 #[test]
 fn test_singleton_ignores_non_universe_chars() {
-    assert!(VariationSet::singleton('#').contains('#'));
-    assert!(!VariationSet::singleton('A').contains('A'));
-    assert!(VariationSet::singleton_keycap('#').contains_keycap('#'));
-    assert!(!VariationSet::singleton_keycap('A').contains_keycap('A'));
+    assert!(PolicyKeySet::singleton('#').contains('#'));
+    assert!(!PolicyKeySet::singleton('A').contains('A'));
+    assert!(PolicyKeySet::singleton_keycap('#').contains_keycap('#'));
+    assert!(!PolicyKeySet::singleton_keycap('A').contains_keycap('A'));
 }
 
 #[test]
 fn test_add_none_is_identity() {
-    let set = VariationSet::none() | ASCII;
+    let set = PolicyKeySet::none() | ASCII;
     assert!(set.contains('#'));
     assert!(!set.contains('\u{00A9}'));
 }
 
 #[test]
 fn test_remove_all_clears_set() {
-    let set = ASCII - VariationSet::all();
+    let set = ASCII - PolicyKeySet::all();
     assert!(!set.contains('#'));
     assert!(!set.contains('\u{00A9}'));
 }
@@ -161,7 +161,7 @@ fn test_operator_not_complements_within_universe() {
 
 #[test]
 fn test_operator_union() {
-    let set = VariationSet::singleton('#') | VariationSet::singleton('*');
+    let set = PolicyKeySet::singleton('#') | PolicyKeySet::singleton('*');
 
     assert!(set.contains('#'));
     assert!(set.contains('*'));
@@ -170,7 +170,7 @@ fn test_operator_union() {
 
 #[test]
 fn test_operator_intersection() {
-    let set = ASCII & VariationSet::singleton('#');
+    let set = ASCII & PolicyKeySet::singleton('#');
 
     assert!(set.contains('#'));
     assert!(!set.contains('*'));
@@ -179,8 +179,8 @@ fn test_operator_intersection() {
 
 #[test]
 fn test_operator_symmetric_difference() {
-    let set = (VariationSet::singleton('#') | VariationSet::singleton('*'))
-        ^ (VariationSet::singleton('*') | VariationSet::singleton('\u{00A9}'));
+    let set = (PolicyKeySet::singleton('#') | PolicyKeySet::singleton('*'))
+        ^ (PolicyKeySet::singleton('*') | PolicyKeySet::singleton('\u{00A9}'));
 
     assert!(set.contains('#'));
     assert!(!set.contains('*'));
@@ -189,7 +189,7 @@ fn test_operator_symmetric_difference() {
 
 #[test]
 fn test_operator_difference() {
-    let set = VariationSet::all() - ASCII;
+    let set = PolicyKeySet::all() - ASCII;
 
     assert!(!set.contains('#'));
     assert!(set.contains('\u{00A9}'));
@@ -197,11 +197,11 @@ fn test_operator_difference() {
 
 #[test]
 fn test_operator_assignments() {
-    let mut set = VariationSet::singleton('#');
-    set |= VariationSet::singleton('*');
+    let mut set = PolicyKeySet::singleton('#');
+    set |= PolicyKeySet::singleton('*');
     set &= ASCII;
-    set ^= VariationSet::singleton('#');
-    set -= VariationSet::singleton('\u{00A9}');
+    set ^= PolicyKeySet::singleton('#');
+    set -= PolicyKeySet::singleton('\u{00A9}');
 
     assert!(!set.contains('#'));
     assert!(set.contains('*'));
@@ -210,7 +210,7 @@ fn test_operator_assignments() {
 
 #[test]
 fn test_bitand_assign_intersects_in_place() {
-    let mut set = VariationSet::singleton('#') | VariationSet::singleton('\u{00A9}');
+    let mut set = PolicyKeySet::singleton('#') | PolicyKeySet::singleton('\u{00A9}');
     set &= ASCII;
 
     assert!(set.contains('#'));
@@ -219,8 +219,8 @@ fn test_bitand_assign_intersects_in_place() {
 
 #[test]
 fn test_sub_assign_removes_in_place() {
-    let mut set = VariationSet::singleton('#') | VariationSet::singleton('\u{00A9}');
-    set -= VariationSet::singleton('#');
+    let mut set = PolicyKeySet::singleton('#') | PolicyKeySet::singleton('\u{00A9}');
+    set -= PolicyKeySet::singleton('#');
 
     assert!(!set.contains('#'));
     assert!(set.contains('\u{00A9}'));
@@ -228,12 +228,12 @@ fn test_sub_assign_removes_in_place() {
 
 #[test]
 fn test_display_examples() {
-    assert_eq!(VariationSet::none().to_string(), "none");
-    assert_eq!(VariationSet::all().to_string(), "all");
-    assert_eq!(VariationSet::singleton('#').to_string(), "u(0023)");
-    assert_eq!(VariationSet::singleton_keycap('#').to_string(), "k(0023)");
+    assert_eq!(PolicyKeySet::none().to_string(), "none");
+    assert_eq!(PolicyKeySet::all().to_string(), "all");
+    assert_eq!(PolicyKeySet::singleton('#').to_string(), "u(0023)");
+    assert_eq!(PolicyKeySet::singleton_keycap('#').to_string(), "k(0023)");
     assert_eq!(
-        (VariationSet::singleton('#') | VariationSet::singleton_keycap('#')).to_string(),
+        (PolicyKeySet::singleton('#') | PolicyKeySet::singleton_keycap('#')).to_string(),
         "u(0023),k(0023)"
     );
 }
@@ -250,15 +250,15 @@ fn test_named_set_matches_reject_nonmembers() {
 
 #[test]
 fn test_default_is_empty() {
-    assert_eq!(VariationSet::default(), VariationSet::none());
+    assert_eq!(PolicyKeySet::default(), PolicyKeySet::none());
 }
 
 #[test]
 fn test_all_bits_matches_public_all_set() {
     let bits = all_bits();
 
-    assert_eq!(bits, VariationSet::all().chars.bits);
-    assert_eq!(bits, VariationSet::all().keycap_chars.bits);
+    assert_eq!(bits, PolicyKeySet::all().chars.bits);
+    assert_eq!(bits, PolicyKeySet::all().keycap_chars.bits);
 
     let used_bits = unicode::VARIATION_ENTRY_COUNT % WORD_BITS;
     let expected_last_word = if used_bits == 0 {
@@ -313,7 +313,7 @@ fn test_named_entry_matches_each_named_set() {
 
 #[test]
 fn test_display_multiple_code_points_in_table_order() {
-    let set = VariationSet::singleton('*') | VariationSet::singleton('#');
+    let set = PolicyKeySet::singleton('*') | PolicyKeySet::singleton('#');
 
     assert_eq!(set.to_string(), "u(0023),u(002A)");
 }

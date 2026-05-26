@@ -72,17 +72,17 @@
 //! The [`mod@analysis`] API is the usual entry point for interactive fixing.
 //! It analyzes scanned items under the supplied [`Policy`] and returns the
 //! whole-item canonical replacement available for each non-canonical finding.
-//! Ambiguous selector contexts are represented as source-order decision slots;
-//! fixed repairs have no slots and use the empty decision vector.
+//! Ambiguous selector slots are represented as source-order presentation
+//! decisions; fixed repairs have no decisions and use the empty decision vector.
 //!
-//! Custom policies can be built from [`variation_set`] variation sets. In this example,
+//! Custom policies can be built from [`policy_key_set`] policy key sets. In this example,
 //! `rights-marks` contains `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to
 //! remain bare.
 //!
 //! ```rust
-//! use evfmt::{Policy, format_text, variation_set};
+//! use evfmt::{Policy, format_text, policy_key_set};
 //!
-//! let ascii_and_rights_marks = variation_set::ASCII | variation_set::RIGHTS_MARKS;
+//! let ascii_and_rights_marks = policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS;
 //! let policy = Policy::default()
 //!     .with_prefer_bare(ascii_and_rights_marks)
 //!     .with_bare_as_text(ascii_and_rights_marks);
@@ -106,20 +106,20 @@
 //!   scanning and analysis
 //! - [`scanner`] owns structural tokenization into singletons, keycaps, ZWJ
 //!   chains, standalone variation selector runs, and passthrough slices
-//! - [`variation_set`] defines the typed variation-set model used by the library
+//! - [`policy_key_set`] defines the typed `PolicyKeySet` model used by the library
 //!   policy API
 
 pub mod analysis;
 pub mod formatter;
 pub mod policy;
+pub mod policy_key_set;
 pub mod presentation;
 pub mod scanner;
 mod unicode;
-pub mod variation_set;
 
 pub use analysis::{Finding, NonCanonicality, analyze_scan_item};
 pub use formatter::{FormatResult, format_text};
 pub use policy::Policy;
+pub use policy_key_set::PolicyKeySet;
 pub use presentation::Presentation;
 pub use scanner::{ScanItem, ScanKind, Scanner, scan};
-pub use variation_set::VariationSet;

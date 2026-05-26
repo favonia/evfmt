@@ -30,14 +30,14 @@ const fn non_canonicality(
     defective_sequences: usize,
     redundant_selectors: usize,
     missing_required_selectors: usize,
-    bases_to_resolve: usize,
+    presentation_decisions: usize,
 ) -> NonCanonicality {
     NonCanonicality::new(
         unsanctioned_selectors,
         defective_sequences,
         redundant_selectors,
         missing_required_selectors,
-        bases_to_resolve,
+        presentation_decisions,
     )
 }
 
@@ -105,8 +105,8 @@ fn standalone_bare_singleton_uses_plain_presentation_resolution() {
 #[test]
 fn standalone_bare_singleton_can_default_to_text_resolution() {
     let policy = Policy::default()
-        .with_prefer_bare(crate::variation_set::VariationSet::none())
-        .with_bare_as_text(crate::variation_set::VariationSet::all());
+        .with_prefer_bare(crate::policy_key_set::PolicyKeySet::none())
+        .with_bare_as_text(crate::policy_key_set::PolicyKeySet::all());
     let finding = finding_for_first_item_with_policy("\u{00A9}", &policy);
     assert_eq!(default_choice_decisions(&finding), [Presentation::Text]);
     assert_eq!(finding.default_canonical_replacement(), "\u{00A9}\u{FE0E}");
