@@ -2,7 +2,7 @@
 
 Read when: auditing, challenging, or replacing the formatter policy predicates, policy defaults, or policy-key domains described in [`../designs/features/policy.markdown`](../designs/features/policy.markdown).
 
-Defines: non-normative evidence, assumptions, gaps, and tradeoff reasoning behind user-facing policy choices, bare-display interpretation, default policy behavior, and keycap policy attention.
+Defines: non-normative evidence, assumptions, gaps, and tradeoff reasoning behind user-facing policy choices, bare-display interpretation, default policy behavior, and the keycap-character policy domain.
 
 Does not define: current policy behavior, recognition behavior, or slot-classification behavior. For behavior, see [`../designs/features/policy.markdown`](../designs/features/policy.markdown), code, tests, and public API documentation. For recognition and classification rationale, see [`recognition.markdown`](recognition.markdown) and [`classification.markdown`](classification.markdown).
 
@@ -42,7 +42,7 @@ Domain-qualified base-indexing is the current public realization of that constra
 
 Revisit this policy-shape choice if future Unicode data introduces policy-relevant selector contexts that do not fit the current domains, or if real user needs show that the current non-keycap/keycap policy surface cannot express an important formatting choice. The response should still expose a named policy distinction that users can reason about, such as adding a small domain or replacing the current domain split with another small policy model, rather than encoding arbitrary surrounding sequence topology into policy keys.
 
-### Keycap Policy Domain
+### Keycap-Character Policy Domain
 
 Manually reviewed: yes.
 

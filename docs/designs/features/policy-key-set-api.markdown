@@ -45,21 +45,21 @@ The internal bitset type is private. Public code should treat `PolicyKeySet` as 
 
 ## Atoms
 
-| Constructor                         | Meaning                                                                            |
-| ----------------------------------- | ---------------------------------------------------------------------------------- |
-| `PolicyKeySet::all()`               | Every non-keycap and keycap-character policy key                                   |
-| `PolicyKeySet::none()`              | No policy key                                                                      |
-| `PolicyKeySet::singleton(c)`        | One non-keycap policy key, or empty if `c` is outside the policy universe          |
-| `PolicyKeySet::singleton_keycap(c)` | One keycap-character policy key, or empty if `c` is outside the policy universe    |
-| `policy_key_set::ASCII`             | ASCII variation-sequence bases as non-keycap policy keys                           |
-| `policy_key_set::TEXT_DEFAULTS`     | Text-default variation-sequence bases as non-keycap policy keys                    |
-| `policy_key_set::EMOJI_DEFAULTS`    | Emoji-default variation-sequence bases as non-keycap policy keys                   |
-| `policy_key_set::RIGHTS_MARKS`      | The rights marks currently listed in Unicode's `emoji-variation-sequences.txt`     |
-| `policy_key_set::ARROWS`            | The arrow characters currently listed in Unicode's `emoji-variation-sequences.txt` |
-| `policy_key_set::CARD_SUITS`        | The card suits currently listed in Unicode's `emoji-variation-sequences.txt`       |
-| `policy_key_set::KEYCAP_CHARS`      | Every keycap-character policy key for a variation-sequence base                    |
-| `policy_key_set::NON_KEYCAP_CHARS`  | Every non-keycap policy key for a variation-sequence base                          |
-| `policy_key_set::KEYCAP_EMOJIS`     | RGI emoji keycap bases (`#`, `*`, `0`-`9`) as keycap-character policy keys         |
+| Constructor                         | Meaning                                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `PolicyKeySet::all()`               | Every non-keycap and keycap-character policy key                                                              |
+| `PolicyKeySet::none()`              | No policy key                                                                                                 |
+| `PolicyKeySet::singleton(c)`        | One non-keycap policy key, or empty if `c` is outside the policy universe                                     |
+| `PolicyKeySet::singleton_keycap(c)` | One keycap-character policy key, or empty if `c` is outside the policy universe                               |
+| `policy_key_set::ASCII`             | ASCII variation-sequence bases (`#`, `*`, and `0`-`9`) as non-keycap policy keys                              |
+| `policy_key_set::TEXT_DEFAULTS`     | Text-default variation-sequence bases as non-keycap policy keys                                               |
+| `policy_key_set::EMOJI_DEFAULTS`    | Emoji-default variation-sequence bases as non-keycap policy keys                                              |
+| `policy_key_set::RIGHTS_MARKS`      | Rights-mark variation-sequence bases (`©︎` U+00A9, `®︎` U+00AE, `™︎` U+2122) as non-keycap policy keys           |
+| `policy_key_set::ARROWS`            | The arrow characters currently listed in Unicode's `emoji-variation-sequences.txt`                            |
+| `policy_key_set::CARD_SUITS`        | Card-suit variation-sequence bases (`♠︎` U+2660, `♣︎` U+2663, `♥︎` U+2665, `♦︎` U+2666) as non-keycap policy keys |
+| `policy_key_set::KEYCAP_CHARS`      | Every keycap-character policy key for a variation-sequence base                                               |
+| `policy_key_set::NON_KEYCAP_CHARS`  | Every non-keycap policy key for a variation-sequence base                                                     |
+| `policy_key_set::KEYCAP_EMOJIS`     | RGI emoji keycap bases (`#`, `*`, `0`-`9`) as keycap-character policy keys                                    |
 
 Semantic named sets such as `ASCII`, `TEXT_DEFAULTS`, `EMOJI_DEFAULTS`, `RIGHTS_MARKS`, `ARROWS`, and `CARD_SUITS` affect non-keycap policy keys only. Keycap-specific membership is expressed explicitly with `KEYCAP_CHARS`, `KEYCAP_EMOJIS`, or `PolicyKeySet::singleton_keycap(c)`.
 

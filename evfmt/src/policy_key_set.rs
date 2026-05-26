@@ -31,42 +31,45 @@ const WORD_BITS: usize = u64::BITS as usize;
 const CHARSET_WORDS: usize = unicode::VARIATION_ENTRY_COUNT.div_ceil(WORD_BITS);
 const ALL_CHARS: CharSet = CharSet { bits: all_bits() };
 
-/// ASCII characters (U+0000-U+007F).
+/// ASCII variation-sequence bases (`#`, `*`, and `0`-`9`) as non-keycap policy
+/// keys.
 pub const ASCII: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::Ascii),
     },
     keycap_chars: CharSet::none(),
 };
-/// Variation-sequence characters whose Unicode default side is text.
+/// Text-default variation-sequence bases as non-keycap policy keys.
 pub const TEXT_DEFAULTS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::TextDefaults),
     },
     keycap_chars: CharSet::none(),
 };
-/// Variation-sequence characters whose Unicode default side is emoji.
+/// Emoji-default variation-sequence bases as non-keycap policy keys.
 pub const EMOJI_DEFAULTS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::EmojiDefaults),
     },
     keycap_chars: CharSet::none(),
 };
-/// ©️ (U+00A9), ®️ (U+00AE), ™️ (U+2122).
+/// Rights-mark variation-sequence bases (©️ (U+00A9), ®️ (U+00AE), ™️ (U+2122))
+/// as non-keycap policy keys.
 pub const RIGHTS_MARKS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::RightsMarks),
     },
     keycap_chars: CharSet::none(),
 };
-/// Arrow characters used by the formatter policy docs.
+/// Arrow variation-sequence bases as non-keycap policy keys.
 pub const ARROWS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::Arrows),
     },
     keycap_chars: CharSet::none(),
 };
-/// ♠️ (U+2660), ♣️ (U+2663), ♥️ (U+2665), ♦️ (U+2666).
+/// Card-suit variation-sequence bases (♠️ (U+2660), ♣️ (U+2663), ♥️ (U+2665),
+/// ♦️ (U+2666)) as non-keycap policy keys.
 pub const CARD_SUITS: PolicyKeySet = PolicyKeySet {
     chars: CharSet {
         bits: named_bits(NamedSet::CardSuits),
@@ -172,7 +175,7 @@ impl PolicyKeySet {
         }
     }
 
-    /// Construct a singleton set containing one eligible non-keycap code point.
+    /// Construct a singleton set containing one eligible non-keycap policy key.
     ///
     /// Returns the empty set when `ch` is outside the variation-sequence
     /// character universe checked by [`is_variation_sequence_character`].
