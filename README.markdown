@@ -88,10 +88,10 @@ evfmt format .
 ```
 
 ```sh
-# A bare heart (U+2764) becomes the emoji-form heart by default.
-# The first command prints the same string as the second command: Love ❤️
-printf '%b' 'Love \u2764' | evfmt format
-printf '%b' 'Love \u2764\ufe0f'
+# A bare copyright sign (U+00A9) becomes text-form by default.
+# The first command prints the same string as the second command: Copyright ©︎
+printf '%b' 'Copyright \u00a9' | evfmt format
+printf '%b' 'Copyright \u00a9\ufe0e'
 ```
 
 Use `-` as an explicit stdin operand when mixing stdin with files. A path such as `./-` still means a file literally named `-`. Repeating `-` is allowed and reads the same stdin stream again from its current position; with piped input, the first `-` normally consumes the stream.
@@ -99,7 +99,7 @@ Use `-` as an explicit stdin operand when mixing stdin with files. A path such a
 ```sh
 evfmt format a.txt - b.txt
 evfmt format ./-
-printf '%b' 'Love \u2764' | evfmt check -
+printf '%b' 'Copyright \u00a9\ufe0e' | evfmt check -
 ```
 
 ### ✅ Checking Mode
@@ -131,7 +131,7 @@ evfmt check -- --set-ignore
 
 [Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_zwj_sequence) are sequences of multiple emoji characters joined by the zero-width joiner (ZWJ; `U+200D`). For example, the rainbow flag 🏳️‍🌈 joins the white flag 🏳️ and the rainbow 🌈. `evfmt` normalizes each component in a ZWJ sequence as if that component appeared without the surrounding ZWJ links.
 
-### 🔢 Normalization of Keycap Sequences
+### 🔢 Keycap Sequences
 
 Keycap sequences combine a base character (`0`–`9`, `#`, or `*`) with the combining enclosing keycap (`U+20E3`) to produce keycap buttons like 1️⃣ and #️⃣. The base character can appear bare, with a text selector (`U+FE0E`), or with an emoji selector (`U+FE0F`) before the keycap mark. Historically, bare keycap sequences were used for both text and emoji presentations, which made them ambiguous. `evfmt` normalizes bare keycap sequences to explicit text forms by default. Explicit text and emoji selectors in keycap forms are preserved.
 
@@ -183,7 +183,7 @@ Use this when you want explicit emoji selectors on emoji-default characters for 
 
 ```sh
 evfmt format \
-  --remove-prefer-bare-for=emoji-default \
+  --remove-prefer-bare=emoji-defaults \
   README.markdown
 ```
 
@@ -191,30 +191,17 @@ With that option, bare emoji-default characters normalize to explicit emoji form
 
 ⚠️ This is not Unicode's recommended interchange form, but it may improve rendering consistency on some platforms.
 
-#### Keep Selected Symbols in Text Presentation
+#### Prefer Bare Forms for Text-Default Symbols
 
-Use this when rights marks, arrows, and card suits already render as text-style symbols, and you want explicit text selectors for portability:
-
-```sh
-evfmt format \
-  --add-bare-as-text=rights-marks,arrows,card-suits \
-  README.markdown
-```
-
-With that option, bare rights marks, arrows, and card suits normalize to explicit text forms such as `©︎`, `®︎`, `™︎`, `➡︎`, and `♠︎`. Explicit emoji-form symbols such as `©️`, `➡️`, and `♠️` stay emoji.
-
-#### Keep Text-Looking Marks Bare
-
-Use this when copyright and trademark-style marks already look like text on your reference platform, and you want their text presentation to stay bare in your files:
+Use this when text-default symbols such as `©︎` (U+00A9), `®︎` (U+00AE), `™︎` (U+2122), and `↔︎` (U+2194) already render acceptably on your reference platform when written without a selector, and you want their text presentation written bare in your files:
 
 ```sh
 evfmt format \
-  --add-bare-as-text=rights-marks \
-  --add-prefer-bare=rights-marks \
+  --add-prefer-bare=text-defaults \
   README.markdown
 ```
 
-With those options, bare or text-form copyright-style marks normalize to bare copyright-style marks. Explicit emoji-form marks such as `©️` stay emoji.
+With that option, bare or text-form text-default symbols in non-keycap selector slots normalize to bare. Explicit emoji-form symbols such as `©️` stay emoji. Keycap-character positions are configured separately.
 
 #### Use Emoji-Style Keycaps
 
@@ -272,7 +259,7 @@ To update the `prefer-bare` set:
 
 The policy sets start as `prefer-bare = ascii,emoji-defaults` and `bare-as-text = text-defaults,keycap-chars`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
 
-Each `<set>` in the list can be either one of the named sets below, one code point with `u(HEX)`, such as `u(00A9)`, or one character, such as `#`, `*`, or `©️`. Presentation selectors are ignored when matching a single character. Except for sets whose names start with `keycap-`, named sets apply only to non-keycap selector slots.
+Each `<set>` in the list can be either one of the named sets below, one code point with `u(HEX)`, such as `u(00A9)`, or one character, such as `#`, `*`, or `©️`. Presentation selectors are ignored when matching a single character. Semantic named sets such as `ascii`, `text-defaults`, `emoji-defaults`, `rights-marks`, `arrows`, and `card-suits` apply only to non-keycap selector slots. Use `keycap-chars` and `keycap-emojis` for keycap-character positions.
 
 | Set                | Meaning                                                                                       |
 | ------------------ | --------------------------------------------------------------------------------------------- |
