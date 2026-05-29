@@ -19,12 +19,11 @@ The public typed surface is built from:
 - `policy_key_set::ASCII`
 - `policy_key_set::TEXT_DEFAULTS`
 - `policy_key_set::EMOJI_DEFAULTS`
-- `policy_key_set::RIGHTS_MARKS`
-- `policy_key_set::ARROWS`
-- `policy_key_set::CARD_SUITS`
-- `policy_key_set::KEYCAP_CHARS`
-- `policy_key_set::NON_KEYCAP_CHARS`
-- `policy_key_set::KEYCAP_EMOJIS`
+- `policy_key_set::VARIATION_BASES`
+- `policy_key_set::KEYCAP_RGI`
+- `policy_key_set::KEYCAP_TEXT_DEFAULTS`
+- `policy_key_set::KEYCAP_EMOJI_DEFAULTS`
+- `policy_key_set::KEYCAP_VARIATION_BASES`
 - `policy_key_set::is_variation_sequence_character(c)`
 - `!set`
 - `set | other`
@@ -45,28 +44,27 @@ The internal bitset type is private. Public code should treat `PolicyKeySet` as 
 
 ## Atoms
 
-| Constructor                         | Meaning                                                                                                       |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `PolicyKeySet::all()`               | Every non-keycap and keycap-character policy key                                                              |
-| `PolicyKeySet::none()`              | No policy key                                                                                                 |
-| `PolicyKeySet::singleton(c)`        | One non-keycap policy key, or empty if `c` is outside the policy universe                                     |
-| `PolicyKeySet::singleton_keycap(c)` | One keycap-character policy key, or empty if `c` is outside the policy universe                               |
-| `policy_key_set::ASCII`             | ASCII variation-sequence bases (`#`, `*`, and `0`-`9`) as non-keycap policy keys                              |
-| `policy_key_set::TEXT_DEFAULTS`     | Text-default variation-sequence bases as non-keycap policy keys                                               |
-| `policy_key_set::EMOJI_DEFAULTS`    | Emoji-default variation-sequence bases as non-keycap policy keys                                              |
-| `policy_key_set::RIGHTS_MARKS`      | Rights-mark variation-sequence bases (`©︎` U+00A9, `®︎` U+00AE, `™︎` U+2122) as non-keycap policy keys           |
-| `policy_key_set::ARROWS`            | The arrow characters currently listed in Unicode's `emoji-variation-sequences.txt`                            |
-| `policy_key_set::CARD_SUITS`        | Card-suit variation-sequence bases (`♠︎` U+2660, `♣︎` U+2663, `♥︎` U+2665, `♦︎` U+2666) as non-keycap policy keys |
-| `policy_key_set::KEYCAP_CHARS`      | Every keycap-character policy key for a variation-sequence base                                               |
-| `policy_key_set::NON_KEYCAP_CHARS`  | Every non-keycap policy key for a variation-sequence base                                                     |
-| `policy_key_set::KEYCAP_EMOJIS`     | RGI emoji keycap bases (`#`, `*`, `0`-`9`) as keycap-character policy keys                                    |
+| Constructor                              | Meaning                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------- |
+| `PolicyKeySet::all()`                    | Every non-keycap and keycap-character policy key                                 |
+| `PolicyKeySet::none()`                   | No policy key                                                                    |
+| `PolicyKeySet::singleton(c)`             | One non-keycap policy key, or empty if `c` is outside the policy universe        |
+| `PolicyKeySet::singleton_keycap(c)`      | One keycap-character policy key, or empty if `c` is outside the policy universe  |
+| `policy_key_set::ASCII`                  | ASCII variation-sequence bases (`#`, `*`, and `0`-`9`) as non-keycap policy keys |
+| `policy_key_set::TEXT_DEFAULTS`          | Text-default variation-sequence bases as non-keycap policy keys                  |
+| `policy_key_set::EMOJI_DEFAULTS`         | Emoji-default variation-sequence bases as non-keycap policy keys                 |
+| `policy_key_set::VARIATION_BASES`        | Every non-keycap policy key for a variation-sequence base                        |
+| `policy_key_set::KEYCAP_RGI`             | RGI emoji keycap bases (`#`, `*`, `0`-`9`) as keycap-character policy keys       |
+| `policy_key_set::KEYCAP_TEXT_DEFAULTS`   | Text-default variation-sequence bases as keycap-character policy keys            |
+| `policy_key_set::KEYCAP_EMOJI_DEFAULTS`  | Emoji-default variation-sequence bases as keycap-character policy keys           |
+| `policy_key_set::KEYCAP_VARIATION_BASES` | Every keycap-character policy key for a variation-sequence base                  |
 
-Semantic named sets such as `ASCII`, `TEXT_DEFAULTS`, `EMOJI_DEFAULTS`, `RIGHTS_MARKS`, `ARROWS`, and `CARD_SUITS` affect non-keycap policy keys only. Keycap-specific membership is expressed explicitly with `KEYCAP_CHARS`, `KEYCAP_EMOJIS`, or `PolicyKeySet::singleton_keycap(c)`.
+Unprefixed named sets affect non-keycap policy keys only. Keycap-specific membership is expressed explicitly with `KEYCAP_RGI`, `KEYCAP_TEXT_DEFAULTS`, `KEYCAP_EMOJI_DEFAULTS`, `KEYCAP_VARIATION_BASES`, or `PolicyKeySet::singleton_keycap(c)`.
 
 `PolicyKeySet::all()` is exactly:
 
 ```rust
-policy_key_set::KEYCAP_CHARS | policy_key_set::NON_KEYCAP_CHARS
+policy_key_set::KEYCAP_VARIATION_BASES | policy_key_set::VARIATION_BASES
 ```
 
 ## Combinators
@@ -88,6 +86,7 @@ Operators apply componentwise to non-keycap and keycap-character domains. The as
 Examples:
 
 - `PolicyKeySet::singleton('#')` renders as `u(0023)`
+- `PolicyKeySet::singleton_keycap('#')` renders as `keycap:u(0023)`
 
 ## Queries
 
@@ -100,10 +99,9 @@ Examples:
 ## Examples
 
 ```rust
-use evfmt::policy_key_set;
+use evfmt::{PolicyKeySet, policy_key_set};
 
-let prefer_bare = policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS;
-let treat_bare_as_text = policy_key_set::ASCII
-    | policy_key_set::RIGHTS_MARKS
-    | policy_key_set::KEYCAP_CHARS;
+let prefer_bare = policy_key_set::ASCII | PolicyKeySet::singleton('\u{00A9}');
+let treat_bare_as_text = policy_key_set::TEXT_DEFAULTS
+    | policy_key_set::KEYCAP_VARIATION_BASES;
 ```

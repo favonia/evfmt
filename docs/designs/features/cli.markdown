@@ -27,9 +27,11 @@ Policy flags configure the predicates defined in [policy.markdown](policy.markdo
 
 Policy set items are comma-separated:
 
-- named sets such as `ascii`, `text-defaults`, `emoji-defaults`, `rights-marks`, `arrows`, `card-suits`, `keycap-chars`, `non-keycap-chars`, or `keycap-emojis`
+- named sets such as `ascii`, `text-defaults`, `emoji-defaults`, `variation-bases`, `keycap:rgi`, `keycap:text-defaults`, `keycap:emoji-defaults`, or `keycap:variation-bases`
 - non-keycap `u(HEX)` code-point items
+- keycap-character `keycap:u(HEX)` code-point items
 - single-character literals, optionally followed by a variation selector, such as `#`, `*`, `©︎`, or `©️`
+- keycap-character literals prefixed with `keycap:`, such as `keycap:#`
 
 `all` selects every policy key. `none` clears a policy set and is valid only with `--set-*` policy flags.
 

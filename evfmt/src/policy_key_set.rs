@@ -11,11 +11,10 @@
 //! # Examples
 //!
 //! ```rust
-//! use evfmt::{FormatResult, Policy, format_text, policy_key_set};
+//! use evfmt::{FormatResult, Policy, PolicyKeySet, format_text, policy_key_set};
 //!
 //! let policy = Policy::default()
-//!     .with_prefer_bare(policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS)
-//!     .with_bare_as_text(policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS);
+//!     .with_prefer_bare(policy_key_set::ASCII | PolicyKeySet::singleton('\u{00A9}'));
 //!
 //! assert_eq!(format_text("\u{00A9}", &policy), FormatResult::Unchanged);
 //! ```
@@ -53,44 +52,35 @@ pub const EMOJI_DEFAULTS: PolicyKeySet = PolicyKeySet {
     },
     keycap_chars: CharSet::none(),
 };
-/// Rights-mark variation-sequence bases (©️ (U+00A9), ®️ (U+00AE), ™️ (U+2122))
-/// as non-keycap policy keys.
-pub const RIGHTS_MARKS: PolicyKeySet = PolicyKeySet {
-    chars: CharSet {
-        bits: named_bits(NamedSet::RightsMarks),
-    },
-    keycap_chars: CharSet::none(),
-};
-/// Arrow variation-sequence bases as non-keycap policy keys.
-pub const ARROWS: PolicyKeySet = PolicyKeySet {
-    chars: CharSet {
-        bits: named_bits(NamedSet::Arrows),
-    },
-    keycap_chars: CharSet::none(),
-};
-/// Card-suit variation-sequence bases (♠️ (U+2660), ♣️ (U+2663), ♥️ (U+2665),
-/// ♦️ (U+2666)) as non-keycap policy keys.
-pub const CARD_SUITS: PolicyKeySet = PolicyKeySet {
-    chars: CharSet {
-        bits: named_bits(NamedSet::CardSuits),
-    },
-    keycap_chars: CharSet::none(),
-};
 /// Every non-keycap policy key for a variation-sequence base.
-pub const NON_KEYCAP_CHARS: PolicyKeySet = PolicyKeySet {
+pub const VARIATION_BASES: PolicyKeySet = PolicyKeySet {
     chars: ALL_CHARS,
     keycap_chars: CharSet::none(),
 };
+/// Text-default variation-sequence bases as keycap-character policy keys.
+pub const KEYCAP_TEXT_DEFAULTS: PolicyKeySet = PolicyKeySet {
+    chars: CharSet::none(),
+    keycap_chars: CharSet {
+        bits: named_bits(NamedSet::TextDefaults),
+    },
+};
+/// Emoji-default variation-sequence bases as keycap-character policy keys.
+pub const KEYCAP_EMOJI_DEFAULTS: PolicyKeySet = PolicyKeySet {
+    chars: CharSet::none(),
+    keycap_chars: CharSet {
+        bits: named_bits(NamedSet::EmojiDefaults),
+    },
+};
 /// Every keycap-character policy key for a variation-sequence base.
-pub const KEYCAP_CHARS: PolicyKeySet = PolicyKeySet {
+pub const KEYCAP_VARIATION_BASES: PolicyKeySet = PolicyKeySet {
     chars: CharSet::none(),
     keycap_chars: ALL_CHARS,
 };
 /// RGI emoji keycap bases (`#`, `*`, `0`-`9`) as keycap-character policy keys.
-pub const KEYCAP_EMOJIS: PolicyKeySet = PolicyKeySet {
+pub const KEYCAP_RGI: PolicyKeySet = PolicyKeySet {
     chars: CharSet::none(),
     keycap_chars: CharSet {
-        bits: named_bits(NamedSet::KeycapEmojis),
+        bits: named_bits(NamedSet::KeycapRgi),
     },
 };
 
@@ -99,10 +89,7 @@ enum NamedSet {
     Ascii,
     TextDefaults,
     EmojiDefaults,
-    RightsMarks,
-    Arrows,
-    CardSuits,
-    KeycapEmojis,
+    KeycapRgi,
 }
 
 /// A finite set of formatter policy keys.
@@ -116,9 +103,8 @@ enum NamedSet {
 /// ```rust
 /// use evfmt::{PolicyKeySet, policy_key_set};
 ///
-/// let rights_marks = policy_key_set::RIGHTS_MARKS;
-/// assert!(rights_marks.contains('\u{00A9}'));
-/// assert!(!rights_marks.contains_keycap('\u{00A9}'));
+/// assert!(policy_key_set::TEXT_DEFAULTS.contains('\u{00A9}'));
+/// assert!(!policy_key_set::TEXT_DEFAULTS.contains_keycap('\u{00A9}'));
 ///
 /// let keycap_hash = PolicyKeySet::singleton_keycap('#');
 /// assert!(keycap_hash.contains_keycap('#'));
@@ -273,28 +259,7 @@ const fn named_entry_matches(id: NamedSet, ch: char) -> bool {
         NamedSet::Ascii => ch.is_ascii(),
         NamedSet::TextDefaults => unicode::is_text_default(ch),
         NamedSet::EmojiDefaults => unicode::is_emoji_default(ch),
-        NamedSet::RightsMarks => matches!(ch, '\u{00A9}' | '\u{00AE}' | '\u{2122}'),
-        NamedSet::Arrows => matches!(
-            ch,
-            '\u{2194}'
-                | '\u{2195}'
-                | '\u{2196}'
-                | '\u{2197}'
-                | '\u{2198}'
-                | '\u{2199}'
-                | '\u{21A9}'
-                | '\u{21AA}'
-                | '\u{27A1}'
-                | '\u{2934}'
-                | '\u{2935}'
-                | '\u{2B05}'
-                | '\u{2B06}'
-                | '\u{2B07}'
-        ),
-        NamedSet::CardSuits => {
-            matches!(ch, '\u{2660}' | '\u{2663}' | '\u{2665}' | '\u{2666}')
-        }
-        NamedSet::KeycapEmojis => ch == '#' || ch == '*' || ch.is_ascii_digit(),
+        NamedSet::KeycapRgi => ch == '#' || ch == '*' || ch.is_ascii_digit(),
     }
 }
 
@@ -404,9 +369,11 @@ impl fmt::Display for PolicyKeySet {
                 if !first {
                     write!(f, ",")?;
                 }
-                // Keep this spelling parseable for diagnostics and tests, but
-                // do not document it as a stable CLI-facing policy item yet.
-                write!(f, "k({:04X})", unicode::variation_entry(index) as u32)?;
+                write!(
+                    f,
+                    "keycap:u({:04X})",
+                    unicode::variation_entry(index) as u32
+                )?;
                 first = false;
             }
         }

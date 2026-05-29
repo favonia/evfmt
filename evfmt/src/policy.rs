@@ -15,13 +15,14 @@
 //!
 //! The default policy uses [`policy_key_set::ASCII`] plus
 //! [`policy_key_set::EMOJI_DEFAULTS`] for `prefer_bare` and
-//! [`policy_key_set::TEXT_DEFAULTS`] plus [`policy_key_set::KEYCAP_CHARS`] for
-//! `bare_as_text`. That keeps ASCII bare forms such as `#` canonical, removes
-//! redundant selectors such as the `FE0E` in `#\u{FE0E}`, keeps emoji-default
-//! bare forms such as `\u{2728}` canonical, resolves text-default bare forms
-//! such as `\u{00A9}` to text presentation by inserting `FE0E`, and resolves
-//! bare keycap-character forms such as `#\u{20E3}` to text presentation by
-//! inserting `FE0E` before `U+20E3`.
+//! [`policy_key_set::TEXT_DEFAULTS`] plus
+//! [`policy_key_set::KEYCAP_VARIATION_BASES`] for `bare_as_text`. That keeps
+//! ASCII bare forms such as `#` canonical, removes redundant selectors such as
+//! the `FE0E` in `#\u{FE0E}`, keeps emoji-default bare forms such as
+//! `\u{2728}` canonical, resolves text-default bare forms such as `\u{00A9}` to
+//! text presentation by inserting `FE0E`, and resolves bare keycap-character
+//! forms such as `#\u{20E3}` to text presentation by inserting `FE0E` before
+//! `U+20E3`.
 //!
 //! # Examples
 //!
@@ -64,7 +65,7 @@ use crate::policy_key_set::{self, PolicyKeySet};
 /// # Examples
 ///
 /// ```rust
-/// use evfmt::{FormatResult, Policy, format_text, policy_key_set};
+/// use evfmt::{FormatResult, Policy, PolicyKeySet, format_text, policy_key_set};
 ///
 /// let policy = Policy::default();
 ///
@@ -75,11 +76,10 @@ use crate::policy_key_set::{self, PolicyKeySet};
 /// );
 /// assert_eq!(format_text("\u{2728}", &policy), FormatResult::Unchanged);
 ///
-/// let rights_marks =
-///     policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS;
+/// let ascii_and_copyright = policy_key_set::ASCII | PolicyKeySet::singleton('\u{00A9}');
 /// let policy = Policy::default()
-///     .with_prefer_bare(rights_marks)
-///     .with_bare_as_text(rights_marks);
+///     .with_prefer_bare(ascii_and_copyright)
+///     .with_bare_as_text(ascii_and_copyright);
 ///
 /// assert_eq!(format_text("\u{00A9}\u{FE0E}", &policy), FormatResult::Changed("\u{00A9}".into()));
 /// ```
@@ -108,10 +108,10 @@ impl Policy {
     /// # Examples
     ///
     /// ```rust
-    /// use evfmt::{FormatResult, Policy, format_text, policy_key_set};
+    /// use evfmt::{FormatResult, Policy, PolicyKeySet, format_text, policy_key_set};
     ///
     /// let policy = Policy::default().with_prefer_bare(
-    ///     policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS,
+    ///     policy_key_set::ASCII | PolicyKeySet::singleton('\u{00A9}'),
     /// );
     ///
     /// assert_eq!(
@@ -136,7 +136,7 @@ impl Policy {
     /// use evfmt::{FormatResult, Policy, format_text, policy_key_set};
     ///
     /// let policy = Policy::default().modify_prefer_bare(|set| {
-    ///     set | policy_key_set::RIGHTS_MARKS
+    ///     set | policy_key_set::TEXT_DEFAULTS
     /// });
     ///
     /// assert_eq!(
@@ -192,7 +192,7 @@ impl Policy {
     /// use evfmt::{FormatResult, Policy, format_text, policy_key_set};
     ///
     /// let policy = Policy::default()
-    ///     .modify_bare_as_text(|set| set | policy_key_set::RIGHTS_MARKS);
+    ///     .modify_bare_as_text(|set| set | policy_key_set::TEXT_DEFAULTS);
     ///
     /// assert_eq!(
     ///     format_text("\u{00A9}", &policy),
@@ -233,7 +233,7 @@ impl Default for Policy {
     fn default() -> Self {
         Self {
             prefer_bare: policy_key_set::ASCII | policy_key_set::EMOJI_DEFAULTS,
-            bare_as_text: policy_key_set::TEXT_DEFAULTS | policy_key_set::KEYCAP_CHARS,
+            bare_as_text: policy_key_set::TEXT_DEFAULTS | policy_key_set::KEYCAP_VARIATION_BASES,
         }
     }
 }

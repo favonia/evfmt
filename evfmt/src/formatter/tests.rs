@@ -139,8 +139,8 @@ fn keycap_policy_can_select_bare_text_or_emoji_outputs() {
     );
 
     let bare_text_policy = Policy::default()
-        .with_prefer_bare(crate::policy_key_set::KEYCAP_CHARS)
-        .with_bare_as_text(crate::policy_key_set::KEYCAP_CHARS);
+        .with_prefer_bare(crate::policy_key_set::KEYCAP_VARIATION_BASES)
+        .with_bare_as_text(crate::policy_key_set::KEYCAP_VARIATION_BASES);
     assert_eq!(
         format_text("#\u{FE0E}\u{20E3}", &bare_text_policy),
         FormatResult::Changed("#\u{20E3}".to_owned())

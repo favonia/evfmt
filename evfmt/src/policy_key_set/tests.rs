@@ -24,7 +24,10 @@ fn test_all_matches_singleton_union_for_full_universe() {
 
 #[test]
 fn test_all_matches_named_domains() {
-    assert_eq!(PolicyKeySet::all(), NON_KEYCAP_CHARS | KEYCAP_CHARS);
+    assert_eq!(
+        PolicyKeySet::all(),
+        VARIATION_BASES | KEYCAP_VARIATION_BASES
+    );
 }
 
 #[test]
@@ -45,18 +48,27 @@ fn test_named_ascii() {
 
 #[test]
 fn test_named_keycap_domains() {
-    assert!(NON_KEYCAP_CHARS.contains('#'));
-    assert!(!NON_KEYCAP_CHARS.contains_keycap('#'));
-    assert!(!KEYCAP_CHARS.contains('#'));
-    assert!(KEYCAP_CHARS.contains_keycap('#'));
-    assert!(KEYCAP_CHARS.contains_keycap('\u{00A9}'));
+    assert!(VARIATION_BASES.contains('#'));
+    assert!(!VARIATION_BASES.contains_keycap('#'));
+    assert!(!KEYCAP_VARIATION_BASES.contains('#'));
+    assert!(KEYCAP_VARIATION_BASES.contains_keycap('#'));
+    assert!(KEYCAP_VARIATION_BASES.contains_keycap('\u{00A9}'));
 
-    assert!(!KEYCAP_EMOJIS.contains('#'));
-    assert!(KEYCAP_EMOJIS.contains_keycap('#'));
-    assert!(KEYCAP_EMOJIS.contains_keycap('*'));
-    assert!(KEYCAP_EMOJIS.contains_keycap('0'));
-    assert!(KEYCAP_EMOJIS.contains_keycap('9'));
-    assert!(!KEYCAP_EMOJIS.contains_keycap('\u{00A9}'));
+    assert!(!KEYCAP_TEXT_DEFAULTS.contains('#'));
+    assert!(KEYCAP_TEXT_DEFAULTS.contains_keycap('#'));
+    assert!(KEYCAP_TEXT_DEFAULTS.contains_keycap('\u{00A9}'));
+    assert!(!KEYCAP_TEXT_DEFAULTS.contains_keycap('\u{2728}'));
+
+    assert!(!KEYCAP_EMOJI_DEFAULTS.contains('\u{2728}'));
+    assert!(KEYCAP_EMOJI_DEFAULTS.contains_keycap('\u{2728}'));
+    assert!(!KEYCAP_EMOJI_DEFAULTS.contains_keycap('\u{00A9}'));
+
+    assert!(!KEYCAP_RGI.contains('#'));
+    assert!(KEYCAP_RGI.contains_keycap('#'));
+    assert!(KEYCAP_RGI.contains_keycap('*'));
+    assert!(KEYCAP_RGI.contains_keycap('0'));
+    assert!(KEYCAP_RGI.contains_keycap('9'));
+    assert!(!KEYCAP_RGI.contains_keycap('\u{00A9}'));
 }
 
 #[test]
@@ -75,34 +87,6 @@ fn test_named_emoji_defaults() {
     assert!(!set.contains('\u{00A9}'));
     assert!(!set.contains('#'));
     assert!(!set.contains('A'));
-}
-
-#[test]
-fn test_named_rights_marks() {
-    let set = RIGHTS_MARKS;
-    assert!(set.contains('\u{00A9}'));
-    assert!(set.contains('\u{00AE}'));
-    assert!(set.contains('\u{2122}'));
-    assert!(!set.contains('\u{2660}'));
-}
-
-#[test]
-fn test_named_arrows() {
-    let set = ARROWS;
-    assert!(set.contains('\u{2194}'));
-    assert!(set.contains('\u{27A1}'));
-    assert!(set.contains('\u{2B05}'));
-    assert!(!set.contains('\u{2660}'));
-}
-
-#[test]
-fn test_named_card_suits() {
-    let set = CARD_SUITS;
-    assert!(set.contains('\u{2660}'));
-    assert!(set.contains('\u{2663}'));
-    assert!(set.contains('\u{2665}'));
-    assert!(set.contains('\u{2666}'));
-    assert!(!set.contains('\u{00A9}'));
 }
 
 #[test]
@@ -231,10 +215,13 @@ fn test_display_examples() {
     assert_eq!(PolicyKeySet::none().to_string(), "none");
     assert_eq!(PolicyKeySet::all().to_string(), "all");
     assert_eq!(PolicyKeySet::singleton('#').to_string(), "u(0023)");
-    assert_eq!(PolicyKeySet::singleton_keycap('#').to_string(), "k(0023)");
+    assert_eq!(
+        PolicyKeySet::singleton_keycap('#').to_string(),
+        "keycap:u(0023)"
+    );
     assert_eq!(
         (PolicyKeySet::singleton('#') | PolicyKeySet::singleton_keycap('#')).to_string(),
-        "u(0023),k(0023)"
+        "u(0023),keycap:u(0023)"
     );
 }
 
@@ -243,9 +230,10 @@ fn test_named_set_matches_reject_nonmembers() {
     assert!(!ASCII.contains('\u{00A9}'));
     assert!(!TEXT_DEFAULTS.contains('\u{2728}'));
     assert!(!EMOJI_DEFAULTS.contains('\u{00A9}'));
-    assert!(!RIGHTS_MARKS.contains('#'));
-    assert!(!ARROWS.contains('\u{2660}'));
-    assert!(!CARD_SUITS.contains('\u{2194}'));
+    assert!(!VARIATION_BASES.contains('A'));
+    assert!(!KEYCAP_TEXT_DEFAULTS.contains_keycap('\u{2728}'));
+    assert!(!KEYCAP_EMOJI_DEFAULTS.contains_keycap('\u{00A9}'));
+    assert!(!KEYCAP_RGI.contains_keycap('\u{00A9}'));
 }
 
 #[test]
@@ -277,12 +265,17 @@ fn test_named_bits_matches_public_named_sets() {
         named_bits(NamedSet::EmojiDefaults),
         EMOJI_DEFAULTS.chars.bits
     );
-    assert_eq!(named_bits(NamedSet::RightsMarks), RIGHTS_MARKS.chars.bits);
-    assert_eq!(named_bits(NamedSet::Arrows), ARROWS.chars.bits);
-    assert_eq!(named_bits(NamedSet::CardSuits), CARD_SUITS.chars.bits);
     assert_eq!(
-        named_bits(NamedSet::KeycapEmojis),
-        KEYCAP_EMOJIS.keycap_chars.bits
+        named_bits(NamedSet::TextDefaults),
+        KEYCAP_TEXT_DEFAULTS.keycap_chars.bits
+    );
+    assert_eq!(
+        named_bits(NamedSet::EmojiDefaults),
+        KEYCAP_EMOJI_DEFAULTS.keycap_chars.bits
+    );
+    assert_eq!(
+        named_bits(NamedSet::KeycapRgi),
+        KEYCAP_RGI.keycap_chars.bits
     );
 }
 
@@ -297,18 +290,9 @@ fn test_named_entry_matches_each_named_set() {
     assert!(named_entry_matches(NamedSet::EmojiDefaults, '\u{2728}'));
     assert!(!named_entry_matches(NamedSet::EmojiDefaults, '\u{00A9}'));
 
-    assert!(named_entry_matches(NamedSet::RightsMarks, '\u{00A9}'));
-    assert!(!named_entry_matches(NamedSet::RightsMarks, '\u{2660}'));
-
-    assert!(named_entry_matches(NamedSet::Arrows, '\u{2194}'));
-    assert!(!named_entry_matches(NamedSet::Arrows, '\u{2660}'));
-
-    assert!(named_entry_matches(NamedSet::CardSuits, '\u{2660}'));
-    assert!(!named_entry_matches(NamedSet::CardSuits, '\u{00A9}'));
-
-    assert!(named_entry_matches(NamedSet::KeycapEmojis, '#'));
-    assert!(named_entry_matches(NamedSet::KeycapEmojis, '0'));
-    assert!(!named_entry_matches(NamedSet::KeycapEmojis, '\u{00A9}'));
+    assert!(named_entry_matches(NamedSet::KeycapRgi, '#'));
+    assert!(named_entry_matches(NamedSet::KeycapRgi, '0'));
+    assert!(!named_entry_matches(NamedSet::KeycapRgi, '\u{00A9}'));
 }
 
 #[test]

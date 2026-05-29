@@ -39,12 +39,12 @@ The default policy is:
 
 ```sh
 --set-prefer-bare=ascii,emoji-defaults
---set-bare-as-text=text-defaults,keycap-chars
+--set-bare-as-text=text-defaults,keycap:variation-bases
 ```
 
 These defaults must satisfy the exact-RGI constraints in [formatting.markdown](../core/formatting.markdown): default formatting preserves recognized exact RGI emoji input, and default policy chooses the RGI spelling when its chosen canonical form has emoji presentation and that spelling is reasonable.
 
-`text-defaults` selects text-default bases only in non-keycap selector slots. Keycap selector slots are a separate policy-key domain, so their default text-side behavior is expressed explicitly with `keycap-chars`.
+`text-defaults` selects text-default bases only in non-keycap selector slots. Keycap selector slots are a separate policy-key domain, so their default text-side behavior is expressed explicitly with `keycap:variation-bases`.
 
 This means:
 

@@ -81,10 +81,13 @@ fn format_help_describes_stateful_options() {
             "--set-ignore <FILTER[,FILTER]...>",
         ))
         .stdout(predicates::str::contains(
-            "POLICYSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits,",
+            "POLICYSET: ascii, text-defaults, emoji-defaults, variation-bases, keycap:rgi,",
         ))
         .stdout(predicates::str::contains(
-            "keycap-chars, non-keycap-chars, keycap-emojis, u(HEX), or a single character.",
+            "keycap:text-defaults, keycap:emoji-defaults, keycap:variation-bases,",
+        ))
+        .stdout(predicates::str::contains(
+            "u(HEX), keycap:u(HEX), CHAR, or keycap:CHAR.",
         ))
         .stdout(predicates::str::contains("FILTER: git, evfmt, or hidden."))
         .stdout(predicates::str::contains(
@@ -109,10 +112,13 @@ fn check_help_describes_stateful_options() {
             "--set-ignore <FILTER[,FILTER]...>",
         ))
         .stdout(predicates::str::contains(
-            "POLICYSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits,",
+            "POLICYSET: ascii, text-defaults, emoji-defaults, variation-bases, keycap:rgi,",
         ))
         .stdout(predicates::str::contains(
-            "keycap-chars, non-keycap-chars, keycap-emojis, u(HEX), or a single character.",
+            "keycap:text-defaults, keycap:emoji-defaults, keycap:variation-bases,",
+        ))
+        .stdout(predicates::str::contains(
+            "u(HEX), keycap:u(HEX), CHAR, or keycap:CHAR.",
         ))
         .stdout(predicates::str::contains("FILTER: git, evfmt, or hidden."))
         .stdout(predicates::str::contains(
@@ -641,8 +647,8 @@ fn set_prefer_bare_keeps_rights_mark_bare() {
     file.write_str("\u{00A9}").unwrap();
 
     format_command()
-        .arg("--set-prefer-bare=ascii,rights-marks")
-        .arg("--set-bare-as-text=ascii,rights-marks")
+        .arg("--set-prefer-bare=ascii,u(00A9)")
+        .arg("--set-bare-as-text=ascii,u(00A9)")
         .arg(file.path())
         .assert()
         .success();
@@ -657,9 +663,9 @@ fn left_to_right_prefer_bare_operations_are_respected() {
     file.write_str("\u{00A9}\u{FE0F}").unwrap();
 
     format_command()
-        .arg("--add-prefer-bare=rights-marks")
-        .arg("--remove-prefer-bare=rights-marks")
-        .arg("--add-bare-as-text=rights-marks")
+        .arg("--add-prefer-bare=u(00A9)")
+        .arg("--remove-prefer-bare=u(00A9)")
+        .arg("--add-bare-as-text=u(00A9)")
         .arg(file.path())
         .assert()
         .success();
@@ -721,11 +727,11 @@ fn unknown_preset_reports_suggestion() {
     file.write_str("\u{00A9}").unwrap();
 
     format_command()
-        .arg("--set-prefer-bare=arowws")
+        .arg("--set-prefer-bare=keycap:rg")
         .arg(file.path())
         .assert()
         .code(2)
-        .stderr(predicates::str::contains("did you mean `arrows`?"));
+        .stderr(predicates::str::contains("did you mean `keycap:rgi`?"));
 
     file.assert("\u{00A9}");
 }
@@ -859,7 +865,7 @@ fn add_bare_as_text_can_force_explicit_text_selector() {
     format_command()
         .arg("--set-prefer-bare=none")
         .arg("--set-bare-as-text=none")
-        .arg("--add-bare-as-text=rights-marks")
+        .arg("--add-bare-as-text=u(00A9)")
         .arg(file.path())
         .assert()
         .success();
@@ -1025,13 +1031,13 @@ fn usage_errors_are_reported_in_cli_order() {
     file.write_str("\u{00A9}").unwrap();
 
     format_command()
-        .arg("--set-prefer-bare=arowws")
+        .arg("--set-prefer-bare=keycap:rg")
         .arg("--set-ignore=hdden")
         .arg(file.path())
         .assert()
         .code(2)
         .stderr(predicates::str::contains("--set-prefer-bare"))
-        .stderr(predicates::str::contains("did you mean `arrows`?"))
+        .stderr(predicates::str::contains("did you mean `keycap:rgi`?"))
         .stderr(predicates::str::contains("--set-ignore").not());
 }
 

@@ -58,8 +58,11 @@ fn policy_key_set_lists_parse_shortcuts_and_comma_lists() {
         PolicyKeySet::none()
     );
 
-    let set =
-        parse_policy_key_set_list(UpdateKind::Add, " ascii, u(00A9), k(0023), *\u{FE0F} ").unwrap();
+    let set = parse_policy_key_set_list(
+        UpdateKind::Add,
+        " ascii, u(00A9), keycap:u(0023), keycap:*\u{FE0F} ",
+    )
+    .unwrap();
     assert!(set.contains('#'));
     assert!(set.contains('*'));
     assert!(set.contains('\u{00A9}'));
@@ -74,17 +77,31 @@ fn policy_key_set_lists_parse_shortcuts_and_comma_lists() {
     assert!(emoji_defaults.contains('\u{2728}'));
     assert!(!emoji_defaults.contains('\u{00A9}'));
 
-    let arrows = parse_policy_key_set_list(UpdateKind::Add, "arrows").unwrap();
-    assert!(arrows.contains('\u{2194}'));
-    assert!(!arrows.contains('\u{2660}'));
+    let variation_bases = parse_policy_key_set_list(UpdateKind::Add, "variation-bases").unwrap();
+    assert!(variation_bases.contains('\u{2194}'));
+    assert!(variation_bases.contains('\u{2660}'));
+    assert!(!variation_bases.contains('A'));
 
-    let keycap_chars = parse_policy_key_set_list(UpdateKind::Add, "keycap-chars").unwrap();
-    assert!(!keycap_chars.contains('#'));
-    assert!(keycap_chars.contains_keycap('#'));
+    let keycap_variation_bases =
+        parse_policy_key_set_list(UpdateKind::Add, "keycap:variation-bases").unwrap();
+    assert!(!keycap_variation_bases.contains('#'));
+    assert!(keycap_variation_bases.contains_keycap('#'));
+    assert!(keycap_variation_bases.contains_keycap('\u{00A9}'));
 
-    let keycap_emojis = parse_policy_key_set_list(UpdateKind::Add, "keycap-emojis").unwrap();
-    assert!(keycap_emojis.contains_keycap('#'));
-    assert!(!keycap_emojis.contains_keycap('\u{00A9}'));
+    let keycap_rgi = parse_policy_key_set_list(UpdateKind::Add, "keycap:rgi").unwrap();
+    assert!(keycap_rgi.contains_keycap('#'));
+    assert!(!keycap_rgi.contains_keycap('\u{00A9}'));
+
+    let keycap_text_defaults =
+        parse_policy_key_set_list(UpdateKind::Add, "keycap:text-defaults").unwrap();
+    assert!(keycap_text_defaults.contains_keycap('#'));
+    assert!(keycap_text_defaults.contains_keycap('\u{00A9}'));
+    assert!(!keycap_text_defaults.contains_keycap('\u{2728}'));
+
+    let keycap_emoji_defaults =
+        parse_policy_key_set_list(UpdateKind::Add, "keycap:emoji-defaults").unwrap();
+    assert!(keycap_emoji_defaults.contains_keycap('\u{2728}'));
+    assert!(!keycap_emoji_defaults.contains_keycap('\u{00A9}'));
 }
 
 #[test]
@@ -107,12 +124,12 @@ fn policy_key_set_lists_reject_invalid_shortcut_usage() {
 #[test]
 fn policy_key_set_items_report_specific_errors() {
     assert_parse_error(
-        parse_policy_key_set_list(UpdateKind::Set, "arowws"),
-        "unknown policy set preset `arowws`; did you mean `arrows`?",
+        parse_policy_key_set_list(UpdateKind::Set, "keycap:rg"),
+        "unknown policy set preset `keycap:rg`; did you mean `keycap:rgi`?",
     );
     assert_parse_error(
-        parse_policy_key_set_list(UpdateKind::Set, "card_suit"),
-        "did you mean `card-suits`?",
+        parse_policy_key_set_list(UpdateKind::Set, "keycap:text-default"),
+        "did you mean `keycap:text-defaults`?",
     );
     assert_parse_error(
         parse_policy_key_set_list(UpdateKind::Set, "u(110000)"),
@@ -127,11 +144,19 @@ fn policy_key_set_items_report_specific_errors() {
         "invalid code point item",
     );
     assert_parse_error(
+        parse_policy_key_set_list(UpdateKind::Set, "keycap:u(00A9"),
+        "invalid code point item",
+    );
+    assert_parse_error(
         parse_policy_key_set_list(UpdateKind::Set, "u(0041)"),
         "not eligible for emoji variation selectors",
     );
     assert_parse_error(
         parse_policy_key_set_list(UpdateKind::Set, "A"),
+        "not eligible for emoji variation selectors",
+    );
+    assert_parse_error(
+        parse_policy_key_set_list(UpdateKind::Set, "keycap:A"),
         "not eligible for emoji variation selectors",
     );
     assert_parse_error(
@@ -194,11 +219,11 @@ fn runtime_settings_start_with_documented_policy_defaults() {
 fn policy_operations_apply_to_their_target_in_order() {
     let settings = build_runtime_settings(&[
         operation(OperationId::SetPreferBare, "none"),
-        operation(OperationId::AddPreferBare, "rights-marks"),
+        operation(OperationId::AddPreferBare, "u(00A9)"),
         operation(OperationId::RemovePreferBare, "u(00AE)"),
         operation(OperationId::SetBareAsText, "all"),
         operation(OperationId::RemoveBareAsText, "ascii"),
-        operation(OperationId::AddBareAsText, "card-suits"),
+        operation(OperationId::AddBareAsText, "u(2660)"),
         operation(OperationId::SetIgnore, "none"),
     ])
     .unwrap();
@@ -228,7 +253,7 @@ fn ignore_operations_apply_left_to_right() {
         operation(OperationId::SetIgnore, "none"),
         operation(OperationId::AddIgnore, "git,hidden"),
         operation(OperationId::RemoveIgnore, "hidden"),
-        operation(OperationId::AddPreferBare, "rights-marks"),
+        operation(OperationId::AddPreferBare, "u(00A9)"),
     ])
     .unwrap();
 
@@ -262,11 +287,14 @@ fn edit_distance_supports_suggestions_threshold() {
     assert_eq!(edit_distance("abc", "ac"), 1);
     assert_eq!(edit_distance("kitten", "sitting"), 3);
     assert_eq!(suggest_name("abd", &["abc", "abe"]), Some("abc")); // spellchecker:disable-line
-    assert_eq!(suggest_name("arr", &named_set_names()), Some("arrows"));
+    assert_eq!(
+        suggest_name("keycap:rg", &named_set_names()),
+        Some("keycap:rgi")
+    );
     assert_eq!(suggest_name("unrelated", &named_set_names()), None);
     assert_eq!(
-        suggest_name("card-suit", &named_set_names()),
-        Some("card-suits")
+        suggest_name("keycap:text-default", &named_set_names()),
+        Some("keycap:text-defaults")
     );
 }
 
