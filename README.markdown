@@ -198,10 +198,11 @@ Use this when text-default symbols such as `©︎` (U+00A9), `®︎` (U+00AE), `
 ```sh
 evfmt format \
   --add-prefer-bare=text-defaults \
+  --add-prefer-bare=keycap:text-defaults \
   README.markdown
 ```
 
-With that option, bare or text-form text-default symbols in non-keycap selector slots normalize to bare. Explicit emoji-form symbols such as `©️` stay emoji. Keycap-character positions are configured separately.
+With those options, bare or text-form text-default symbols normalize to bare in both non-keycap selector slots and keycap-character positions. Explicit emoji-form symbols such as `©️` stay emoji.
 
 #### Use Emoji-Style Keycaps
 
@@ -209,7 +210,7 @@ Use this when existing text contains bare keycap sequences such as `1` + `U+20E3
 
 ```sh
 evfmt format \
-  --remove-bare-as-text=keycap-emojis \
+  --remove-bare-as-text=keycap:rgi \
   README.markdown
 ```
 
@@ -221,7 +222,7 @@ The policy is shaped by two choices: how bare characters render on your _referen
 
 The CLI exposes those choices as two mutable sets:
 
-- `bare-as-text`: For which policy keys bare spelling should be treated as text when it must be interpreted. The default set is `text-defaults,keycap-chars`.
+- `bare-as-text`: For which policy keys bare spelling should be treated as text when it must be interpreted. The default set is `text-defaults,keycap:variation-bases`.
 - `prefer-bare`: Among characters that can stay bare without changing their appearance on the reference platform, which ones should stay bare rather than getting an explicit selector. The default set is `ascii,emoji-defaults`, so ASCII and emoji-default characters stay bare, while text-default non-ASCII characters still get explicit text selectors.
 
 To choose the right policy, first decide whether a character's bare form looks like text or emoji on your reference platform. Put it in `bare-as-text` if the bare form looks like text. Then decide whether the character should stay bare in the files you publish, as long as doing so preserves the intended presentation. Put it in `prefer-bare` if bare spelling is stable enough for your target platforms.
@@ -235,7 +236,7 @@ The two choices determine how `evfmt` repairs each policy-resolved selector slot
 | in `prefer-bare` only               | changes explicit emoji to bare; leaves others alone |
 | in neither set                      | changes bare to explicit emoji; leaves others alone |
 
-With the default sets `bare-as-text = text-defaults,keycap-chars` and `prefer-bare = ascii,emoji-defaults`, ASCII bare forms and emoji-default bare forms stay bare, text-default non-ASCII bare forms in non-keycap selector slots get explicit text selectors, and bare keycap-character forms get explicit text selectors.
+With the default sets `bare-as-text = text-defaults,keycap:variation-bases` and `prefer-bare = ascii,emoji-defaults`, ASCII bare forms and emoji-default bare forms stay bare, text-default non-ASCII bare forms in non-keycap selector slots get explicit text selectors, and bare keycap-character forms get explicit text selectors.
 
 #### Policy Flags
 
@@ -257,21 +258,20 @@ To update the `prefer-bare` set:
 | `--add-prefer-bare=<set>[,<set>...]`    | Add to the set      |
 | `--remove-prefer-bare=<set>[,<set>...]` | Remove from the set |
 
-The policy sets start as `prefer-bare = ascii,emoji-defaults` and `bare-as-text = text-defaults,keycap-chars`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
+The policy sets start as `prefer-bare = ascii,emoji-defaults` and `bare-as-text = text-defaults,keycap:variation-bases`, and flags are processed from left to right. `set-*` replaces the current set, `add-*` unions items into it, and `remove-*` subtracts items from it.
 
-Each `<set>` in the list can be either one of the named sets below, one code point with `u(HEX)`, such as `u(00A9)`, or one character, such as `#`, `*`, or `©️`. Presentation selectors are ignored when matching a single character. Semantic named sets such as `ascii`, `text-defaults`, `emoji-defaults`, `rights-marks`, `arrows`, and `card-suits` apply only to non-keycap selector slots. Use `keycap-chars` and `keycap-emojis` for keycap-character positions.
+Each `<set>` in the list can be either one of the named sets below, one non-keycap code point with `u(HEX)`, such as `u(00A9)`, one keycap-character code point with `keycap:u(HEX)`, such as `keycap:u(0023)`, one non-keycap character, such as `#`, `*`, or `©️`, or one keycap-character item, such as `keycap:#`. Presentation selectors are ignored when matching a single character.
 
-| Set                | Meaning                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------- |
-| `ascii`            | ASCII dual-presentation characters in non-keycap selector slots, such as `#`, `*`, and digits |
-| `text-defaults`    | Text-default dual-presentation characters in non-keycap selector slots                        |
-| `emoji-defaults`   | Emoji-default dual-presentation characters in non-keycap selector slots                       |
-| `rights-marks`     | Copyright and registered/trademark-style marks in non-keycap selector slots                   |
-| `arrows`           | Arrow symbols in non-keycap selector slots                                                    |
-| `card-suits`       | Card suit symbols in non-keycap selector slots                                                |
-| `keycap-chars`     | Dual-presentation characters in keycap-character positions                                    |
-| `non-keycap-chars` | Dual-presentation characters in non-keycap selector slots                                     |
-| `keycap-emojis`    | Emoji keycap bases (`#`, `*`, `0`–`9`) in keycap-character positions                          |
+| Set                      | Meaning                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `ascii`                  | ASCII dual-presentation characters in non-keycap selector slots, such as `#`, `*`, and digits |
+| `text-defaults`          | Text-default dual-presentation characters in non-keycap selector slots                        |
+| `emoji-defaults`         | Emoji-default dual-presentation characters in non-keycap selector slots                       |
+| `variation-bases`        | All dual-presentation characters in non-keycap selector slots                                 |
+| `keycap:rgi`             | RGI emoji keycap bases (`#`, `*`, `0`–`9`) in keycap-character positions                      |
+| `keycap:text-defaults`   | Text-default dual-presentation characters in keycap-character positions                       |
+| `keycap:emoji-defaults`  | Emoji-default dual-presentation characters in keycap-character positions                      |
+| `keycap:variation-bases` | All dual-presentation characters in keycap-character positions                                |
 
 The meaning of named sets may change as Unicode adds or revises dual-presentation characters.
 

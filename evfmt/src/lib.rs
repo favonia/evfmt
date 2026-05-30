@@ -76,16 +76,13 @@
 //! decisions; fixed repairs have no decisions and use the empty decision vector.
 //!
 //! Custom policies can be built from [`policy_key_set`] policy key sets. In this example,
-//! `rights-marks` contains `\u{00A9}`, so bare COPYRIGHT SIGN is allowed to
-//! remain bare.
+//! a singleton policy key for `\u{00A9}` allows bare COPYRIGHT SIGN to remain bare.
 //!
 //! ```rust
-//! use evfmt::{Policy, format_text, policy_key_set};
+//! use evfmt::{Policy, PolicyKeySet, format_text, policy_key_set};
 //!
-//! let ascii_and_rights_marks = policy_key_set::ASCII | policy_key_set::RIGHTS_MARKS;
-//! let policy = Policy::default()
-//!     .with_prefer_bare(ascii_and_rights_marks)
-//!     .with_bare_as_text(ascii_and_rights_marks);
+//! let ascii_and_copyright = policy_key_set::ASCII | PolicyKeySet::singleton('\u{00A9}');
+//! let policy = Policy::default().with_prefer_bare(ascii_and_copyright);
 //!
 //! let formatted = format_text("\u{00A9}", &policy);
 //! assert_eq!(formatted, evfmt::FormatResult::Unchanged);

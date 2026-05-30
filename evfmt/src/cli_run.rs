@@ -288,6 +288,10 @@ fn split_list_items(input: &str) -> Result<Vec<&str>, CliParseError> {
 }
 
 fn parse_policy_key_set_item(item: &str) -> Result<PolicyKeySet, CliParseError> {
+    if let Some(rest) = item.strip_prefix("keycap:") {
+        return parse_keycap_policy_key_set_item(item, rest);
+    }
+
     if let Some(named_set) = parse_named_set(item) {
         return Ok(named_set);
     }
@@ -296,15 +300,34 @@ fn parse_policy_key_set_item(item: &str) -> Result<PolicyKeySet, CliParseError> 
         return parse_code_point_item(item, CodePointDomain::Ordinary);
     }
 
-    // Undocumented compatibility spelling: the CLI accepts keycap-domain
-    // singletons for internal round-tripping, but this syntax is not mature
-    // enough to advertise as public policy grammar.
-    if item.starts_with("k(") {
+    if let Some(ch) = parse_naked_single(item) {
+        return parse_singleton_item(item, ch, CodePointDomain::Ordinary);
+    }
+
+    if looks_like_identifier(item) {
+        let mut message = format!("unknown policy set preset `{item}`");
+        if let Some(suggestion) = suggest_name(item, &named_set_names()) {
+            let _ = write!(message, "; did you mean `{suggestion}`?");
+        }
+        return Err(CliParseError { message });
+    }
+
+    Err(CliParseError {
+        message: format!("invalid policy set item `{item}`"),
+    })
+}
+
+fn parse_keycap_policy_key_set_item(item: &str, rest: &str) -> Result<PolicyKeySet, CliParseError> {
+    if let Some(named_set) = parse_keycap_named_set(rest) {
+        return Ok(named_set);
+    }
+
+    if rest.starts_with("u(") {
         return parse_code_point_item(item, CodePointDomain::Keycap);
     }
 
-    if let Some(ch) = parse_naked_single(item) {
-        return parse_singleton_item(item, ch, CodePointDomain::Ordinary);
+    if let Some(ch) = parse_naked_single(rest) {
+        return parse_singleton_item(item, ch, CodePointDomain::Keycap);
     }
 
     if looks_like_identifier(item) {
@@ -365,12 +388,17 @@ fn parse_named_set(item: &str) -> Option<PolicyKeySet> {
         "ascii" => Some(policy_key_set::ASCII),
         "text-defaults" => Some(policy_key_set::TEXT_DEFAULTS),
         "emoji-defaults" => Some(policy_key_set::EMOJI_DEFAULTS),
-        "rights-marks" => Some(policy_key_set::RIGHTS_MARKS),
-        "arrows" => Some(policy_key_set::ARROWS),
-        "card-suits" => Some(policy_key_set::CARD_SUITS),
-        "keycap-chars" => Some(policy_key_set::KEYCAP_CHARS),
-        "non-keycap-chars" => Some(policy_key_set::NON_KEYCAP_CHARS),
-        "keycap-emojis" => Some(policy_key_set::KEYCAP_EMOJIS),
+        "variation-bases" => Some(policy_key_set::VARIATION_BASES),
+        _ => None,
+    }
+}
+
+fn parse_keycap_named_set(item: &str) -> Option<PolicyKeySet> {
+    match item {
+        "text-defaults" => Some(policy_key_set::KEYCAP_TEXT_DEFAULTS),
+        "emoji-defaults" => Some(policy_key_set::KEYCAP_EMOJI_DEFAULTS),
+        "variation-bases" => Some(policy_key_set::KEYCAP_VARIATION_BASES),
+        "rgi" => Some(policy_key_set::KEYCAP_RGI),
         _ => None,
     }
 }
@@ -387,7 +415,7 @@ fn parse_code_point_item(
 ) -> Result<PolicyKeySet, CliParseError> {
     let prefix = match domain {
         CodePointDomain::Ordinary => "u(",
-        CodePointDomain::Keycap => "k(",
+        CodePointDomain::Keycap => "keycap:u(",
     };
     let Some(hex) = item
         .strip_prefix(prefix)
@@ -429,17 +457,16 @@ fn parse_singleton_item(
     })
 }
 
-fn named_set_names() -> [&'static str; 9] {
+fn named_set_names() -> [&'static str; 8] {
     [
         "ascii",
         "text-defaults",
         "emoji-defaults",
-        "rights-marks",
-        "arrows",
-        "card-suits",
-        "keycap-chars",
-        "non-keycap-chars",
-        "keycap-emojis",
+        "variation-bases",
+        "keycap:rgi",
+        "keycap:text-defaults",
+        "keycap:emoji-defaults",
+        "keycap:variation-bases",
     ]
 }
 
@@ -458,7 +485,7 @@ fn parse_naked_single(item: &str) -> Option<char> {
 
 fn looks_like_identifier(item: &str) -> bool {
     item.chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == ':')
 }
 
 fn suggest_name<'a>(input: &str, choices: &'a [&str]) -> Option<&'a str> {

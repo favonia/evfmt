@@ -39,7 +39,7 @@ fn operations_are_extracted_in_cli_order_across_option_groups() {
     let matches = build_format_command().get_matches_from([
         "evfmt format",
         "--add-prefer-bare",
-        "rights-marks",
+        "u(00A9)",
         "--set-ignore",
         "none",
         "--remove-bare-as-text",
@@ -54,7 +54,7 @@ fn operations_are_extracted_in_cli_order_across_option_groups() {
         [
             OrderedOperation {
                 id: OperationId::AddPreferBare,
-                value: "rights-marks".to_owned(),
+                value: "u(00A9)".to_owned(),
             },
             OrderedOperation {
                 id: OperationId::SetIgnore,

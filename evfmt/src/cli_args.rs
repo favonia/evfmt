@@ -12,9 +12,9 @@ Policy:
   prefer-bare: characters to keep bare when that preserves the chosen presentation.
 
 Values:
-  POLICYSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, \
-keycap-chars, non-keycap-chars, keycap-emojis, u(HEX), \
-or a single character.
+  POLICYSET: ascii, text-defaults, emoji-defaults, variation-bases, keycap:rgi, \
+keycap:text-defaults, keycap:emoji-defaults, keycap:variation-bases, \
+u(HEX), keycap:u(HEX), CHAR, or keycap:CHAR.
   FILTER: git, evfmt, or hidden.
   Use all for every POLICYSET or FILTER. Use none to clear a set with --set-*.
 
@@ -26,9 +26,9 @@ Policy:
   prefer-bare: characters to keep bare when that preserves the chosen presentation.
 
 Values:
-  POLICYSET: ascii, text-defaults, emoji-defaults, rights-marks, arrows, card-suits, \
-keycap-chars, non-keycap-chars, keycap-emojis, u(HEX), \
-or a single character.
+  POLICYSET: ascii, text-defaults, emoji-defaults, variation-bases, keycap:rgi, \
+keycap:text-defaults, keycap:emoji-defaults, keycap:variation-bases, \
+u(HEX), keycap:u(HEX), CHAR, or keycap:CHAR.
   FILTER: git, evfmt, or hidden.
   Use all for every POLICYSET or FILTER. Use none to clear a set with --set-*.
 
