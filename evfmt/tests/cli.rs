@@ -737,6 +737,56 @@ fn unknown_preset_reports_suggestion() {
 }
 
 #[test]
+fn unknown_unprefixed_policy_preset_reports_suggestion() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .arg("--set-prefer-bare=variation-base")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("did you mean `variation-bases`?"));
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn invalid_keycap_policy_item_is_rejected() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("\u{00A9}").unwrap();
+
+    format_command()
+        .arg("--set-prefer-bare=keycap:##")
+        .arg(file.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains(
+            "invalid policy set item `keycap:##`",
+        ));
+
+    file.assert("\u{00A9}");
+}
+
+#[test]
+fn keycap_policy_items_apply_to_keycap_character_positions() {
+    let tmp = assert_fs::TempDir::new().unwrap();
+    let file = tmp.child("test.txt");
+    file.write_str("#\u{20E3} \u{00A9}\u{20E3}").unwrap();
+
+    format_command()
+        .arg("--set-prefer-bare=keycap:u(0023),keycap:\u{00A9}")
+        .arg("--set-bare-as-text=keycap:u(0023),keycap:\u{00A9}")
+        .arg(file.path())
+        .assert()
+        .success();
+
+    file.assert("#\u{20E3} \u{00A9}\u{20E3}");
+}
+
+#[test]
 fn none_is_rejected_for_add_operations() {
     let tmp = assert_fs::TempDir::new().unwrap();
     let file = tmp.child("test.txt");
