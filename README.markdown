@@ -262,16 +262,16 @@ The policy sets start as `prefer-bare = ascii,emoji-defaults` and `bare-as-text 
 
 Each `<set>` in the list can be either one of the named sets below, one non-keycap code point with `u(HEX)`, such as `u(00A9)`, one keycap-character code point with `keycap:u(HEX)`, such as `keycap:u(0023)`, one non-keycap character, such as `#`, `*`, or `©️`, or one keycap-character item, such as `keycap:#`. Presentation selectors are ignored when matching a single character.
 
-| Set                       | Meaning                                                                                       |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
-| `ascii`                   | ASCII dual-presentation characters in non-keycap selector slots, such as `#`, `*`, and digits |
-| `text-defaults`           | Text-default dual-presentation characters in non-keycap selector slots                        |
-| `emoji-defaults`          | Emoji-default dual-presentation characters in non-keycap selector slots                       |
-| `variation-bases`         | All dual-presentation characters in non-keycap selector slots                                 |
-| `keycap:rgi`              | RGI emoji keycap bases (`#`, `*`, `0`–`9`) in keycap-character positions                      |
-| `keycap:text-defaults`    | Text-default dual-presentation characters in keycap-character positions                       |
-| `keycap:emoji-defaults`   | Emoji-default dual-presentation characters in keycap-character positions                      |
-| `keycap:variation-bases`  | All dual-presentation characters in keycap-character positions                                |
+| Set                      | Meaning                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `ascii`                  | ASCII dual-presentation characters in non-keycap selector slots, such as `#`, `*`, and digits |
+| `text-defaults`          | Text-default dual-presentation characters in non-keycap selector slots                        |
+| `emoji-defaults`         | Emoji-default dual-presentation characters in non-keycap selector slots                       |
+| `variation-bases`        | All dual-presentation characters in non-keycap selector slots                                 |
+| `keycap:rgi`             | RGI emoji keycap bases (`#`, `*`, `0`–`9`) in keycap-character positions                      |
+| `keycap:text-defaults`   | Text-default dual-presentation characters in keycap-character positions                       |
+| `keycap:emoji-defaults`  | Emoji-default dual-presentation characters in keycap-character positions                      |
+| `keycap:variation-bases` | All dual-presentation characters in keycap-character positions                                |
 
 The meaning of named sets may change as Unicode adds or revises dual-presentation characters.
 
