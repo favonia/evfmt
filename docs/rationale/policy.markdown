@@ -52,21 +52,29 @@ Inference: **keycap-character selector slots need a separate policy-key domain b
 
 Evidence gap: the data and history support a distinct domain, but they do not prove that this is the simplest maintainable policy structure.
 
-### Bare Keycap Default
+### Bare Default for Bases with RGI Emoji Keycap Sequences
 
 Manually reviewed: yes.
 
-Facts: bare keycap inputs such as `# 20E3` are present in Unicode emoji data as unqualified forms, while fully qualified emoji keycaps include `FE0F`. The keycap bases `[0-9#*]` are text-default characters and have both text and emoji variation-sequence data in the pinned Unicode data.
+Facts: bare keycap inputs such as `# 20E3` are present in Unicode emoji data as unqualified forms, while the corresponding RGI emoji keycap sequences use `base FE0F U+20E3`. The bases with RGI emoji keycap sequences are `[0-9#*]`; they are text-default characters and have both text and emoji variation-sequence data in the pinned Unicode data.
 
-Product assumption: **the default formatter behavior treats a bare keycap-character form as text-style source unless policy says otherwise.** The keycap bases are text-default characters, so a bare spelling follows their current Unicode default. The fact that Unicode emoji data also lists the bare keycap form as unqualified emoji data describes its emoji qualification status; it does not by itself transfer the text-default bare spelling into emoji intent. This favors preserving an observed text-default base spelling over silently promoting it to fully qualified emoji.
+Product assumption: **the default formatter behavior treats a bare keycap-character form for a base with an RGI emoji keycap sequence as text-style source unless policy says otherwise.** These bases are text-default characters, so a bare spelling follows their current Unicode default. The fact that Unicode emoji data also lists the bare keycap form as unqualified emoji data describes its emoji qualification status; it does not by itself transfer the text-default bare spelling into emoji intent. This favors preserving an observed text-default base spelling over silently promoting it to fully qualified emoji.
 
-The weak point is user intent for contemporary bare keycap inputs. The supporting facts are that the bare form is historically valid Unicode text, the bases are text-default, and modern fully qualified emoji keycaps use `FE0F 20E3`. The counterargument is early emoji interchange practice: Unicode Emoji 1.0 recorded bare keycaps with carrier source data, and Unicode Emoji 2.0 listed bare keycaps directly as emoji sequences. That history weakens any claim that bare keycaps are naturally text-only. The missing evidence is renderer and user evidence about how often bare keycaps in contemporary source files mean emoji rather than text-style keycaps. Evidence from common tools showing that bare keycaps are overwhelmingly produced or perceived as emoji would weaken this default; evidence that users rely on text-styled enclosed keycaps would strengthen it.
+The weak point is user intent for contemporary bare keycap inputs. The supporting facts are that the bare form is historically valid Unicode text, the bases are text-default, and the corresponding RGI emoji keycap sequences use `base FE0F U+20E3`. The counterargument is early emoji interchange practice: Unicode Emoji 1.0 recorded bare keycaps with carrier source data, and Unicode Emoji 2.0 listed bare keycaps directly as emoji sequences. That history weakens any claim that bare keycaps are naturally text-only. The missing evidence is renderer and user evidence about how often bare keycaps in contemporary source files mean emoji rather than text-style keycaps. Evidence from common tools showing that bare keycaps are overwhelmingly produced or perceived as emoji would weaken this default; evidence that users rely on text-styled enclosed keycaps would strengthen it.
 
-### Text-Styled Keycap Preservation
+### Bare Default for Bases Without RGI Emoji Keycap Sequences
 
 Manually reviewed: yes.
 
-Facts: `[0-9#*] FE0E` is a sanctioned text variation sequence for the base characters in the pinned data. In a keycap spelling, that selector appears before `U+20E3`; it is not an orphaned selector after the keycap mark. Older standardization discussions considered text-styled keycap spellings, even though current emoji qualification centers the emoji form on `FE0F 20E3`.
+Facts: Unicode emoji keycap sequence data defines RGI keycap bases only for `#`, `*`, and `0`-`9`. Other variation-sequence bases followed by `U+20E3` do not have Unicode emoji keycap sequence semantics, even though `evfmt` still treats the local selector slot as a keycap-character policy context.
+
+Product assumption: **the default formatter behavior should not synthesize emoji intent for keycap-character forms whose bases have no RGI emoji keycap sequences.** With no Unicode emoji keycap semantics to preserve, a bare keycap-character form for such a base is treated as text-side source by default. The final selector tie-breaker then makes the explicit text selector canonical when bare spelling is not preferred, so default formatting inserts `FE0E` before `U+20E3`.
+
+### Text Selector Preservation in Keycap-Character Context
+
+Manually reviewed: yes.
+
+Facts: for each keycap-character policy key, `FE0E` is a sanctioned text variation selector for the base character in the pinned data. In a keycap-character spelling, that selector appears before `U+20E3`; it is not an orphaned selector after the keycap mark. Older standardization discussions considered text-selector keycap spellings, even though current emoji qualification defines only the `FE0F 20E3` emoji form for RGI keycap bases.
 
 Inference: **preserving an explicit text selector in keycap context treats it as a local text-presentation request on the base before the enclosing keycap mark.** Converting it to `FE0F` would erase an explicit sanctioned selector state rather than merely repairing malformed text.
 
