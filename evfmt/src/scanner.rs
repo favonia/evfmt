@@ -82,6 +82,10 @@ fn is_presentation_selector(ch: char) -> bool {
 /// selectors are preserved as boundaries between successive [`EmojiTagRun`]s
 /// inside an
 /// [`EmojiModification::TagModifier`].
+///
+/// `U+E007F CANCEL TAG` is treated like any other tag character here: it
+/// neither terminates the run nor makes the scanner validate tag-sequence
+/// syntax.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct EmojiTagRun {
@@ -146,11 +150,11 @@ pub enum EmojiStem {
     /// rationale: UTS #51 allows flag and keycap sequences to participate
     /// in ZWJ sequences, yet UAX #29's GB11 rule only permits
     /// `Extended_Pictographic` characters to be joined by ZWJ. We reconcile
-    /// the two specifications by treating keycap bases and regional
-    /// indicators as though they were `Extended_Pictographic`. A side
-    /// effect is that a lone regional indicator becomes a valid
-    /// emoji-like unit on its own — the scanner does not retroactively
-    /// reject it if the second indicator never arrives.
+    /// the two specifications by treating keycap starter characters (`#`,
+    /// `*`, and `0`-`9`) and regional indicators as though they were
+    /// `Extended_Pictographic`. A side effect is that a lone regional
+    /// indicator becomes a valid emoji-like unit on its own — the scanner
+    /// does not retroactively reject it if the second indicator never arrives.
     SingletonBase {
         /// The base character.
         base: char,
@@ -205,7 +209,8 @@ pub struct ZwjLink {
     pub presentation_selectors_after_link: Vec<Presentation>,
 }
 
-/// One `ZWJ + emoji` pair after the first emoji component of a sequence.
+/// An emoji-like component after the first emoji-like component, paired with
+/// its preceding ZWJ link.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ZwjJoinedEmoji {
@@ -428,7 +433,7 @@ impl EmojiSequenceInProgress {
 
 // --- Scanner ---
 
-/// A streaming scanner that yields [`ScanItem`]s from input text.
+/// A lazy, forward-only scanner that yields [`ScanItem`]s from input text.
 ///
 /// Created by [`scan`]. Implements [`Iterator`] for lazy, forward-only
 /// scanning with one-character lookahead.
@@ -463,7 +468,7 @@ pub struct Scanner<'a> {
     sequence_in_progress: EmojiSequenceInProgress,
 }
 
-/// Scan input text into a streaming sequence of items.
+/// Scan input text into a lazy sequence of items.
 ///
 /// Returns a [`Scanner`] iterator. Concatenating all [`ScanItem::raw`]
 /// slices from the iterator reconstructs the original input exactly.

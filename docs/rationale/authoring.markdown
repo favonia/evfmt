@@ -14,6 +14,8 @@ Rationale prose should distinguish facts, project-principle inferences, product 
 
 These categories are vocabulary, not a template. Do not add tags, fixed sections, or boilerplate just to show that every category was considered. Prefer readable prose that makes the argument easy to inspect.
 
+Do not equate a past standard's rule with evidence that the rule was used in practice. "A past standard specified X" and "X happened in historical implementations, interchange, or user-authored text" are separate claims. When a historical-use claim matters, first look for direct evidence such as source mappings, implementation records, interchange data, archived documents, or corpus examples. If direct evidence remains unavailable, keep the strongest defensible inference, label it as an inference, and record the narrow missing evidence; do not shrink the argument into a technically safe but useless tautology just to avoid uncertainty.
+
 ## Cross-Layer Arguments
 
 A rationale file may cite another design layer as an input to an integration check, but it must not use the current behavior of that other layer as evidence that the other layer is correct.

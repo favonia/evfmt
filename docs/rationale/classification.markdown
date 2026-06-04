@@ -2,7 +2,7 @@
 
 Read when: auditing, challenging, or replacing the selector-slot classification behavior described in [`../designs/features/classification.markdown`](../designs/features/classification.markdown).
 
-Defines: non-normative evidence, assumptions, gaps, and tradeoff reasoning behind reasonable-state assignment and fixed cleanup.
+Defines: non-normative evidence, assumptions, gaps, and tradeoff reasoning behind reasonable-state assignment, context-specific selector accounting, and fixed cleanup.
 
 Does not define: current classification behavior, recognition behavior, or policy semantics. For behavior, see [`../designs/features/classification.markdown`](../designs/features/classification.markdown), code, tests, and public API documentation. For recognition and policy rationale, see [`recognition.markdown`](recognition.markdown) and [`policy.markdown`](policy.markdown).
 
@@ -12,23 +12,23 @@ This file follows the rationale authoring and manual review conventions in [`aut
 
 ### Policy Boundary For Ambiguous Contexts
 
-Manually reviewed: yes.
+Manually reviewed: no.
 
 Facts: `FE0E` and `FE0F` request text or emoji presentation only in contexts that can interpret them. Some contexts have more than one sanctioned selector state after local structure is recognized; other contexts leave only removal, insertion, or replacement of a selector as the plausible canonical repair.
 
 Principle-based inference: **policy belongs where a user-facing presentation choice remains.** Exposing policy for a deterministic repair would add configuration surface without creating a real choice, which weakens usability and maintainability.
 
-Product goal: when only one reasonable selector state remains, `evfmt` should generate a broadly supported canonical spelling instead of asking users to opt into the only spelling the formatter can defend. That goal explains why fixed-cleanup sequence contexts and unsanctioned selectors are handled as fixed cleanup rather than as separate policy families.
+Product goal: when classification leaves no meaningful user-facing presentation choice, `evfmt` should generate the canonical spelling owned by that context instead of asking users to opt into a spelling the formatter cannot defend as an independent presentation preference. That goal explains why modifier defects, tag-context presentation, and unsanctioned selectors are handled outside policy.
 
 Evidence gap: this is a product boundary, not a Unicode theorem. There is no user-study evidence here showing that this exact boundary is the one most users expect.
 
-### Deterministic Fixed Cleanup
+### Single-State Cleanup
 
-Manually reviewed: yes.
+Manually reviewed: no.
 
-Facts: selector runs can be redundant, defective, or unsupported after the local Unicode-related structure is known. `evfmt` can rewrite those cases by changing only `FE0E` and `FE0F`.
+Facts: selector runs can be redundant, conflicting, defective, forced, or unsanctioned after the local Unicode-related structure is known. `evfmt` can rewrite those cases by changing only `FE0E` and `FE0F`.
 
-Principle-based inference: **deterministic cleanup is favored when the formatter can identify a single canonical selector state.** It improves reproducibility and keeps formatting idempotent without asking users to choose between states that are not meaningful presentation preferences.
+Principle-based inference: **cleanup is favored when the formatter can identify a single canonical selector state.** It improves reproducibility and keeps formatting idempotent without asking users to choose between states that are not meaningful presentation preferences.
 
 Product goal: fixed cleanup should produce selector spellings that are canonical for the recognized local structure and likely to be accepted by mainstream renderers. The goal is not to preserve every historical or byte-level spelling, nor to validate the entire emoji sequence as RGI.
 
@@ -52,15 +52,19 @@ Important distinction: `base FE0F modifier` is the UTS #51 defective legacy form
 
 Evidence gap: UTS #51 strongly supports not generating the defective `FE0F` spelling, but it does not require `evfmt` to choose formatting over warning-only diagnostics. The `FE0E` distinction also leaves a design question: preserving a sanctioned text selector is source-faithful while still producing output that is not an emoji modifier sequence.
 
-### Tag-Sequence Fixed Cleanup
+### Tag-Context Selector Accounting
 
-Manually reviewed: yes.
+Manually reviewed: no.
 
-Facts: the core Unicode Standard delegates emoji tag-sequence semantics to UTS #51, and the only valid use of tag characters is the use specified there. UTS #51 owns the semantics of the tag sequence, while ordinary text presentation is largely outside UTS #51.
+Facts: the core Unicode Standard delegates emoji tag-sequence semantics to UTS #51. Current UTS #51 defines `emoji_tag_sequence` with a broad `tag_base` grammar: an emoji character, emoji modifier sequence, or emoji presentation sequence can precede the tag specification. The same version's valid flag tag sequences, however, restrict flag `tag_base` to `U+1F3F4 BLACK FLAG`, and the Unicode 17.0 RGI tag-sequence data uses that emoji-default base.
 
-Inference: **tag contexts should use fixed cleanup rather than policy because there is no independent text-presentation meaning for `evfmt` to preserve inside a tag sequence.** The formatter can still be permissive about recognizing tag-bearing structure, but once a tag context is recognized, selector cleanup should follow the UTS #51-owned emoji-tag semantics. That is the rationale for normalizing tag base presentation and for the stronger policy of dropping `FE0E` in tag context.
+Draft-history evidence: the 2019 proposed update for UTS #51 experimented with making emoji sequence grammar more general. It placed `tag_modifier` in the same `emoji_modification` family as emoji modifiers and keycap modifiers, and review material around that update considered allowing tag sequences in ZWJ-related grammar. UTC #161 then recorded action items to update UTS #51 based on David Corbett's feedback, remove the review notes about allowing tag sequences within ZWJ sequences, and produce a separate document on the costs and benefits of making emoji ZWJ and modifier grammar more general.
 
-Evidence gap: this argues for fixed cleanup once recognition has already classified the surrounding text as a tag context. It does not justify the scanner's boundary for deciding which tag-bearing structures should be recognized in the first place.
+Inference: **tag contexts need their own selector accounting because the standard history leaves base presentation in tag contexts broader than RGI practice and different from emoji-modifier defect handling.** `FE0F` before a tag specification on an emoji-default base is not a policy-redundant selector; it is redundant only because the recognized tag context already canonicalizes that base as bare emoji-default. `FE0E` before a tag specification is not an unsanctioned selector; it is a sanctioned selector whose requested text presentation conflicts with the formatter's canonical base presentation in tag context. A bare text-default base before a tag specification is not "missing a required selector" in UTS #51 terms; it is a recognized tag context where `evfmt` supplies emoji presentation for its canonical output.
+
+Sources: [UTS #51 Version 17.0](https://www.unicode.org/reports/tr51/tr51-29.html) defines the current tag grammar and valid flag tag-sequence constraints. [Unicode 17.0 `emoji-sequences.txt`](https://www.unicode.org/Public/17.0.0/emoji/emoji-sequences.txt) lists the current RGI tag sequences. [L2/19-351](https://www.unicode.org/L2/L2019/19351-uts51-17-draft.pdf) is the 2019 proposed UTS #51 update showing the broader tag-modifier grammar experiment. [UTC #161 minutes](https://www.unicode.org/L2/L2019/19323.htm) record the follow-up action items.
+
+Evidence gap: this supports separate tag-specific accounting and the current canonicalization choice, but it does not prove that every well-formed broad base-and-tag spelling should normalize this way forever. It is draft-history evidence, not direct evidence of historical implementation behavior or user-authored interchange text. Future UTS #51 or RGI changes that assign interchange value to another base presentation before a tag specification should reopen this rule.
 
 ### ZWJ Component Locality
 

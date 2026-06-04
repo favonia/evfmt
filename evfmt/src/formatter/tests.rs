@@ -357,10 +357,12 @@ fn check_finding_length_invariants(finding: &Finding<'_>) -> Result<(), TestCase
     let non_canonicality = finding.non_canonicality();
     let replacement = finding.default_canonical_replacement();
     let removed_chars = non_canonicality.unsanctioned_selectors
-        + non_canonicality.defective_sequences
-        + non_canonicality.redundant_selectors;
+        + non_canonicality.defective_selectors
+        + non_canonicality.tag_conflicting_selectors
+        + non_canonicality.tag_redundant_selectors
+        + non_canonicality.policy_redundant_selectors;
     let inserted_chars =
-        non_canonicality.missing_required_selectors + non_canonicality.presentation_decisions;
+        non_canonicality.tag_forced_presentations + non_canonicality.presentation_decisions;
     // The byte-length invariant below counts selector insertions and removals
     // with one shared byte width. Keep that assumption explicit so it fails
     // near the accounting if the selector constants ever change.

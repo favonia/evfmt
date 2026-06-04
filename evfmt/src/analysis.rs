@@ -80,7 +80,7 @@ mod tests;
 /// let finding = analyze_scan_item(&selector_item, &policy).unwrap();
 /// assert_eq!(
 ///     finding.non_canonicality(),
-///     NonCanonicality::new(1, 0, 0, 0, 0)
+///     NonCanonicality::new(1, 0, 0, 0, 0, 0, 0)
 /// );
 /// assert_eq!(finding.default_decisions().len(), 0);
 /// assert_eq!(finding.canonical_replacement_with_decisions(&[]).unwrap(), "");
@@ -103,9 +103,10 @@ pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Fin
             // `LinksOnly` contributes only link cleanup. `EmojiHeaded` uses
             // the same accumulation path regardless of whether the scanner
             // found one component or a joined chain: analyze each component
-            // with the same component-local policy/fixed cleanup it would use
-            // outside surrounding ZWJ links, then stitch the literal ZWJ links
-            // back into the replacement elements in source order.
+            // with the same component-local policy or context-specific
+            // cleanup it would use outside surrounding ZWJ links, then stitch
+            // the literal ZWJ links back into the replacement elements in
+            // source order.
             //
             // This is the analysis-side implementation of the ZWJ-related
             // sequence contract in
@@ -181,7 +182,7 @@ fn analyze_links_only_zwj_sequence<'a>(
 ///
 /// The ZWJ itself is preserved. Presentation selectors attached after the ZWJ
 /// link are not owned by either neighboring component, so this counts them as
-/// unsanctioned cleanup.
+/// unsanctioned selector cleanup.
 fn analyze_link(link: &ZwjLink) -> ReplacementAnalysis {
     ReplacementAnalysis::fixed(
         NonCanonicality::unsanctioned(link.presentation_selectors_after_link.len()),
@@ -229,8 +230,8 @@ fn analyze_component(emoji: &EmojiLike, policy: &Policy) -> ReplacementAnalysis 
 /// replacement presentation for the base itself. The modification list is
 /// rendered after that base, with presentation selectors after modifiers,
 /// keycap marks, and tag characters stripped and counted as unsanctioned
-/// cleanup. This function is the boundary where those two accounting streams
-/// are combined into one [`ReplacementAnalysis`].
+/// selector usage. This function is the boundary where those two accounting
+/// streams are combined into one [`ReplacementAnalysis`].
 fn analyze_singleton_component(
     base: char,
     presentation_selectors_after_base: &[Presentation],
@@ -281,11 +282,11 @@ fn analyze_singleton_component(
 /// base, before any cleanup from later modifications is added.
 #[derive(Clone, Copy)]
 enum SingletonBaseSelectorOutcome {
-    /// The base selector run has one deterministic canonical form.
+    /// The base selector run has one canonical form without a caller decision.
     ///
-    /// This includes already-canonical input, fixed cleanup, and policy cases
-    /// that do not expose a caller choice. `canonical_presentation` is only the
-    /// selector state for the base itself.
+    /// This includes already-canonical input, fixed/context-specific cleanup,
+    /// and policy cases that do not expose a caller choice.
+    /// `canonical_presentation` is only the selector state for the base itself.
     Deterministic {
         canonical_presentation: Option<Presentation>,
         non_canonicality: NonCanonicality,
@@ -305,7 +306,7 @@ enum SingletonBaseSelectorOutcome {
 /// - `presentation_selectors_after_base`: the complete `FE0E`/`FE0F` run
 ///   immediately after `base`.
 /// - `first_modification`: the first structural modification after that base
-///   selector run, if any. It selects the fixed-cleanup context for the base
+///   selector run, if any. It selects the context-specific rule for the base
 ///   selector run; later modifications do not affect this decision.
 ///
 /// Output: the canonical selector state for the base, plus the
@@ -318,8 +319,9 @@ enum SingletonBaseSelectorOutcome {
 /// The classification rule order lives in
 /// `docs/designs/features/classification.markdown`.
 ///
-/// Rules that yield one reasonable state become fixed cleanup. The remaining
-/// ordinary/keycap cases enter policy.
+/// Tag, modifier, and unsanctioned contexts are resolved before policy.
+/// The remaining ordinary/keycap cases enter policy when the slot keeps more
+/// than one reasonable state.
 fn analyze_singleton_base_selectors(
     base: char,
     presentation_selectors_after_base: &[Presentation],
@@ -338,7 +340,7 @@ fn analyze_singleton_base_selectors(
     }
 
     // AI MAINTAINER NOTE: keep this cascade aligned with the classification
-    // rule order in the design document. Each deterministic branch must
+    // rule order in the design document. Each non-policy branch must
     // construct the complete base outcome:
     // `canonical_presentation` and `NonCanonicality`. Do not move rule
     // dispatch into helper functions or split output selection from
@@ -367,7 +369,7 @@ fn analyze_singleton_base_selectors(
             let non_canonicality = match presentation_selectors_after_base {
                 [] => NonCanonicality::default(),
                 [Presentation::Emoji, rest @ ..] => {
-                    NonCanonicality::DEFECTIVE + NonCanonicality::unsanctioned(rest.len())
+                    NonCanonicality::DEFECTIVE_SELECTOR + NonCanonicality::unsanctioned(rest.len())
                 }
                 [Presentation::Text, ..] => {
                     unreachable!("text presentation before modifier is precedence 2")
@@ -380,40 +382,26 @@ fn analyze_singleton_base_selectors(
             }
         }
         // Precedence 4 and 5: tag context keeps emoji-default bases bare and
-        // forces emoji presentation for other bases. Precedence 1 above has
-        // already guaranteed that the explicit emoji presentation is
-        // sanctioned when needed.
+        // canonicalizes other variation-sequence bases to emoji presentation.
+        // Precedence 1 above has already guaranteed that the explicit emoji
+        // presentation is sanctioned when needed.
         Some(EmojiModification::TagModifier(_)) => {
             let canonical_presentation = if unicode::is_emoji_default(base) {
                 None
             } else {
                 Some(Presentation::Emoji)
             };
-            let canonical = canonical_presentation.as_slice();
-
-            let non_canonicality = if presentation_selectors_after_base == canonical {
-                NonCanonicality::default()
-            } else if presentation_selectors_after_base.starts_with(canonical) {
-                NonCanonicality::unsanctioned(
-                    presentation_selectors_after_base.len() - canonical.len(),
-                )
-            } else {
-                let missing_required_selector = if canonical_presentation.is_some() {
-                    NonCanonicality::MISSING_REQUIRED
-                } else {
-                    NonCanonicality::default()
-                };
-
-                missing_required_selector
-                    + NonCanonicality::unsanctioned(presentation_selectors_after_base.len())
-            };
+            let non_canonicality = analyze_tag_base_selectors(
+                canonical_presentation,
+                presentation_selectors_after_base,
+            );
 
             SingletonBaseSelectorOutcome::Deterministic {
                 canonical_presentation,
                 non_canonicality,
             }
         }
-        // Final classification case: no deterministic cleanup context remains.
+        // Final classification case: no context-specific cleanup remains.
         // Ordinary and keycap-character contexts use the matching policy domain.
         first_modification => analyze_policy_base_selectors(
             base,
@@ -427,10 +415,45 @@ fn analyze_singleton_base_selectors(
     }
 }
 
+/// Account for the base selector run in a recognized tag context.
+///
+/// The broad tag grammar permits several base-and-tag spellings, while current
+/// RGI tag sequences use an emoji-default base. Tag-context selector accounting
+/// is therefore separate from ordinary policy redundancy and from defective
+/// emoji-modifier selector cleanup.
+fn analyze_tag_base_selectors(
+    canonical_presentation: Option<Presentation>,
+    presentation_selectors_after_base: &[Presentation],
+) -> NonCanonicality {
+    match (canonical_presentation, presentation_selectors_after_base) {
+        (None, []) | (Some(Presentation::Emoji), [Presentation::Emoji]) => {
+            NonCanonicality::default()
+        }
+        (None, [Presentation::Emoji, rest @ ..]) => {
+            NonCanonicality::TAG_REDUNDANT_SELECTOR + NonCanonicality::unsanctioned(rest.len())
+        }
+        (None, [Presentation::Text, rest @ ..]) => {
+            NonCanonicality::TAG_CONFLICTING_SELECTOR + NonCanonicality::unsanctioned(rest.len())
+        }
+        (Some(Presentation::Emoji), []) => NonCanonicality::TAG_FORCED_PRESENTATION,
+        (Some(Presentation::Emoji), [Presentation::Emoji, rest @ ..]) => {
+            NonCanonicality::unsanctioned(rest.len())
+        }
+        (Some(Presentation::Emoji), [Presentation::Text, rest @ ..]) => {
+            NonCanonicality::TAG_CONFLICTING_SELECTOR
+                + NonCanonicality::TAG_FORCED_PRESENTATION
+                + NonCanonicality::unsanctioned(rest.len())
+        }
+        (Some(Presentation::Text), _) => {
+            unreachable!("tag context never canonicalizes a base to text presentation")
+        }
+    }
+}
+
 /// Apply ordinary/keycap policy to a singleton base selector run.
 ///
-/// This is the policy side of the classification rules: all deterministic
-/// cleanup contexts have already been ruled out. The function only classifies
+/// This is the policy side of the classification rules: context-specific
+/// cleanup has already been ruled out. The function only classifies
 /// `presentation_selectors_after_base` under the active policy domain and
 /// returns the resulting base selector outcome. It does not handle modification
 /// suffix cleanup.
@@ -457,8 +480,10 @@ fn analyze_policy_base_selectors(
                 non_canonicality: NonCanonicality::new(
                     presentation_selectors_after_base.len() - 1,
                     0,
-                    1,
                     0,
+                    0,
+                    0,
+                    1,
                     0,
                 ),
             }
@@ -492,7 +517,7 @@ fn analyze_policy_base_selectors(
         | (SingletonRule::EmojiToBare, &[Presentation::Emoji]) => {
             SingletonBaseSelectorOutcome::Deterministic {
                 canonical_presentation: None,
-                non_canonicality: NonCanonicality::REDUNDANT,
+                non_canonicality: NonCanonicality::POLICY_REDUNDANT_SELECTOR,
             }
         }
         // All remaining single-presentation-selector and no-presentation-selector
@@ -545,7 +570,7 @@ fn count_selectors_after_modification(m: &EmojiModification) -> usize {
 /// Count all presentation selectors attached after modification suffixes in
 /// one emoji-like component.
 ///
-/// The returned count is added as unsanctioned cleanup by the component-level
+/// The returned count is added as unsanctioned selector cleanup by the component-level
 /// analyzer after the base selector run has been analyzed.
 fn count_selectors_after_modifications(modifications: &[EmojiModification]) -> usize {
     modifications

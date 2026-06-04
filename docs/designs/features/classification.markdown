@@ -1,8 +1,8 @@
 # Design Note: Classification
 
-Read when: changing selector-slot classification, fixed-cleanup conditions, or policy-domain selection.
+Read when: changing selector-slot classification, context-specific selector accounting, or policy-domain selection.
 
-Defines: how recognized structure classifies selector slots into reasonable states and policy domains.
+Defines: how recognized structure classifies selector slots into reasonable states, context-specific selector accounting, and policy domains.
 
 Does not define: selector slots or recognition invariants. Selector slots live in [formatting.markdown](../core/formatting.markdown). Recognition invariants live in [recognition.markdown](recognition.markdown). Policy predicates and defaults live in [policy.markdown](policy.markdown).
 
@@ -12,7 +12,7 @@ Recognized structures may expose more information than these rules currently nee
 
 - whether the slot has no base, or a base without sanctioned variation sequences
 - if the slot has a base, whether following structure is an emoji modifier, a tag specification, or `U+20E3 COMBINING ENCLOSING KEYCAP`
-- whether the base is emoji-default
+- whether the base is emoji-default or text-default
 - which selector, if any, is first in the slot
 
 ## Slot Classification
@@ -23,20 +23,42 @@ The scalar before a slot, if present, is the base. A base has sanctioned variati
 
 Apply the first matching rule:
 
-| Rule | Condition                                                             | Reasonable states      |
-| ---- | --------------------------------------------------------------------- | ---------------------- |
-| 1    | No base, or base has no sanctioned variation sequences                | `none`                 |
-| 2    | Slot is followed by an emoji modifier and starts with `FE0E`          | `FE0E`                 |
-| 3    | Slot is followed by an emoji modifier and does not start with `FE0E`  | `none`                 |
-| 4    | Slot is followed by a tag specification and base is emoji-default     | `none`                 |
-| 5    | Slot is followed by a tag specification and base is not emoji-default | `FE0F`                 |
-| 6    | Slot starts with `FE0E`                                               | `none`, `FE0E`         |
-| 7    | Slot starts with `FE0F`                                               | `none`, `FE0F`         |
-| 8    | Slot has no selector                                                  | `none`, `FE0E`, `FE0F` |
+| Rule | Condition                                                            | Reasonable states      |
+| ---- | -------------------------------------------------------------------- | ---------------------- |
+| 1    | No base, or base has no sanctioned variation sequences               | `none`                 |
+| 2    | Slot is followed by an emoji modifier and starts with `FE0E`         | `FE0E`                 |
+| 3    | Slot is followed by an emoji modifier and does not start with `FE0E` | `none`                 |
+| 4    | Slot is followed by a tag specification and base is emoji-default    | `none`                 |
+| 5    | Slot is followed by a tag specification and base is text-default     | `FE0F`                 |
+| 6    | Slot starts with `FE0E`                                              | `none`, `FE0E`         |
+| 7    | Slot starts with `FE0F`                                              | `none`, `FE0F`         |
+| 8    | Slot has no selector                                                 | `none`, `FE0E`, `FE0F` |
 
 Rules are ordered only to resolve overlapping conditions. Fixed cleanup is not defined by rule number; it is the case where the resulting reasonable-state set has exactly one state.
 
-Selectors after the first selector in a slot are never part of the reasonable-state choice. They are removed as unsupported selector usage unless another narrower rule accounts for them.
+Only a selector that immediately follows the base can be part of the reasonable-state choice.
+
+## Selector Accounting
+
+Classification also decides how non-canonical selector changes are counted.
+
+A sanctioned selector is a presentation selector that immediately follows a base with sanctioned variation sequences. Any other presentation selector is unsanctioned.
+
+Generic accounting:
+
+- unsanctioned selectors count as `unsanctioned_selectors`
+- sanctioned `FE0F` before an emoji modifier counts as `defective_selectors` when the modifier still attaches to the bare base
+- sanctioned selectors dropped because policy chooses the bare state count as `policy_redundant_selectors`
+- selector slots with no selector that policy resolves to an explicit selector count as `presentation_decisions`
+
+Tag-context accounting is separate from ordinary policy redundancy and emoji-modifier defects:
+
+- sanctioned `FE0F` before a tag specification on an emoji-default base: `tag_redundant_selectors`
+- sanctioned `FE0E` before a tag specification on an emoji-default base: `tag_conflicting_selectors`
+- no selector before a tag specification on a text-default base: `tag_forced_presentations`
+- sanctioned `FE0E` before a tag specification on a text-default base: `tag_conflicting_selectors` and `tag_forced_presentations`
+
+These tag counters describe `evfmt`'s canonicalization of a recognized tag context. UTS #51 admits other base-and-tag spellings that `evfmt` treats as non-canonical, and these counters do not create a user-facing policy choice for tag presentation.
 
 ## Policy Domains
 

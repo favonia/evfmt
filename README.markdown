@@ -31,7 +31,7 @@ Many Unicode characters have dual presentations, text and emoji:
 
 Unicode provides invisible presentation selectors (`U+FE0E` for text, `U+FE0F` for emoji) to request a specific presentation (though platforms may not always honor the request). These two characters (`U+FE0E` and `U+FE0F`) are _variation selectors_. [Unicode Technical Standard #51](https://www.unicode.org/reports/tr51/tr51-29.html) also calls them _presentation selectors_ in the emoji context, and this document follows that convention. (The _ev_ in _evfmt_ stands for _emoji variation_, after the [emoji variation sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_variation_sequence) that these selectors produce.)
 
-Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, certain dual-presentation characters may look different on different platforms. On the other hand, selectors are considered redundant or even defective in other contexts. `evfmt` normalizes these selectors for you.
+Each character can therefore appear in three forms: **bare** (no selector), **text** (`U+FE0E`), or **emoji** (`U+FE0F`). Without explicit selectors, certain dual-presentation characters may look different on different platforms. In other contexts, selectors can be redundant, conflicting, defective, or unsupported. `evfmt` normalizes these selectors for you.
 
 The emoji selector `U+FE0F` also appears in multi-character emoji sequences such as keycaps and [Emoji ZWJ sequences](https://www.unicode.org/reports/tr51/tr51-29.html#def_emoji_zwj_sequence) (where multiple emoji are joined into one). `evfmt` normalizes selector usage in these sequences as well.
 
