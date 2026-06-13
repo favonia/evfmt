@@ -144,7 +144,9 @@ pub enum EmojiModification {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EmojiStem {
-    /// A single emoji character.
+    /// A single [emoji character]: a character with the Unicode `Emoji` property.
+    ///
+    /// [emoji character]: https://www.unicode.org/reports/tr51/#def_emoji_character
     ///
     /// This variant also covers an unpaired regional indicator. The
     /// rationale: UTS #51 allows flag and keycap sequences to participate
