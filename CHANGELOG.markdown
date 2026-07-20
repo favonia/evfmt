@@ -8,6 +8,7 @@ Breaking changes:
 - Renamed `VariationSet` and `evfmt::variation_set` to `PolicyKeySet` and `evfmt::policy_key_set` to make the policy-key domain explicit.
 - Replaced policy-set names with a smaller policy-set surface: `keycap-chars` is now `keycap:variation-bases`, `non-keycap-chars` is now `variation-bases`, `keycap-emojis` is now `keycap:rgi`, and the convenience subsets `rights-marks`, `arrows`, and `card-suits` were removed.
 - Renamed the `findings` module to `analysis` and replaced the analysis API's `Violation` categories, `DecisionSlot`s, and `ReplacementDecision`s with compositional `NonCanonicality` summaries and `Presentation`-based replacement choices.
+- Refined `NonCanonicality` accounting by replacing `defective_sequences`, `redundant_selectors`, and `missing_required_selectors` with `defective_selectors`, `tag_conflicting_selectors`, `tag_forced_presentations`, `tag_redundant_selectors`, and `policy_redundant_selectors`; `unsanctioned_selectors` and `presentation_decisions` remain, and `NonCanonicality::new` now takes seven counts instead of five.
 - Renamed `Finding::default_replacement` to `Finding::default_canonical_replacement` and `Finding::replacement` to `Finding::canonical_replacement_with_decisions` to clarify that successful replacements are canonical under the selected decisions.
 - Renamed `NonCanonicality::bases_to_resolve` to `NonCanonicality::presentation_decisions`.
 - Moved the shared `Presentation` type from the scanner API to the crate root.
