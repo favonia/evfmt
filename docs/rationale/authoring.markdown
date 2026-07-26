@@ -14,6 +14,10 @@ Rationale prose should distinguish facts, project-principle inferences, product 
 
 These categories are vocabulary, not a template. Do not add tags, fixed sections, or boilerplate just to show that every category was considered. Prefer readable prose that makes the argument easy to inspect.
 
+The readable-prose rule above implies a direct-statement editing test for rationale: lead with the applicable fact, classification, or consequence. Omit a negative statement when it only denies an alternative that neither the prose nor the reader has raised; the affirmative statement carries more relevant information directly. Keep a negative statement when the exclusion itself defines a boundary, corrects a plausible misunderstanding, or records relevant evidence.
+
+Apply the same test to causal arguments. Name the evidence source or implementation, its observed behavior or output, and the consequence for the argument. Replace abstract assessments such as “makes the gap concrete” or “highlights the tension” with the specific ambiguity, failure mode, changed inference, or decision they stand for. A connective such as “but,” “however,” or “although” should join claims whose implications for the argument actually conflict.
+
 Do not equate a past standard's rule with evidence that the rule was used in practice. "A past standard specified X" and "X happened in historical implementations, interchange, or user-authored text" are separate claims. When a historical-use claim matters, first look for direct evidence such as source mappings, implementation records, interchange data, archived documents, or corpus examples. If direct evidence remains unavailable, keep the strongest defensible inference, label it as an inference, and record the narrow missing evidence; do not shrink the argument into a technically safe but useless tautology just to avoid uncertainty.
 
 ## Cross-Layer Arguments

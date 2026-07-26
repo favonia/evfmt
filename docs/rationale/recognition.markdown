@@ -30,7 +30,7 @@ Inference: **every `FE0E` and `FE0F` must be seen before the formatter can be tr
 
 ### Permissive Scanner Recognition
 
-Manually reviewed: no.
+Manually reviewed: yes.
 
 UTS #51 defines valid emoji sequence structures, and RGI emoji data is only a smaller recommended-for-interchange subset of those structures. Presentation selectors are part of that structure in some cases: some valid emoji sequences require `FE0F`, while others allow or omit selectors. This rationale calls the non-`FE0E`/`FE0F` structure shared with a valid emoji sequence a valid emoji skeleton.
 

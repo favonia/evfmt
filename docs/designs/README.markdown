@@ -26,6 +26,12 @@ Use this file as a retrieval map. Each design note has "Read when:" and "Defines
 - [`features/cli.markdown`](features/cli.markdown) — CLI option grammar, modes, ignore filtering, exit codes
 - [`features/policy-key-set-api.markdown`](features/policy-key-set-api.markdown) — typed `PolicyKeySet` API, named sets, and set operations
 
+## Writing Design Claims
+
+Apply the minimum-information and direct-statement rules from [Explanatory Document Writing](guides/explanatory-writing.markdown) to design prose. State the concrete behavior, invariant, boundary, or consequence that future work must preserve.
+
+When a design claim depends on causality, name the component or actor, its observable behavior, and the resulting design consequence. Replace abstract assessments such as “makes the gap concrete” or “highlights the tension” with the specific risk, constraint, or decision they stand for. A connective such as “but,” “however,” or “although” should join claims whose implications for the design actually conflict.
+
 ## Rationale Archive
 
 Rationale files are non-normative records of evidence, assumptions, tradeoffs, rejected alternatives, weak points, and revisit triggers. Read them when auditing, challenging, or replacing a design decision; do not treat them as behavior contracts or as the sole source for frequently used guidance.
