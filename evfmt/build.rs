@@ -33,6 +33,7 @@ fn main() {
     let (has_text_vs, has_emoji_vs) = parse_variation_sequences(&variation_sequences_path);
     let emoji_presentation = parse_ucd_property(&emoji_data_path, "Emoji_Presentation");
     let emoji_modifiers = parse_ucd_property(&emoji_data_path, "Emoji_Modifier");
+    let emoji_modifier_bases = parse_ucd_property(&emoji_data_path, "Emoji_Modifier_Base");
     let emoji_chars = parse_ucd_property(&emoji_data_path, "Emoji");
     let ri_chars = parse_ucd_property(&proplist_path, "Regional_Indicator");
 
@@ -66,6 +67,12 @@ fn main() {
         "EMOJI_MODIFIERS",
         "Emoji_Modifier",
         &emoji_modifiers,
+    );
+    write_char_table(
+        &mut f,
+        "EMOJI_MODIFIER_BASES",
+        "Emoji_Modifier_Base",
+        &emoji_modifier_bases,
     );
     write_range_table(
         &mut f,

@@ -80,7 +80,7 @@ mod tests;
 /// let finding = analyze_scan_item(&selector_item, &policy).unwrap();
 /// assert_eq!(
 ///     finding.non_canonicality(),
-///     NonCanonicality::new(1, 0, 0, 0, 0, 0, 0)
+///     NonCanonicality::new(1, 0, 0, 0, 0, 0, 0, 0)
 /// );
 /// assert_eq!(finding.default_decisions().len(), 0);
 /// assert_eq!(finding.canonical_replacement_with_decisions(&[]).unwrap(), "");
@@ -363,13 +363,20 @@ fn analyze_singleton_base_selectors(
             }
         }
         // Precedence 3: with no leading sanctioned FE0E, the modifier attaches
-        // to the bare base. Legacy FE0F in that selector slot is the UTS #51
-        // defective form and is removed.
+        // to the bare base. UTS #51 defines legacy FE0F as defective when the
+        // base has Emoji_Modifier_Base. evfmt applies the same narrow removal
+        // to sanctioned variation-sequence emoji bases without that property
+        // and accounts for the formatter classification separately.
         Some(EmojiModification::EmojiModifier { .. }) => {
             let non_canonicality = match presentation_selectors_after_base {
                 [] => NonCanonicality::default(),
                 [Presentation::Emoji, rest @ ..] => {
-                    NonCanonicality::DEFECTIVE_SELECTOR + NonCanonicality::unsanctioned(rest.len())
+                    let primary = if unicode::is_emoji_modifier_base(base) {
+                        NonCanonicality::MODIFIER_DEFECTIVE_SELECTOR
+                    } else {
+                        NonCanonicality::ADDITIONAL_DEFECTIVE_SELECTOR
+                    };
+                    primary + NonCanonicality::unsanctioned(rest.len())
                 }
                 [Presentation::Text, ..] => {
                     unreachable!("text presentation before modifier is precedence 2")
@@ -479,6 +486,7 @@ fn analyze_policy_base_selectors(
                 canonical_presentation: None,
                 non_canonicality: NonCanonicality::new(
                     presentation_selectors_after_base.len() - 1,
+                    0,
                     0,
                     0,
                     0,

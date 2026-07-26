@@ -19,7 +19,8 @@ fn assert_finding_length_invariants(finding: &Finding<'_>) {
     let expected_char_delta = non_canonicality.tag_forced_presentations as isize
         + non_canonicality.presentation_decisions as isize
         - non_canonicality.unsanctioned_selectors as isize
-        - non_canonicality.defective_selectors as isize
+        - non_canonicality.modifier_defective_selectors as isize
+        - non_canonicality.additional_defective_selectors as isize
         - non_canonicality.tag_conflicting_selectors as isize
         - non_canonicality.tag_redundant_selectors as isize
         - non_canonicality.policy_redundant_selectors as isize;

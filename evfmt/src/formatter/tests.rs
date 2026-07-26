@@ -326,6 +326,9 @@ fn interesting_string_strategy() -> impl Strategy<Value = String> {
         1 => prop::sample::select(vec![
             '\u{1F3FB}', '\u{1F3FC}', '\u{1F3FD}', '\u{1F3FE}', '\u{1F3FF}',
         ]),
+        1 => prop::sample::select(vec![
+            '\u{E0020}', '\u{E0061}', '\u{E007A}', '\u{E007F}',
+        ]),
         2 => prop::sample::select(vec![
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
             'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
@@ -357,7 +360,8 @@ fn check_finding_length_invariants(finding: &Finding<'_>) -> Result<(), TestCase
     let non_canonicality = finding.non_canonicality();
     let replacement = finding.default_canonical_replacement();
     let removed_chars = non_canonicality.unsanctioned_selectors
-        + non_canonicality.defective_selectors
+        + non_canonicality.modifier_defective_selectors
+        + non_canonicality.additional_defective_selectors
         + non_canonicality.tag_conflicting_selectors
         + non_canonicality.tag_redundant_selectors
         + non_canonicality.policy_redundant_selectors;

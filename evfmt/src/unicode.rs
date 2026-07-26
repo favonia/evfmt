@@ -9,10 +9,11 @@
 //! includes them with [`include!`].
 
 // Generated file included at compile time from build.rs output.
-// Defines: VARIATION_ENTRIES, EMOJI_MODIFIERS, EMOJI_PRESENTATION_RANGES,
-//          EMOJI_RANGES, RI_RANGES.
-// AUDIT NOTE: VARIATION_ENTRIES and EMOJI_MODIFIERS are sorted by code point
-// (BTreeSet in build.rs guarantees this), required for binary search below.
+// Defines: VARIATION_ENTRIES, EMOJI_MODIFIERS, EMOJI_MODIFIER_BASES,
+//          EMOJI_PRESENTATION_RANGES, EMOJI_RANGES, RI_RANGES.
+// AUDIT NOTE: VARIATION_ENTRIES, EMOJI_MODIFIERS, and EMOJI_MODIFIER_BASES are
+// sorted by code point (BTreeSet in build.rs guarantees this), required for
+// binary search below.
 // Range tables are sorted and non-overlapping.
 include!(concat!(env!("OUT_DIR"), "/unicode_data.rs"));
 
@@ -152,6 +153,12 @@ pub(crate) const fn is_emoji_default(ch: char) -> bool {
 #[must_use]
 pub(crate) fn is_emoji_modifier(ch: char) -> bool {
     EMOJI_MODIFIERS.binary_search(&ch).is_ok()
+}
+
+/// Return whether a character has the Unicode `Emoji_Modifier_Base` property.
+#[must_use]
+pub(crate) fn is_emoji_modifier_base(ch: char) -> bool {
+    EMOJI_MODIFIER_BASES.binary_search(&ch).is_ok()
 }
 
 /// Return whether a character has the Unicode `Emoji` property.

@@ -12,6 +12,7 @@ Recognized structures may expose more information than these rules currently nee
 
 - whether the slot has no base, or a base without sanctioned variation sequences
 - if the slot has a base, whether following structure is an emoji modifier, a tag specification, or `U+20E3 COMBINING ENCLOSING KEYCAP`
+- whether a base followed by an emoji modifier has the Unicode `Emoji_Modifier_Base` property
 - whether the base is emoji-default or text-default
 - which selector, if any, is first in the slot
 
@@ -47,7 +48,8 @@ A sanctioned selector is a presentation selector that immediately follows a base
 Generic accounting:
 
 - unsanctioned selectors count as `unsanctioned_selectors`
-- sanctioned `FE0F` before an emoji modifier counts as `defective_selectors` when the modifier still attaches to the bare base
+- sanctioned `FE0F` before an emoji modifier counts as `modifier_defective_selectors` when the modifier still attaches to the bare base and the base has `Emoji_Modifier_Base`
+- the same selector removal counts as `additional_defective_selectors` when the base lacks `Emoji_Modifier_Base`
 - sanctioned selectors dropped because policy chooses the bare state count as `policy_redundant_selectors`
 - selector slots with no selector that policy resolves to an explicit selector count as `presentation_decisions`
 
@@ -59,6 +61,8 @@ Tag-context accounting is separate from ordinary policy redundancy and emoji-mod
 - sanctioned `FE0E` before a tag specification on a text-default base: `tag_conflicting_selectors` and `tag_forced_presentations`
 
 These tag counters describe `evfmt`'s canonicalization of a recognized tag context. UTS #51 admits other base-and-tag spellings that `evfmt` treats as non-canonical, and these counters do not create a user-facing policy choice for tag presentation.
+
+`additional_defective_selectors` is an `evfmt` formatter classification. It records the narrow recognized shape `Emoji FE0F Emoji_Modifier` when the sanctioned selector follows a base without `Emoji_Modifier_Base`. The name describes an additional fixed cleanup owned by the formatter. UTS #51 and its `Emoji_Modifier_Base` boundary continue to determine Unicode conformance status.
 
 ## Policy Domains
 
