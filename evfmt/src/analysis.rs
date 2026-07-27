@@ -393,18 +393,16 @@ fn analyze_singleton_base_selectors(
         // Precedence 1 above has already guaranteed that the explicit emoji
         // presentation is sanctioned when needed.
         Some(EmojiModification::TagModifier(_)) => {
-            let canonical_presentation = if unicode::is_emoji_default(base) {
-                None
+            let canonical_form = if unicode::is_emoji_default(base) {
+                TagBaseCanonicalForm::Bare
             } else {
-                Some(Presentation::Emoji)
+                TagBaseCanonicalForm::EmojiSelector
             };
-            let non_canonicality = analyze_tag_base_selectors(
-                canonical_presentation,
-                presentation_selectors_after_base,
-            );
+            let non_canonicality =
+                analyze_tag_base_selectors(canonical_form, presentation_selectors_after_base);
 
             SingletonBaseSelectorOutcome::Deterministic {
-                canonical_presentation,
+                canonical_presentation: canonical_form.presentation(),
                 non_canonicality,
             }
         }
@@ -422,6 +420,24 @@ fn analyze_singleton_base_selectors(
     }
 }
 
+/// Canonical presentation-selector form for a base in tag context.
+#[derive(Clone, Copy)]
+enum TagBaseCanonicalForm {
+    /// The emoji-default base remains bare.
+    Bare,
+    /// The base requires an emoji presentation selector.
+    EmojiSelector,
+}
+
+impl TagBaseCanonicalForm {
+    fn presentation(self) -> Option<Presentation> {
+        match self {
+            Self::Bare => None,
+            Self::EmojiSelector => Some(Presentation::Emoji),
+        }
+    }
+}
+
 /// Account for the base selector run in a recognized tag context.
 ///
 /// The broad tag grammar permits several base-and-tag spellings, while current
@@ -429,30 +445,28 @@ fn analyze_singleton_base_selectors(
 /// is therefore separate from ordinary policy redundancy and from defective
 /// emoji-modifier selector cleanup.
 fn analyze_tag_base_selectors(
-    canonical_presentation: Option<Presentation>,
+    canonical_form: TagBaseCanonicalForm,
     presentation_selectors_after_base: &[Presentation],
 ) -> NonCanonicality {
-    match (canonical_presentation, presentation_selectors_after_base) {
-        (None, []) | (Some(Presentation::Emoji), [Presentation::Emoji]) => {
+    match (canonical_form, presentation_selectors_after_base) {
+        (TagBaseCanonicalForm::Bare, [])
+        | (TagBaseCanonicalForm::EmojiSelector, [Presentation::Emoji]) => {
             NonCanonicality::default()
         }
-        (None, [Presentation::Emoji, rest @ ..]) => {
+        (TagBaseCanonicalForm::Bare, [Presentation::Emoji, rest @ ..]) => {
             NonCanonicality::TAG_REDUNDANT_SELECTOR + NonCanonicality::unsanctioned(rest.len())
         }
-        (None, [Presentation::Text, rest @ ..]) => {
+        (TagBaseCanonicalForm::Bare, [Presentation::Text, rest @ ..]) => {
             NonCanonicality::TAG_CONFLICTING_SELECTOR + NonCanonicality::unsanctioned(rest.len())
         }
-        (Some(Presentation::Emoji), []) => NonCanonicality::TAG_FORCED_PRESENTATION,
-        (Some(Presentation::Emoji), [Presentation::Emoji, rest @ ..]) => {
+        (TagBaseCanonicalForm::EmojiSelector, []) => NonCanonicality::TAG_FORCED_PRESENTATION,
+        (TagBaseCanonicalForm::EmojiSelector, [Presentation::Emoji, rest @ ..]) => {
             NonCanonicality::unsanctioned(rest.len())
         }
-        (Some(Presentation::Emoji), [Presentation::Text, rest @ ..]) => {
+        (TagBaseCanonicalForm::EmojiSelector, [Presentation::Text, rest @ ..]) => {
             NonCanonicality::TAG_CONFLICTING_SELECTOR
                 + NonCanonicality::TAG_FORCED_PRESENTATION
                 + NonCanonicality::unsanctioned(rest.len())
-        }
-        (Some(Presentation::Text), _) => {
-            unreachable!("tag context never canonicalizes a base to text presentation")
         }
     }
 }
