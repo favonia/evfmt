@@ -21,10 +21,16 @@ Use this file as a retrieval map. Each design note has "Read when:" and "Defines
 ### Feature models
 
 - [`features/recognition.markdown`](features/recognition.markdown) — high-level scanner contract, recognition boundaries, selector visibility
-- [`features/classification.markdown`](features/classification.markdown) — selector-slot classification, fixed-cleanup conditions, policy domains
+- [`features/classification.markdown`](features/classification.markdown) — selector-slot classification, context-specific selector accounting, policy domains
 - [`features/policy.markdown`](features/policy.markdown) — formatter policy predicates, decision table, defaults
 - [`features/cli.markdown`](features/cli.markdown) — CLI option grammar, modes, ignore filtering, exit codes
 - [`features/policy-key-set-api.markdown`](features/policy-key-set-api.markdown) — typed `PolicyKeySet` API, named sets, and set operations
+
+## Writing Design Claims
+
+Apply the minimum-information and direct-statement rules from [Explanatory Document Writing](guides/explanatory-writing.markdown) to design prose. State the concrete behavior, invariant, boundary, or consequence that future work must preserve.
+
+When a design claim depends on causality, name the component or actor, its observable behavior, and the resulting design consequence. Replace abstract assessments such as “makes the gap concrete” or “highlights the tension” with the specific risk, constraint, or decision they stand for. A connective such as “but,” “however,” or “although” should join claims whose implications for the design actually conflict.
 
 ## Rationale Archive
 

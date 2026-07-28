@@ -95,6 +95,9 @@ pub struct Policy {
 impl Policy {
     /// Return a copy of this policy with a new `prefer_bare` set.
     ///
+    /// Use this when you already have the full replacement set. This is the
+    /// replacement form of `policy.modify_prefer_bare(|_| prefer_bare)`.
+    ///
     /// This set controls whether bare form is allowed as the canonical output
     /// for a standalone variation-sequence character. For a character that is
     /// also in `bare_as_text`, the formatter changes explicit text
@@ -127,8 +130,9 @@ impl Policy {
 
     /// Return a copy of this policy with `prefer_bare` updated by `modify`.
     ///
-    /// This is a convenience for applying set operations to the current
-    /// `prefer_bare` value without restating the default set.
+    /// Use this when the new set is easier to express from the current one,
+    /// such as adding or removing policy keys. The callback receives the
+    /// current `prefer_bare` set and returns the replacement set.
     ///
     /// # Examples
     ///
@@ -151,6 +155,9 @@ impl Policy {
     }
 
     /// Return a copy of this policy with a new `bare_as_text` set.
+    ///
+    /// Use this when you already have the full replacement set. This is the
+    /// replacement form of `policy.modify_bare_as_text(|_| bare_as_text)`.
     ///
     /// This set controls what bare form means when a standalone
     /// variation-sequence character is not allowed to stay bare. Characters in
@@ -183,8 +190,9 @@ impl Policy {
 
     /// Return a copy of this policy with `bare_as_text` updated by `modify`.
     ///
-    /// This is a convenience for applying set operations to the current
-    /// `bare_as_text` value without restating the default set.
+    /// Use this when the new set is easier to express from the current one,
+    /// such as adding or removing policy keys. The callback receives the
+    /// current `bare_as_text` set and returns the replacement set.
     ///
     /// # Examples
     ///

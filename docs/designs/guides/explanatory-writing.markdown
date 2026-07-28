@@ -21,6 +21,8 @@ This note applies the project principles to explanatory documents with the same 
 - If an example uses escaped code points for source stability, explain nearby what string the reader should understand from that example.
 - If two commands are meant to produce the same result, say so directly instead of forcing the reader to infer it from shell mechanics.
 
+The minimum-information and direct-statement rules in this note imply a broader editing test: lead with the applicable fact, classification, or consequence. Omit a negative statement when it only denies an alternative that neither the prose nor the reader has raised; the affirmative statement carries more relevant information directly. Keep a negative statement when the exclusion itself defines a boundary, corrects a plausible misunderstanding, or records relevant evidence.
+
 ## Layering And Placement
 
 - Keep the example and its nearby prose focused on the minimum information needed for the next reader action.

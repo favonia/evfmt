@@ -16,6 +16,6 @@ Rationale may include guidance when it supports a design decision, but it must n
 
 - [`formatting-model.markdown`](formatting-model.markdown) — rationale for the selector-only formatting boundary and cross-family selector-canonicalization model
 - [`recognition.markdown`](recognition.markdown) — rationale for scanner recognition boundaries, selector visibility, valid emoji skeletons, and permissive recognition
-- [`classification.markdown`](classification.markdown) — rationale for selector-slot reasonable states, fixed cleanup, ZWJ component handling, and related rejected alternatives
+- [`classification.markdown`](classification.markdown) — rationale for selector-slot reasonable states, context-specific selector accounting, ZWJ component handling, and related rejected alternatives
 - [`policy.markdown`](policy.markdown) — rationale for policy predicates, default policy choices, bare-display assumptions, and keycap policy attention
 - [`source-text-stability.markdown`](source-text-stability.markdown) — rationale for checked-in text source stability and reader/source separation

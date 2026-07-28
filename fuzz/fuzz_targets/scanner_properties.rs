@@ -16,11 +16,14 @@ fn assert_finding_length_invariants(finding: &Finding<'_>) {
     let raw_chars = finding.raw.chars().count() as isize;
     let replacement_chars = replacement.chars().count() as isize;
     let char_delta = replacement_chars - raw_chars;
-    let expected_char_delta = non_canonicality.missing_required_selectors as isize
+    let expected_char_delta = non_canonicality.tag_forced_presentations as isize
         + non_canonicality.presentation_decisions as isize
         - non_canonicality.unsanctioned_selectors as isize
-        - non_canonicality.defective_sequences as isize
-        - non_canonicality.redundant_selectors as isize;
+        - non_canonicality.modifier_defective_selectors as isize
+        - non_canonicality.additional_defective_selectors as isize
+        - non_canonicality.tag_conflicting_selectors as isize
+        - non_canonicality.tag_redundant_selectors as isize
+        - non_canonicality.policy_redundant_selectors as isize;
 
     assert_eq!(
         finding.default_decisions().len(),

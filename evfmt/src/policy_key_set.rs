@@ -94,8 +94,8 @@ enum NamedSet {
 
 /// A finite set of formatter policy keys.
 ///
-/// The universe has two domains: non-keycap and keycap-character. Both domains
-/// are indexed by the generated variation-sequence base table. Characters
+/// The universe has two policy domains: non-keycap and keycap-character. Both
+/// domains are indexed by the generated variation-sequence base table. Characters
 /// outside that table never form policy keys, including in [`PolicyKeySet::all`].
 ///
 /// # Examples

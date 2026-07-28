@@ -6,35 +6,42 @@ use crate::presentation::Presentation;
 /// Count summary for why a scanned item is non-canonical.
 ///
 /// These axes are compositional rather than mutually exclusive. A finding may
-/// simultaneously include selector cleanup, deterministic sequence defects,
-/// redundant selectors, deterministic selector insertion, and policy-driven
-/// presentation decisions.
+/// simultaneously include unsanctioned selectors, modifier-related defective
+/// selectors, tag-context selector cleanup, policy-redundant selectors, and
+/// policy-driven presentation decisions.
 ///
 /// The categories describe how non-canonical selector usage is repaired or
 /// exposed to callers:
 ///
-/// - unsanctioned or structurally broken selector usage is removed
-/// - fixed-cleanup sequence defects are repaired without policy
-/// - redundant sanctioned selectors are removed when the active policy prefers
-///   the bare form
-/// - missing required presentation selectors are inserted by deterministic
-///   cleanup rather than by policy choice
+/// - unsanctioned selector usage is removed
+/// - sanctioned modifier-defective selectors are removed when a base with
+///   `Emoji_Modifier_Base` precedes an emoji modifier
+/// - additional defective selectors are sanctioned selectors removed by the
+///   formatter's narrow extension to variation-sequence emoji bases without
+///   `Emoji_Modifier_Base`
+/// - an intervening selector on a base without a sanctioned variation
+///   sequence is removed as unsanctioned selector usage
+/// - tag-context selectors are removed, replaced, or supplied by tag-specific
+///   cleanup
+/// - policy-redundant selectors are removed when the active policy prefers the
+///   bare form
 /// - ambiguous selector slots become caller-resolvable presentation decisions
 ///
-/// A redundant variation selector is not unsanctioned. It belongs to a
-/// sanctioned Unicode structure but is non-canonical under the active
-/// formatter policy because the same context canonically stays bare. Likewise,
-/// a missing required selector is separate from a defective sequence: inserting
-/// `FE0F` for a deterministic tag context is fixed cleanup, not a UTS #51
-/// defective emoji modifier repair.
+/// Tag-context counters are separate because tag-sequence presentation has a
+/// different Unicode history from ordinary policy resolution: current UTS #51
+/// admits broad base-and-tag spellings, while RGI tag sequences deliberately
+/// use an emoji-default base.
 ///
 /// The scalar-length effect of a finding's default canonical replacement is
-/// derived from these selector-level counters:
+/// derived from these counters. Each current category changes the default
+/// replacement by one presentation-selector scalar per count:
 ///
 /// ```text
 /// replacement.chars().count() - raw.chars().count()
-///   = missing_required_selectors + presentation_decisions
-///   - unsanctioned_selectors - defective_sequences - redundant_selectors
+///   = tag_forced_presentations + presentation_decisions
+///   - unsanctioned_selectors - modifier_defective_selectors
+///   - additional_defective_selectors - tag_conflicting_selectors
+///   - tag_redundant_selectors - policy_redundant_selectors
 /// ```
 ///
 /// # Examples
@@ -50,67 +57,100 @@ use crate::presentation::Presentation;
 ///
 /// assert_eq!(
 ///     finding.non_canonicality(),
-///     NonCanonicality::new(1, 0, 0, 0, 0)
+///     NonCanonicality::new(1, 0, 0, 0, 0, 0, 0, 0)
 /// );
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct NonCanonicality {
-    /// Count of presentation selectors removed as unsanctioned cleanup.
+    /// Count of presentation selectors removed as unsanctioned selector usage.
     pub unsanctioned_selectors: usize,
-    /// Count of deterministic sequence defects, such as a UTS #51 defective
-    /// emoji modifier sequence, that need repair but do not expose a policy
-    /// choice.
-    pub defective_sequences: usize,
-    /// Count of sanctioned selectors dropped because the active policy prefers
-    /// bare form.
-    pub redundant_selectors: usize,
-    /// Count of required presentation selectors inserted by deterministic
-    /// cleanup rather than policy choice.
-    pub missing_required_selectors: usize,
+    /// Count of sanctioned `FE0F` selectors removed in the UTS #51 defective
+    /// modifier context where an `Emoji_Modifier_Base` character precedes an
+    /// `Emoji_Modifier`.
+    ///
+    /// An intervening `FE0F` on an `Emoji_Modifier_Base` character without a
+    /// sanctioned variation sequence counts as [`Self::unsanctioned_selectors`].
+    pub modifier_defective_selectors: usize,
+    /// Count of sanctioned `FE0F` selectors removed before an emoji modifier
+    /// when the recognized variation-sequence emoji base lacks
+    /// `Emoji_Modifier_Base`.
+    ///
+    /// Earlier UTS #51 revisions admitted an intervening `FE0F` only through a
+    /// sanctioned variation sequence on an `Emoji_Modifier_Base`. `evfmt`
+    /// records sanctioned selectors on other recognized emoji bases in this
+    /// counter.
+    pub additional_defective_selectors: usize,
+    /// Count of sanctioned tag-context selectors whose requested presentation
+    /// differs from the canonical base presentation in tag context.
+    pub tag_conflicting_selectors: usize,
+    /// Count of tag-context selector slots where canonical output supplies
+    /// emoji presentation that was not already present in the source.
+    pub tag_forced_presentations: usize,
+    /// Count of sanctioned tag-context selectors whose requested emoji
+    /// presentation is already carried by the canonical bare base in tag
+    /// context.
+    pub tag_redundant_selectors: usize,
+    /// Count of sanctioned selectors dropped because the active policy chooses
+    /// bare form as canonical.
+    pub policy_redundant_selectors: usize,
     /// Count of policy presentation decisions callers may resolve.
     pub presentation_decisions: usize,
 }
 
 impl Default for NonCanonicality {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0)
+        Self::new(0, 0, 0, 0, 0, 0, 0, 0)
     }
 }
 
 impl NonCanonicality {
-    pub(super) const DEFECTIVE: Self = Self::new(0, 1, 0, 0, 0);
-    pub(super) const REDUNDANT: Self = Self::new(0, 0, 1, 0, 0);
-    pub(super) const MISSING_REQUIRED: Self = Self::new(0, 0, 0, 1, 0);
-    pub(super) const PRESENTATION_DECISION: Self = Self::new(0, 0, 0, 0, 1);
+    pub(super) const MODIFIER_DEFECTIVE_SELECTOR: Self = Self::new(0, 1, 0, 0, 0, 0, 0, 0);
+    pub(super) const ADDITIONAL_DEFECTIVE_SELECTOR: Self = Self::new(0, 0, 1, 0, 0, 0, 0, 0);
+    pub(super) const TAG_CONFLICTING_SELECTOR: Self = Self::new(0, 0, 0, 1, 0, 0, 0, 0);
+    pub(super) const TAG_FORCED_PRESENTATION: Self = Self::new(0, 0, 0, 0, 1, 0, 0, 0);
+    pub(super) const TAG_REDUNDANT_SELECTOR: Self = Self::new(0, 0, 0, 0, 0, 1, 0, 0);
+    pub(super) const POLICY_REDUNDANT_SELECTOR: Self = Self::new(0, 0, 0, 0, 0, 0, 1, 0);
+    pub(super) const PRESENTATION_DECISION: Self = Self::new(0, 0, 0, 0, 0, 0, 0, 1);
 
     /// Create an explicit non-canonicality summary.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    // The public constructor mirrors the eight independent accounting axes.
     pub const fn new(
         unsanctioned_selectors: usize,
-        defective_sequences: usize,
-        redundant_selectors: usize,
-        missing_required_selectors: usize,
+        modifier_defective_selectors: usize,
+        additional_defective_selectors: usize,
+        tag_conflicting_selectors: usize,
+        tag_forced_presentations: usize,
+        tag_redundant_selectors: usize,
+        policy_redundant_selectors: usize,
         presentation_decisions: usize,
     ) -> Self {
         Self {
             unsanctioned_selectors,
-            defective_sequences,
-            redundant_selectors,
-            missing_required_selectors,
+            modifier_defective_selectors,
+            additional_defective_selectors,
+            tag_conflicting_selectors,
+            tag_forced_presentations,
+            tag_redundant_selectors,
+            policy_redundant_selectors,
             presentation_decisions,
         }
     }
 
     pub(super) const fn unsanctioned(count: usize) -> Self {
-        Self::new(count, 0, 0, 0, 0)
+        Self::new(count, 0, 0, 0, 0, 0, 0, 0)
     }
 
     pub(super) const fn is_empty(self) -> bool {
         self.unsanctioned_selectors == 0
-            && self.defective_sequences == 0
-            && self.redundant_selectors == 0
-            && self.missing_required_selectors == 0
+            && self.modifier_defective_selectors == 0
+            && self.additional_defective_selectors == 0
+            && self.tag_conflicting_selectors == 0
+            && self.tag_forced_presentations == 0
+            && self.tag_redundant_selectors == 0
+            && self.policy_redundant_selectors == 0
             && self.presentation_decisions == 0
     }
 }
@@ -121,10 +161,16 @@ impl Add for NonCanonicality {
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             unsanctioned_selectors: self.unsanctioned_selectors + rhs.unsanctioned_selectors,
-            defective_sequences: self.defective_sequences + rhs.defective_sequences,
-            redundant_selectors: self.redundant_selectors + rhs.redundant_selectors,
-            missing_required_selectors: self.missing_required_selectors
-                + rhs.missing_required_selectors,
+            modifier_defective_selectors: self.modifier_defective_selectors
+                + rhs.modifier_defective_selectors,
+            additional_defective_selectors: self.additional_defective_selectors
+                + rhs.additional_defective_selectors,
+            tag_conflicting_selectors: self.tag_conflicting_selectors
+                + rhs.tag_conflicting_selectors,
+            tag_forced_presentations: self.tag_forced_presentations + rhs.tag_forced_presentations,
+            tag_redundant_selectors: self.tag_redundant_selectors + rhs.tag_redundant_selectors,
+            policy_redundant_selectors: self.policy_redundant_selectors
+                + rhs.policy_redundant_selectors,
             presentation_decisions: self.presentation_decisions + rhs.presentation_decisions,
         }
     }
@@ -332,11 +378,12 @@ impl Finding<'_> {
         }
     }
 
-    /// The canonical replacement using the default decision vector.
+    /// Return the canonical replacement selected by this finding's default
+    /// decision vector.
     ///
-    /// This is infallible because each presentation decision stores its own default
-    /// next to the options it may select. The default is validated when
-    /// constructing the slot.
+    /// Use this when accepting evfmt's default repair for the whole finding.
+    /// Unlike [`Finding::canonical_replacement_with_decisions`], this method
+    /// cannot fail because the decisions come from the finding itself.
     #[must_use]
     pub fn default_canonical_replacement(&self) -> String {
         let mut out = String::new();
@@ -358,8 +405,9 @@ impl Finding<'_> {
     /// [`Presentation::Text`] or [`Presentation::Emoji`]. Fixed cleanup is
     /// included in the whole replacement but contributes no presentation decision.
     ///
-    /// Returns `None` when the decision vector has the wrong length or contains
-    /// a decision value that is not valid for its slot. That `None` reports
+    /// Returns `None` when the decision vector is invalid. Because the current
+    /// API accepts both presentation decisions at every slot, the only invalid
+    /// decision vectors are those with the wrong length. That `None` reports
     /// invalid caller input; it does not mean this finding is canonical.
     /// Callers that want to skip a finding can keep [`Finding::raw`].
     #[must_use]

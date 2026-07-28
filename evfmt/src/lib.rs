@@ -61,7 +61,7 @@
 //! let finding = analyze_scan_item(&item, &policy).unwrap();
 //! assert_eq!(
 //!     finding.non_canonicality(),
-//!     NonCanonicality::new(1, 0, 0, 0, 0)
+//!     NonCanonicality::new(1, 0, 0, 0, 0, 0, 0, 0)
 //! );
 //! assert_eq!(finding.default_decisions().len(), 0);
 //!

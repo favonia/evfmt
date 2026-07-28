@@ -70,6 +70,14 @@ fn test_emoji_modifier_property() {
     assert!(!is_emoji_modifier('A'));
 }
 
+#[test]
+fn test_emoji_modifier_base_property() {
+    assert!(is_emoji_modifier_base('\u{270C}'));
+    assert!(is_emoji_modifier_base('\u{1F468}'));
+    assert!(!is_emoji_modifier_base('#'));
+    assert!(!is_emoji_modifier_base('A'));
+}
+
 /// Drift watch for modification handling: emoji modifiers and the enclosing
 /// keycap are sequence suffixes, not bases with their own VS15/VS16 policies.
 #[test]
@@ -287,6 +295,20 @@ fn test_conformance_emoji_modifier() {
     assert_eq!(
         generated_modifiers, emoji_modifiers,
         "Emoji_Modifier set mismatch between source data and generated table"
+    );
+}
+
+#[test]
+fn test_conformance_emoji_modifier_base() {
+    let emoji_modifier_bases =
+        parse_ucd_property_independently("data/emoji-data.txt", "Emoji_Modifier_Base");
+
+    let generated_modifier_bases: BTreeSet<u32> =
+        EMOJI_MODIFIER_BASES.iter().map(|&ch| ch as u32).collect();
+
+    assert_eq!(
+        generated_modifier_bases, emoji_modifier_bases,
+        "Emoji_Modifier_Base set mismatch between source data and generated table"
     );
 }
 

@@ -21,9 +21,10 @@ The command family uses aligned subcommands: `evfmt format [options] FILES...` a
 `evfmt/build.rs` parses pinned Unicode data files from `evfmt/data/` at compile time and generates `unicode_data.rs`:
 
 - `emoji-variation-sequences.txt` → which characters have text and emoji variation sequences
-- `emoji-data.txt` → which characters have the `Emoji_Presentation` property
+- `emoji-data.txt` → which characters have the `Emoji_Presentation`, `Emoji_Modifier`, `Emoji_Modifier_Base`, and `Emoji` properties
+- `PropList.txt` → which characters have the `Regional_Indicator` property
 
-The generated file contains a sorted `VARIATION_ENTRIES` array. Runtime lookup uses binary search. Broader sequence-aware validation builds on top of this data layer rather than replacing it.
+The generated file contains sorted `VARIATION_ENTRIES`, `EMOJI_MODIFIERS`, and `EMOJI_MODIFIER_BASES` arrays, plus sorted non-overlapping ranges for `Emoji_Presentation`, `Emoji`, and `Regional_Indicator`. Runtime lookup uses binary search. Broader sequence-aware validation builds on top of this data layer rather than replacing it.
 
 The repository's pinned Unicode inputs are broader than the compile-time tables alone. Upgrade and verification work may also depend on:
 
