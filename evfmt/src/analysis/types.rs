@@ -76,10 +76,10 @@ pub struct NonCanonicality {
     /// when the recognized variation-sequence emoji base lacks
     /// `Emoji_Modifier_Base`.
     ///
-    /// This is an `evfmt` formatter classification. It extends the modifier
-    /// cleanup to the narrow recognized shape `Emoji FE0F Emoji_Modifier`; it
-    /// keeps Unicode conformance status governed by UTS #51 and the
-    /// `Emoji_Modifier_Base` boundary.
+    /// Earlier UTS #51 revisions admitted an intervening `FE0F` only through a
+    /// sanctioned variation sequence on an `Emoji_Modifier_Base`. `evfmt`
+    /// records sanctioned selectors on other recognized emoji bases in this
+    /// counter.
     pub additional_defective_selectors: usize,
     /// Count of sanctioned tag-context selectors whose requested presentation
     /// differs from the canonical base presentation in tag context.

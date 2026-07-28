@@ -62,7 +62,7 @@ Tag-context accounting is separate from ordinary policy redundancy and emoji-mod
 
 These tag counters describe `evfmt`'s canonicalization of a recognized tag context. UTS #51 admits other base-and-tag spellings that `evfmt` treats as non-canonical, and these counters do not create a user-facing policy choice for tag presentation.
 
-`additional_defective_selectors` is an `evfmt` formatter classification. It records the narrow recognized shape `Emoji FE0F Emoji_Modifier` when the sanctioned selector follows a base without `Emoji_Modifier_Base`. The name describes an additional fixed cleanup owned by the formatter. UTS #51 and its `Emoji_Modifier_Base` boundary continue to determine Unicode conformance status.
+`additional_defective_selectors` is an `evfmt` formatter classification. It records the narrow recognized shape `Emoji FE0F Emoji_Modifier` when the sanctioned selector follows a base without `Emoji_Modifier_Base`. The name describes an additional fixed cleanup owned by the formatter.
 
 ## Policy Domains
 
