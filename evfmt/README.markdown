@@ -8,7 +8,7 @@ It is an opinionated formatter for Unicode variation selectors:
 
 - chooses a deterministic bare, text, or emoji form for characters with variation sequences
 - removes stray selectors in unsupported positions
-- normalizes multi-character emoji sequences to fully qualified forms
+- preserves emoji sequences recommended for general interchange (RGI)
 - respects `.gitignore` and `.evfmtignore`
 
 Install from [crates.io](https://crates.io/crates/evfmt) with:
