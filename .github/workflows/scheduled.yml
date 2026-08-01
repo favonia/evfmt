@@ -12,7 +12,6 @@ jobs:
   fuzz:
     name: Fuzz
     runs-on: ubuntu-latest
-    continue-on-error: true # informational deep-check; failures do not block routine changes
     steps:
       - name: 🛡️ Harden runner
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
@@ -31,9 +30,9 @@ jobs:
           tool: cargo-fuzz
       - name: 🧪 Run fuzz targets
         run: |
-          for target in $(cargo fuzz list 2>/dev/null); do
+          for target in $(cargo +nightly fuzz list 2>/dev/null); do
             echo "::group::Fuzzing $target"
-            cargo fuzz run "$target" -- -max_total_time=1800
+            cargo +nightly fuzz run "$target" -- -max_total_time=1800
             echo "::endgroup::"
           done
 
