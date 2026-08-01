@@ -42,6 +42,22 @@ Domain-qualified base-indexing is the current public realization of that constra
 
 Revisit this policy-shape choice if future Unicode data introduces policy-relevant selector contexts that do not fit the current domains, or if real user needs show that the current non-keycap/keycap policy surface cannot express an important formatting choice. The response should still expose a named policy distinction that users can reason about, such as adding a small domain or replacing the current domain split with another small policy model, rather than encoding arbitrary surrounding sequence topology into policy keys.
 
+### Named Policy-Set Surface
+
+Manually reviewed: yes.
+
+Facts: the 0.3.0 policy-key namespace omits the earlier convenience subsets `rights-marks`, `arrows`, and `card-suits`. Those subsets let users keep a small class of text-default characters bare without selecting all `text-defaults`. The same policies remain expressible with singleton characters or code points, but may require longer option values. At the time of this namespace decision, no known external workflow depended on the convenience names.
+
+Product assumption: **the initial named-set surface should omit these convenience subsets until a concrete workflow shows that the remaining named sets and short singleton lists are too cumbersome.** A small surface is easier to explain and leaves room to add a set later without breaking existing policy expressions. Namespace size alone does not decide the issue: a common policy that repeatedly requires long singleton lists would justify reconsidering a focused convenience name.
+
+Revisit this choice when real configurations show that `text-defaults`, `emoji-defaults`, `variation-bases`, `keycap:rgi`, and short singleton lists do not express a common policy clearly.
+
+### Why There Is No `keycap:ascii`
+
+Manually reviewed: yes.
+
+Product assumption: **users expect `ascii` to refer to ordinary ASCII characters such as `#`, `*`, and digits, not to their use as keycap bases.** The policy namespace therefore provides `keycap:rgi` and does not provide `keycap:ascii`.
+
 ### Keycap-Character Policy Domain
 
 Manually reviewed: yes.
