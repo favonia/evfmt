@@ -4,18 +4,16 @@
 
 Breaking changes:
 
-- Changed the default policy so bare text-default non-keycap characters normalize to explicit text presentation instead of explicit emoji presentation. ([#29](https://github.com/favonia/evfmt/pull/29))
-- Renamed `VariationSet` and `evfmt::variation_set` to `PolicyKeySet` and `evfmt::policy_key_set` to make the policy-key domain explicit. ([#28](https://github.com/favonia/evfmt/pull/28))
-- Replaced policy-set names with a smaller policy-set surface: `keycap-chars` is now `keycap:variation-bases`, `non-keycap-chars` is now `variation-bases`, `keycap-emojis` is now `keycap:rgi`, and the convenience subsets `rights-marks`, `arrows`, and `card-suits` were removed. ([#34](https://github.com/favonia/evfmt/pull/34))
-- Renamed the `findings` module to `analysis` and replaced the analysis API's `Violation` categories, `DecisionSlot`s, and `ReplacementDecision`s with compositional `NonCanonicality` summaries and `Presentation`-based replacement choices. ([#26](https://github.com/favonia/evfmt/pull/26))
-- Refined `NonCanonicality` accounting by replacing `defective_sequences`, `redundant_selectors`, and `missing_required_selectors` with `modifier_defective_selectors`, `additional_defective_selectors`, `tag_conflicting_selectors`, `tag_forced_presentations`, `tag_redundant_selectors`, and `policy_redundant_selectors`; `unsanctioned_selectors` and `presentation_decisions` remain, and `NonCanonicality::new` now takes eight counts instead of five. ([#36](https://github.com/favonia/evfmt/pull/36))
-- Renamed `Finding::default_replacement` to `Finding::default_canonical_replacement` and `Finding::replacement` to `Finding::canonical_replacement_with_decisions` to clarify that successful replacements are canonical under the selected decisions. ([#26](https://github.com/favonia/evfmt/pull/26))
-- Renamed `NonCanonicality::bases_to_resolve` to `NonCanonicality::presentation_decisions`. ([#26](https://github.com/favonia/evfmt/pull/26))
+- Changed the default policy so bare text-default characters in non-keycap selector slots normalize to explicit text presentation instead of explicit emoji presentation. ([#29](https://github.com/favonia/evfmt/pull/29), [#32](https://github.com/favonia/evfmt/pull/32))
+- Renamed `VariationSet` and `evfmt::variation_set` to `PolicyKeySet` and `evfmt::policy_key_set` to make the policy-key domain explicit. ([#28](https://github.com/favonia/evfmt/pull/28), [#31](https://github.com/favonia/evfmt/pull/31))
+- Reworked the policy-set namespace: `keycap-chars` is now `keycap:variation-bases`, `non-keycap-chars` is now `variation-bases`, `keycap-emojis` is now `keycap:rgi`, `keycap:text-defaults` and `keycap:emoji-defaults` were added, and the convenience subsets `rights-marks`, `arrows`, and `card-suits` were removed. ([#34](https://github.com/favonia/evfmt/pull/34), [#35](https://github.com/favonia/evfmt/pull/35))
+- Renamed the `findings` module to `analysis` and replaced the analysis API's `Violation` categories, `DecisionSlot`s, and `ReplacementDecision`s with compositional `NonCanonicality` summaries and `Presentation`-based replacement choices. ([#26](https://github.com/favonia/evfmt/pull/26), [#36](https://github.com/favonia/evfmt/pull/36), [#42](https://github.com/favonia/evfmt/pull/42))
+- Reshaped `Finding` for the new analysis model: `Finding::violation` became `Finding::non_canonicality`, `Finding::decision_slots` was removed, `Finding::default_decision` became the `Presentation` iterator `Finding::default_decisions`, `Finding::default_replacement` became `Finding::default_canonical_replacement` and now returns `String`, and `Finding::replacement` became `Finding::canonical_replacement_with_decisions`. ([#26](https://github.com/favonia/evfmt/pull/26))
 - Moved the shared `Presentation` type from the scanner API to the crate root. ([#26](https://github.com/favonia/evfmt/pull/26))
 
 Fixed:
 
-- Preserved sanctioned text presentation before emoji modifiers while continuing to remove legacy defective emoji-presentation selectors before modifiers. ([#36](https://github.com/favonia/evfmt/pull/36))
+- Preserved sanctioned text presentation before emoji modifiers while continuing to remove legacy defective emoji-presentation selectors before modifiers. ([#26](https://github.com/favonia/evfmt/pull/26))
 
 ## 0.2.0 (2026-04-22)
 
