@@ -30,9 +30,10 @@ jobs:
           tool: cargo-fuzz
       - name: 🧪 Run fuzz targets
         run: |
+          host_target="$(rustc +nightly -vV | sed -n 's/^host: //p')"
           for target in $(cargo +nightly fuzz list 2>/dev/null); do
             echo "::group::Fuzzing $target"
-            cargo +nightly fuzz run "$target" -- -max_total_time=1800
+            cargo +nightly fuzz run --target "$host_target" "$target" -- -max_total_time=1800
             echo "::endgroup::"
           done
 
