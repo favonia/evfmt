@@ -45,7 +45,7 @@
 //!
 //! ```rust
 //! use evfmt::{Policy, ScanKind, scan};
-//! use evfmt::analysis::{NonCanonicality, analyze_scan_item};
+//! use evfmt::analysis::analyze_scan_item;
 //!
 //! let policy = Policy::default();
 //! let input = "A\u{FE0F}";
@@ -59,10 +59,9 @@
 //! ));
 //!
 //! let finding = analyze_scan_item(&item, &policy).unwrap();
-//! assert_eq!(
-//!     finding.non_canonicality(),
-//!     NonCanonicality::new(1, 0, 0, 0, 0, 0, 0, 0)
-//! );
+//! let non_canonicality = finding.non_canonicality();
+//! assert!(!non_canonicality.is_empty());
+//! assert_eq!(non_canonicality.unsanctioned_selectors, 1);
 //! assert_eq!(finding.default_decisions().len(), 0);
 //!
 //! let repaired = finding.canonical_replacement_with_decisions(&[]).unwrap();

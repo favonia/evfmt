@@ -25,28 +25,13 @@ fn finding_for_first_item_with_policy<'a>(input: &'a str, policy: &Policy) -> Fi
     analyze_scan_item(&items[0], policy).expect("first item should produce a finding")
 }
 
-#[allow(clippy::too_many_arguments)]
-// Keep expected values in the same order as the public eight-axis constructor.
-const fn non_canonicality(
-    unsanctioned_selectors: usize,
-    modifier_defective_selectors: usize,
-    additional_defective_selectors: usize,
-    tag_conflicting_selectors: usize,
-    tag_forced_presentations: usize,
-    tag_redundant_selectors: usize,
-    policy_redundant_selectors: usize,
-    presentation_decisions: usize,
-) -> NonCanonicality {
-    NonCanonicality::new(
-        unsanctioned_selectors,
-        modifier_defective_selectors,
-        additional_defective_selectors,
-        tag_conflicting_selectors,
-        tag_forced_presentations,
-        tag_redundant_selectors,
-        policy_redundant_selectors,
-        presentation_decisions,
-    )
+macro_rules! non_canonicality {
+    ($($field:ident: $count:expr),* $(,)?) => {
+        NonCanonicality {
+            $($field: $count,)*
+            ..Default::default()
+        }
+    };
 }
 
 fn default_choice_decisions(finding: &Finding<'_>) -> Vec<Presentation> {
@@ -58,7 +43,7 @@ fn links_only_zwj_sequence_strips_link_selectors() {
     let finding = finding_for_first_item("\u{200D}\u{FE0F}\u{200D}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(finding.default_canonical_replacement(), "\u{200D}\u{200D}");
 }
@@ -73,7 +58,7 @@ fn fixed_repair_has_empty_decision_vector() {
     let finding = finding_for_first_item("#\u{FE0E}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 0, 1, 0)
+        non_canonicality! { policy_redundant_selectors: 1 }
     );
     assert!(default_choice_decisions(&finding).is_empty());
     assert_eq!(finding.default_canonical_replacement(), "#");
@@ -96,7 +81,10 @@ fn policy_redundant_selector_with_extra_selector_keeps_policy_accounting() {
     let finding = finding_for_first_item("#\u{FE0E}\u{FE0F}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 1, 0)
+        non_canonicality! {
+            unsanctioned_selectors: 1,
+            policy_redundant_selectors: 1,
+        }
     );
     assert_eq!(finding.default_canonical_replacement(), "#");
 }
@@ -106,7 +94,7 @@ fn unsanctioned_singleton_context_cleans_base_and_modification_selectors() {
     let finding = finding_for_first_item("\u{1F600}\u{FE0F}\u{20E3}\u{FE0E}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(2, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 2 }
     );
     assert_eq!(finding.default_canonical_replacement(), "\u{1F600}\u{20E3}");
     assert_eq!(finding.default_decisions().len(), 0);
@@ -117,7 +105,7 @@ fn standalone_bare_singleton_uses_plain_presentation_resolution() {
     let finding = finding_for_first_item("\u{00A9}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! { presentation_decisions: 1 }
     );
     assert_eq!(default_choice_decisions(&finding), [Presentation::Text]);
     assert_eq!(finding.default_canonical_replacement(), "\u{00A9}\u{FE0E}");
@@ -157,7 +145,7 @@ fn flag_selector_on_either_indicator_is_removed() {
         let finding = finding_for_first_item(input);
         assert_eq!(
             finding.non_canonicality(),
-            non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+            non_canonicality! { unsanctioned_selectors: 1 }
         );
         assert_eq!(
             finding.default_canonical_replacement(),
@@ -185,7 +173,7 @@ fn flag_finding_is_created_for_each_selector_source_independently() {
         let finding = finding_for_first_item(input);
         assert_eq!(
             finding.non_canonicality(),
-            non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+            non_canonicality! { unsanctioned_selectors: 1 }
         );
         assert_eq!(finding.default_canonical_replacement(), replacement);
     }
@@ -201,7 +189,7 @@ fn single_emoji_zwj_wrapper_uses_singleton_resolution_but_preserves_link() {
     let finding = finding_for_first_item("\u{00A9}\u{200D}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! { presentation_decisions: 1 }
     );
     assert_eq!(
         finding.canonical_replacement_with_decisions(&[Presentation::Text]),
@@ -224,7 +212,7 @@ fn single_emoji_keycap_wrapper_repairs_without_dropping_link() {
     let finding = finding_for_first_item("#\u{20E3}\u{200D}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! { presentation_decisions: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -241,7 +229,10 @@ fn single_emoji_keycap_wrapper_reports_trailing_link_selector_cleanup() {
     let finding = finding_for_first_item("#\u{20E3}\u{200D}\u{FE0F}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! {
+            unsanctioned_selectors: 1,
+            presentation_decisions: 1,
+        }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -254,7 +245,7 @@ fn tag_modifier_trailing_selector_is_cleaned() {
     let finding = finding_for_first_item("\u{1F3F4}\u{E0067}\u{FE0F}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -267,7 +258,7 @@ fn tag_modifier_on_emoji_default_base_does_not_add_base_selector() {
     let finding = finding_for_first_item("\u{2728}\u{E0067}\u{FE0F}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(finding.default_canonical_replacement(), "\u{2728}\u{E0067}");
 }
@@ -277,7 +268,7 @@ fn tag_modifier_on_emoji_default_base_counts_emoji_selector_as_redundant() {
     let finding = finding_for_first_item("\u{2728}\u{FE0F}\u{E0067}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 1, 0, 0)
+        non_canonicality! { tag_redundant_selectors: 1 }
     );
     assert_eq!(finding.default_canonical_replacement(), "\u{2728}\u{E0067}");
 }
@@ -287,7 +278,7 @@ fn tag_modifier_on_emoji_default_base_counts_text_selector_as_conflicting() {
     let finding = finding_for_first_item("\u{2728}\u{FE0E}\u{E0067}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 1, 0, 0, 0, 0)
+        non_canonicality! { tag_conflicting_selectors: 1 }
     );
     assert_eq!(finding.default_canonical_replacement(), "\u{2728}\u{E0067}");
 }
@@ -297,7 +288,10 @@ fn tag_modifier_on_emoji_default_base_counts_extra_selectors_as_unsanctioned() {
     let finding = finding_for_first_item("\u{2728}\u{FE0F}\u{FE0E}\u{E0067}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 1, 0, 0)
+        non_canonicality! {
+            unsanctioned_selectors: 1,
+            tag_redundant_selectors: 1,
+        }
     );
     assert_eq!(finding.default_canonical_replacement(), "\u{2728}\u{E0067}");
 }
@@ -307,7 +301,7 @@ fn emoji_modifier_legacy_emoji_selector_is_defective() {
     let finding = finding_for_first_item("\u{270C}\u{FE0F}\u{1F3FB}");
     assert_eq!(
         finding.non_canonicality(),
-        NonCanonicality::new(0, 1, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { modifier_defective_selectors: 1 }
     );
     assert_eq!(finding.default_canonical_replacement(), "\u{270C}\u{1F3FB}");
 }
@@ -317,7 +311,7 @@ fn modifier_base_without_variation_sequence_data_counts_selector_as_unsanctioned
     let finding = finding_for_first_item("\u{1F468}\u{FE0F}\u{1F3FB}");
     assert_eq!(
         finding.non_canonicality(),
-        NonCanonicality::new(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -330,7 +324,7 @@ fn emoji_modifier_on_non_modifier_base_is_an_additional_defect() {
     let finding = finding_for_first_item("#\u{FE0F}\u{1F3FB}");
     assert_eq!(
         finding.non_canonicality(),
-        NonCanonicality::new(0, 0, 1, 0, 0, 0, 0, 0)
+        non_canonicality! { additional_defective_selectors: 1 }
     );
     assert_eq!(finding.default_canonical_replacement(), "#\u{1F3FB}");
 }
@@ -340,7 +334,10 @@ fn emoji_modifier_extra_selector_after_legacy_emoji_selector_is_unsanctioned() {
     let finding = finding_for_first_item("\u{270C}\u{FE0F}\u{FE0E}\u{1F3FB}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 1, 0, 0, 0, 0, 0, 0)
+        non_canonicality! {
+            unsanctioned_selectors: 1,
+            modifier_defective_selectors: 1,
+        }
     );
     assert_eq!(finding.default_canonical_replacement(), "\u{270C}\u{1F3FB}");
 }
@@ -355,7 +352,7 @@ fn emoji_modifier_extra_selector_after_text_selector_is_unsanctioned() {
     let finding = finding_for_first_item("\u{270C}\u{FE0E}\u{FE0F}\u{1F3FB}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -368,7 +365,7 @@ fn tag_modifier_bare_text_default_base_counts_forced_emoji_presentation() {
     let finding = finding_for_first_item("\u{00A9}\u{E0067}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 1, 0, 0, 0)
+        non_canonicality! { tag_forced_presentations: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -386,7 +383,7 @@ fn tag_modifier_extra_selector_after_forced_emoji_presentation_is_unsanctioned()
     let finding = finding_for_first_item("\u{00A9}\u{FE0F}\u{FE0E}\u{E0067}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -399,7 +396,10 @@ fn tag_modifier_text_selector_counts_conflict_and_forced_emoji_presentation() {
     let finding = finding_for_first_item("\u{00A9}\u{FE0E}\u{E0067}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 1, 1, 0, 0, 0)
+        non_canonicality! {
+            tag_conflicting_selectors: 1,
+            tag_forced_presentations: 1,
+        }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -412,7 +412,11 @@ fn tag_modifier_extra_selector_after_text_conflict_is_unsanctioned() {
     let finding = finding_for_first_item("\u{00A9}\u{FE0E}\u{FE0E}\u{E0067}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 1, 1, 0, 0, 0)
+        non_canonicality! {
+            unsanctioned_selectors: 1,
+            tag_conflicting_selectors: 1,
+            tag_forced_presentations: 1,
+        }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -425,7 +429,7 @@ fn multi_emoji_zwj_sequence_resolves_bare_components_with_component_policy() {
     let finding = finding_for_first_item("\u{2764}\u{200D}\u{1F525}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! { presentation_decisions: 1 }
     );
     assert_eq!(default_choice_decisions(&finding), [Presentation::Text]);
     assert_eq!(
@@ -443,7 +447,7 @@ fn multi_emoji_zwj_sequence_exposes_multiple_component_decision_slots() {
     let finding = finding_for_first_item("\u{00A9}\u{200D}\u{00AE}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 0, 0, 2)
+        non_canonicality! { presentation_decisions: 2 }
     );
     assert_eq!(
         default_choice_decisions(&finding),
@@ -460,7 +464,10 @@ fn multi_emoji_zwj_sequence_keeps_mixed_component_non_canonicality_counts() {
     let finding = finding_for_first_item("\u{1F1E6}\u{FE0F}\u{1F1E8}\u{200D}\u{00A9}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! {
+            unsanctioned_selectors: 1,
+            presentation_decisions: 1,
+        }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -473,7 +480,7 @@ fn multi_emoji_zwj_sequence_repairs_noncanonical_joined_component_by_policy() {
     let finding = finding_for_first_item("\u{1F525}\u{200D}\u{2764}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! { presentation_decisions: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -500,7 +507,7 @@ fn multi_emoji_zwj_sequence_cleans_joined_link_selector_without_component_repair
     let finding = finding_for_first_item("\u{1F525}\u{200D}\u{FE0F}\u{1F600}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -513,7 +520,7 @@ fn multi_emoji_zwj_sequence_cleans_trailing_link_selector_without_component_repa
     let finding = finding_for_first_item("\u{1F525}\u{200D}\u{1F600}\u{200D}\u{FE0F}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -540,7 +547,7 @@ fn multi_emoji_zwj_sequence_repairs_flag_component_selectors() {
         let finding = finding_for_first_item(input);
         assert_eq!(
             finding.non_canonicality(),
-            non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+            non_canonicality! { unsanctioned_selectors: 1 }
         );
         assert_eq!(finding.default_canonical_replacement(), replacement);
     }
@@ -571,7 +578,7 @@ fn combo_leading_zwj_run_does_not_attach_to_following_emoji() {
         analyze_scan_item(&items[1], &default_policy()).expect("bare copyright still uses policy");
     assert_eq!(
         emoji_finding.non_canonicality(),
-        non_canonicality(0, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! { presentation_decisions: 1 }
     );
     assert_eq!(
         emoji_finding.default_canonical_replacement(),
@@ -584,7 +591,10 @@ fn combo_dangling_zwj_after_one_emoji_uses_singleton_policy() {
     let finding = finding_for_first_item("\u{00A9}\u{200D}\u{FE0F}\u{200D}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 1)
+        non_canonicality! {
+            unsanctioned_selectors: 1,
+            presentation_decisions: 1,
+        }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -597,7 +607,7 @@ fn combo_dangling_zwj_after_canonical_singleton_only_cleans_link_selectors() {
     let finding = finding_for_first_item("\u{00A9}\u{FE0F}\u{200D}\u{FE0F}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(1, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 1 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),
@@ -611,7 +621,7 @@ fn combo_true_zwj_sequence_uses_component_local_cleanup() {
         finding_for_first_item("\u{2764}\u{FE0E}\u{200D}\u{FE0F}\u{1F525}\u{FE0F}\u{200D}\u{FE0E}");
     assert_eq!(
         finding.non_canonicality(),
-        non_canonicality(3, 0, 0, 0, 0, 0, 0, 0)
+        non_canonicality! { unsanctioned_selectors: 3 }
     );
     assert_eq!(
         finding.default_canonical_replacement(),

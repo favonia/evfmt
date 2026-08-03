@@ -48,17 +48,18 @@ use crate::presentation::Presentation;
 ///
 /// ```rust
 /// use evfmt::{Policy, scan};
-/// use evfmt::analysis::{NonCanonicality, analyze_scan_item};
+/// use evfmt::analysis::analyze_scan_item;
+///
+/// assert!(evfmt::NonCanonicality::default().is_empty());
 ///
 /// let policy = Policy::default();
 /// let finding = scan("A\u{FE0F}")
 ///     .find_map(|item| analyze_scan_item(&item, &policy))
 ///     .unwrap();
 ///
-/// assert_eq!(
-///     finding.non_canonicality(),
-///     NonCanonicality::new(1, 0, 0, 0, 0, 0, 0, 0)
-/// );
+/// let non_canonicality = finding.non_canonicality();
+/// assert!(!non_canonicality.is_empty());
+/// assert_eq!(non_canonicality.unsanctioned_selectors, 1);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -100,58 +101,62 @@ pub struct NonCanonicality {
 
 impl Default for NonCanonicality {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0, 0, 0, 0)
+        Self::EMPTY
     }
 }
 
 impl NonCanonicality {
-    pub(super) const MODIFIER_DEFECTIVE_SELECTOR: Self = Self::new(0, 1, 0, 0, 0, 0, 0, 0);
-    pub(super) const ADDITIONAL_DEFECTIVE_SELECTOR: Self = Self::new(0, 0, 1, 0, 0, 0, 0, 0);
-    pub(super) const TAG_CONFLICTING_SELECTOR: Self = Self::new(0, 0, 0, 1, 0, 0, 0, 0);
-    pub(super) const TAG_FORCED_PRESENTATION: Self = Self::new(0, 0, 0, 0, 1, 0, 0, 0);
-    pub(super) const TAG_REDUNDANT_SELECTOR: Self = Self::new(0, 0, 0, 0, 0, 1, 0, 0);
-    pub(super) const POLICY_REDUNDANT_SELECTOR: Self = Self::new(0, 0, 0, 0, 0, 0, 1, 0);
-    pub(super) const PRESENTATION_DECISION: Self = Self::new(0, 0, 0, 0, 0, 0, 0, 1);
+    const EMPTY: Self = Self {
+        unsanctioned_selectors: 0,
+        modifier_defective_selectors: 0,
+        additional_defective_selectors: 0,
+        tag_conflicting_selectors: 0,
+        tag_forced_presentations: 0,
+        tag_redundant_selectors: 0,
+        policy_redundant_selectors: 0,
+        presentation_decisions: 0,
+    };
 
-    /// Create an explicit non-canonicality summary.
-    #[must_use]
-    #[allow(clippy::too_many_arguments)]
-    // The public constructor mirrors the eight independent accounting axes.
-    pub const fn new(
-        unsanctioned_selectors: usize,
-        modifier_defective_selectors: usize,
-        additional_defective_selectors: usize,
-        tag_conflicting_selectors: usize,
-        tag_forced_presentations: usize,
-        tag_redundant_selectors: usize,
-        policy_redundant_selectors: usize,
-        presentation_decisions: usize,
-    ) -> Self {
+    pub(super) const MODIFIER_DEFECTIVE_SELECTOR: Self = Self {
+        modifier_defective_selectors: 1,
+        ..Self::EMPTY
+    };
+    pub(super) const ADDITIONAL_DEFECTIVE_SELECTOR: Self = Self {
+        additional_defective_selectors: 1,
+        ..Self::EMPTY
+    };
+    pub(super) const TAG_CONFLICTING_SELECTOR: Self = Self {
+        tag_conflicting_selectors: 1,
+        ..Self::EMPTY
+    };
+    pub(super) const TAG_FORCED_PRESENTATION: Self = Self {
+        tag_forced_presentations: 1,
+        ..Self::EMPTY
+    };
+    pub(super) const TAG_REDUNDANT_SELECTOR: Self = Self {
+        tag_redundant_selectors: 1,
+        ..Self::EMPTY
+    };
+    pub(super) const POLICY_REDUNDANT_SELECTOR: Self = Self {
+        policy_redundant_selectors: 1,
+        ..Self::EMPTY
+    };
+    pub(super) const PRESENTATION_DECISION: Self = Self {
+        presentation_decisions: 1,
+        ..Self::EMPTY
+    };
+
+    pub(super) const fn unsanctioned(count: usize) -> Self {
         Self {
-            unsanctioned_selectors,
-            modifier_defective_selectors,
-            additional_defective_selectors,
-            tag_conflicting_selectors,
-            tag_forced_presentations,
-            tag_redundant_selectors,
-            policy_redundant_selectors,
-            presentation_decisions,
+            unsanctioned_selectors: count,
+            ..Self::EMPTY
         }
     }
 
-    pub(super) const fn unsanctioned(count: usize) -> Self {
-        Self::new(count, 0, 0, 0, 0, 0, 0, 0)
-    }
-
-    pub(super) const fn is_empty(self) -> bool {
-        self.unsanctioned_selectors == 0
-            && self.modifier_defective_selectors == 0
-            && self.additional_defective_selectors == 0
-            && self.tag_conflicting_selectors == 0
-            && self.tag_forced_presentations == 0
-            && self.tag_redundant_selectors == 0
-            && self.policy_redundant_selectors == 0
-            && self.presentation_decisions == 0
+    /// Return whether every non-canonicality count is zero.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        *self == Self::EMPTY
     }
 }
 
@@ -298,7 +303,7 @@ impl ReplacementAnalysis {
     /// elements can still be present because sequence-level analysis may need
     /// them to preserve surrounding structure when another part of the same
     /// item is non-canonical.
-    pub(super) const fn is_canonical(&self) -> bool {
+    pub(super) fn is_canonical(&self) -> bool {
         self.non_canonicality.is_empty()
     }
 
