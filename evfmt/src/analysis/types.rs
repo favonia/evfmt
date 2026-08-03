@@ -155,8 +155,22 @@ impl NonCanonicality {
 
     /// Return whether every non-canonicality count is zero.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        *self == Self::EMPTY
+    pub const fn is_empty(&self) -> bool {
+        // Keep the pattern exhaustive so new accounting axes must be handled
+        // here while this method remains usable in const contexts.
+        matches!(
+            self,
+            Self {
+                unsanctioned_selectors: 0,
+                modifier_defective_selectors: 0,
+                additional_defective_selectors: 0,
+                tag_conflicting_selectors: 0,
+                tag_forced_presentations: 0,
+                tag_redundant_selectors: 0,
+                policy_redundant_selectors: 0,
+                presentation_decisions: 0,
+            }
+        )
     }
 }
 
@@ -303,7 +317,7 @@ impl ReplacementAnalysis {
     /// elements can still be present because sequence-level analysis may need
     /// them to preserve surrounding structure when another part of the same
     /// item is non-canonical.
-    pub(super) fn is_canonical(&self) -> bool {
+    pub(super) const fn is_canonical(&self) -> bool {
         self.non_canonicality.is_empty()
     }
 

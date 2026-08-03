@@ -34,8 +34,17 @@ macro_rules! non_canonicality {
     };
 }
 
+const fn non_canonicality_is_empty(summary: &NonCanonicality) -> bool {
+    summary.is_empty()
+}
+
 fn default_choice_decisions(finding: &Finding<'_>) -> Vec<Presentation> {
     finding.default_decisions().collect()
+}
+
+#[test]
+fn empty_non_canonicality_is_empty_in_const_context() {
+    assert!(non_canonicality_is_empty(&NonCanonicality::default()));
 }
 
 #[test]
