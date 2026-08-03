@@ -69,7 +69,7 @@ mod tests;
 ///
 /// ```rust
 /// use evfmt::{Policy, scan};
-/// use evfmt::analysis::{NonCanonicality, analyze_scan_item};
+/// use evfmt::analysis::analyze_scan_item;
 ///
 /// let policy = Policy::default();
 ///
@@ -78,10 +78,9 @@ mod tests;
 ///
 /// let selector_item = scan("\u{FE0F}").next().unwrap();
 /// let finding = analyze_scan_item(&selector_item, &policy).unwrap();
-/// assert_eq!(
-///     finding.non_canonicality(),
-///     NonCanonicality::new(1, 0, 0, 0, 0, 0, 0, 0)
-/// );
+/// let non_canonicality = finding.non_canonicality();
+/// assert!(!non_canonicality.is_empty());
+/// assert_eq!(non_canonicality.unsanctioned_selectors, 1);
 /// assert_eq!(finding.default_decisions().len(), 0);
 /// assert_eq!(finding.canonical_replacement_with_decisions(&[]).unwrap(), "");
 /// ```
@@ -498,16 +497,9 @@ fn analyze_policy_base_selectors(
         | (SingletonRule::EmojiToBare, &[Presentation::Emoji, _, ..]) => {
             SingletonBaseSelectorOutcome::Deterministic {
                 canonical_presentation: None,
-                non_canonicality: NonCanonicality::new(
+                non_canonicality: NonCanonicality::unsanctioned(
                     presentation_selectors_after_base.len() - 1,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    1,
-                    0,
-                ),
+                ) + NonCanonicality::POLICY_REDUNDANT_SELECTOR,
             }
         }
         // More than one presentation selector but the first is meaningful
