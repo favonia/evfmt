@@ -64,7 +64,7 @@ use crate::unicode;
 mod tests;
 
 // This module implements the structural-recognition contract documented in
-// `docs/designs/features/recognition.markdown`. Keep cross-module
+// `docs/design/features/recognition.markdown`. Keep cross-module
 // contracts there; keep concrete scanner state shapes and local invariants in
 // comments near the code that enforces them.
 

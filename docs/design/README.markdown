@@ -40,7 +40,7 @@ See [`../rationale/README.markdown`](../rationale/README.markdown) for the ratio
 
 ## Directory Scope
 
-Use `docs/designs/` only for durable design information that is broader than one local edit and likely to be retrieved while changing the project.
+Use `docs/design/` only for durable design information that is broader than one local edit and likely to be retrieved while changing the project.
 
 - `core/` for project-wide principles and architecture
 - `features/` for durable feature contracts, invariants, and scope boundaries
@@ -48,4 +48,4 @@ Use `docs/designs/` only for durable design information that is broader than one
 - choose the narrowest durable home for a rule: keep durable cross-component constraints here, and keep local implementation detail, repository operations, and tool wiring in code comments, tests, help text, or the files that implement them
 - update an existing note before adding a new one
 - add a new note only when no existing note can own the information cleanly and the information is durable, cross-file, and likely to matter again
-- keep temporary rollout notes, branch-local rationale, review notes, and one-file heuristics out of `docs/designs/`
+- keep temporary rollout notes, branch-local rationale, review notes, and one-file heuristics out of `docs/design/`

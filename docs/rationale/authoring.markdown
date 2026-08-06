@@ -4,7 +4,7 @@ Read when: creating or editing rationale files in this directory.
 
 Defines: shared authoring conventions for non-normative rationale records.
 
-Does not define: formatter behavior, public API behavior, or design contracts. Normative contracts live in `docs/designs/`, code, tests, and public API documentation.
+Does not define: formatter behavior, public API behavior, or design contracts. Normative contracts live in `docs/design/`, code, tests, and public API documentation.
 
 ## Rationale Scope
 
