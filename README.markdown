@@ -10,7 +10,7 @@
 
 The name stands for “emoji variation formatter”. It is a command-line formatter and a Rust library.
 
-This project was developed with AI assistance, guided by [detailed design documents](docs/designs/README.markdown) and substantial testing.
+This project was developed with AI assistance, guided by [detailed design documents](docs/design/README.markdown) and substantial testing.
 
 ## 🧭 Stability
 

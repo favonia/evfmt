@@ -1,10 +1,10 @@
 # Rationale: Policy
 
-Read when: auditing, challenging, or replacing the formatter policy predicates, policy defaults, or policy-key domains described in [`../designs/features/policy.markdown`](../designs/features/policy.markdown).
+Read when: auditing, challenging, or replacing the formatter policy predicates, policy defaults, or policy-key domains described in [`../design/features/policy.markdown`](../design/features/policy.markdown).
 
 Defines: non-normative evidence, assumptions, gaps, and tradeoff reasoning behind user-facing policy choices, bare-display interpretation, default policy behavior, and the keycap-character policy domain.
 
-Does not define: current policy behavior, recognition behavior, or slot-classification behavior. For behavior, see [`../designs/features/policy.markdown`](../designs/features/policy.markdown), code, tests, and public API documentation. For recognition and classification rationale, see [`recognition.markdown`](recognition.markdown) and [`classification.markdown`](classification.markdown).
+Does not define: current policy behavior, recognition behavior, or slot-classification behavior. For behavior, see [`../design/features/policy.markdown`](../design/features/policy.markdown), code, tests, and public API documentation. For recognition and classification rationale, see [`recognition.markdown`](recognition.markdown) and [`classification.markdown`](classification.markdown).
 
 This file follows the rationale authoring and manual review conventions in [`authoring.markdown`](authoring.markdown).
 

@@ -1,10 +1,10 @@
 # Rationale: Formatting Model
 
-Read when: auditing, challenging, or replacing the core formatting model described in [`../designs/core/formatting.markdown`](../designs/core/formatting.markdown).
+Read when: auditing, challenging, or replacing the core formatting model described in [`../design/core/formatting.markdown`](../design/core/formatting.markdown).
 
 Defines: non-normative evidence, assumptions, gaps, and tradeoff reasoning behind the formatter's cross-family selector-canonicalization model.
 
-Does not define: current formatter behavior, recognition behavior, slot-classification behavior, or policy semantics. For behavior, see [`../designs/core/formatting.markdown`](../designs/core/formatting.markdown), feature design notes, code, tests, and public API documentation. For recognition, classification, and policy rationale, see [`recognition.markdown`](recognition.markdown), [`classification.markdown`](classification.markdown), and [`policy.markdown`](policy.markdown).
+Does not define: current formatter behavior, recognition behavior, slot-classification behavior, or policy semantics. For behavior, see [`../design/core/formatting.markdown`](../design/core/formatting.markdown), feature design notes, code, tests, and public API documentation. For recognition, classification, and policy rationale, see [`recognition.markdown`](recognition.markdown), [`classification.markdown`](classification.markdown), and [`policy.markdown`](policy.markdown).
 
 This file follows the rationale authoring and manual review conventions in [`authoring.markdown`](authoring.markdown).
 

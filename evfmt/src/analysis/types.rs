@@ -206,7 +206,7 @@ impl AddAssign for NonCanonicality {
 /// These elements are a private renderer representation after the semantic
 /// formatter model has already resolved selector contexts and policy
 /// keys. They should not be treated as the design-spec vocabulary for
-/// selector classification; see `docs/designs/core/formatting.markdown`
+/// selector classification; see `docs/design/core/formatting.markdown`
 /// for that model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum ReplacementElement<D> {

@@ -28,7 +28,7 @@ If you have code ready, please make a pull request. Before you do:
 
 4. Put documentation in the right place.
 
-   Use [README.markdown](../README.markdown) for user-facing documentation. If you edit `docs/designs/`, start with [docs/designs/README.markdown](designs/README.markdown).
+   Use [README.markdown](../README.markdown) for user-facing documentation. If you edit `docs/design/`, start with [docs/design/README.markdown](design/README.markdown).
 
 5. Open the pull request.
 

@@ -1,10 +1,10 @@
 # Rationale: Recognition
 
-Read when: auditing, challenging, or replacing the scanner recognition boundaries described in [`../designs/features/recognition.markdown`](../designs/features/recognition.markdown).
+Read when: auditing, challenging, or replacing the scanner recognition boundaries described in [`../design/features/recognition.markdown`](../design/features/recognition.markdown).
 
 Defines: non-normative evidence, assumptions, gaps, and tradeoff reasoning behind scanner structure, selector visibility, valid emoji skeleton recognition, and related recognition boundaries.
 
-Does not define: current scanner behavior or slot-classification behavior. For behavior, see [`../designs/features/recognition.markdown`](../designs/features/recognition.markdown), code, tests, and public API documentation. For classification and policy rationale, see [`classification.markdown`](classification.markdown) and [`policy.markdown`](policy.markdown).
+Does not define: current scanner behavior or slot-classification behavior. For behavior, see [`../design/features/recognition.markdown`](../design/features/recognition.markdown), code, tests, and public API documentation. For classification and policy rationale, see [`classification.markdown`](classification.markdown) and [`policy.markdown`](policy.markdown).
 
 This file follows the rationale authoring and manual review conventions in [`authoring.markdown`](authoring.markdown).
 

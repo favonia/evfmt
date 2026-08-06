@@ -1,10 +1,10 @@
 # Rationale: Classification
 
-Read when: auditing, challenging, or replacing the selector-slot classification behavior described in [`../designs/features/classification.markdown`](../designs/features/classification.markdown).
+Read when: auditing, challenging, or replacing the selector-slot classification behavior described in [`../design/features/classification.markdown`](../design/features/classification.markdown).
 
 Defines: non-normative evidence, assumptions, gaps, and tradeoff reasoning behind reasonable-state assignment, context-specific selector accounting, and fixed cleanup.
 
-Does not define: current classification behavior, recognition behavior, or policy semantics. For behavior, see [`../designs/features/classification.markdown`](../designs/features/classification.markdown), code, tests, and public API documentation. For recognition and policy rationale, see [`recognition.markdown`](recognition.markdown) and [`policy.markdown`](policy.markdown).
+Does not define: current classification behavior, recognition behavior, or policy semantics. For behavior, see [`../design/features/classification.markdown`](../design/features/classification.markdown), code, tests, and public API documentation. For recognition and policy rationale, see [`recognition.markdown`](recognition.markdown) and [`policy.markdown`](policy.markdown).
 
 This file follows the rationale authoring and manual review conventions in [`authoring.markdown`](authoring.markdown).
 

@@ -109,7 +109,7 @@ pub fn analyze_scan_item<'a>(item: &ScanItem<'a>, policy: &Policy) -> Option<Fin
             //
             // This is the analysis-side implementation of the ZWJ-related
             // sequence contract in
-            // `docs/designs/features/classification.markdown`.
+            // `docs/design/features/classification.markdown`.
             EmojiSequence::LinksOnly(links) => analyze_links_only_zwj_sequence(item, links),
             EmojiSequence::EmojiHeaded {
                 first,
@@ -316,7 +316,7 @@ enum SingletonBaseSelectorOutcome {
 /// [`analyze_singleton_component`].
 ///
 /// The classification rule order lives in
-/// `docs/designs/features/classification.markdown`.
+/// `docs/design/features/classification.markdown`.
 ///
 /// Tag, modifier, and unsanctioned contexts are resolved before policy.
 /// The remaining ordinary/keycap cases enter policy when the slot keeps more

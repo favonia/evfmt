@@ -1,10 +1,10 @@
 # Rationale: Documentation Source Stability
 
-Read when: auditing, challenging, or replacing the checked-in text rules described in [`../designs/guides/source-text-stability.markdown`](../designs/guides/source-text-stability.markdown).
+Read when: auditing, challenging, or replacing the checked-in text rules described in [`../design/guides/source-text-stability.markdown`](../design/guides/source-text-stability.markdown).
 
 Defines: non-normative evidence gaps, assumptions, and tradeoff reasoning behind the repository text source-stability rules.
 
-Does not define: current documentation, comment, diagnostic, or formatter behavior. For behavior, see [`../designs/guides/source-text-stability.markdown`](../designs/guides/source-text-stability.markdown), local documentation, code, tests, and public API documentation.
+Does not define: current documentation, comment, diagnostic, or formatter behavior. For behavior, see [`../design/guides/source-text-stability.markdown`](../design/guides/source-text-stability.markdown), local documentation, code, tests, and public API documentation.
 
 This file follows the rationale authoring and manual review conventions in [`authoring.markdown`](authoring.markdown).
 

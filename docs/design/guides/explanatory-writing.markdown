@@ -28,7 +28,7 @@ The minimum-information and direct-statement rules in this note imply a broader 
 - Keep the example and its nearby prose focused on the minimum information needed for the next reader action.
 - Put byte-level proofs, edge cases, and deeper normalization details in later technical sections or design notes when they do not change the immediate beginner-facing takeaway.
 - Keep a short warning or qualification near the example only when omitting it would create a wrong setup or misleading expectation.
-- Durable feature semantics still belong in `docs/designs/features/`; explanatory documents may summarize them but should not become their defining source.
+- Durable feature semantics still belong in `docs/design/features/`; explanatory documents may summarize them but should not become their defining source.
 - Do not send readers from user-facing explanations to design documents to understand feature behavior. Design-document links are acceptable for project provenance or contributor orientation, but not as a substitute for explaining user-facing behavior in the README.
 
 ## Stable Terms
@@ -40,6 +40,6 @@ The minimum-information and direct-statement rules in this note imply a broader 
 
 It does not define:
 
-- durable feature semantics, which belong in `docs/designs/features/`
+- durable feature semantics, which belong in `docs/design/features/`
 - non-explanatory wording such as diagnostics or code comments
 - source spelling rules outside explanatory documents, which belong in [Documentation Source Stability](source-text-stability.markdown)
