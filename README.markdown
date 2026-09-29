@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/evfmt?logo=rust)](https://crates.io/crates/evfmt)
 [![docs.rs](https://img.shields.io/docsrs/evfmt?logo=docs.rs)](https://docs.rs/evfmt)
 [![MSRV](https://img.shields.io/crates/msrv/evfmt?logo=rust)](https://crates.io/crates/evfmt)
-[![coverage](https://img.shields.io/codecov/c/github/favonia/evfmt?logo=codecov)](https://app.codecov.io/gh/favonia/evfmt)
+[![coverage](https://codecov.io/gh/favonia/evfmt/branch/main/graph/badge.svg?precision=2)](https://app.codecov.io/gh/favonia/evfmt)
 [![source code](https://img.shields.io/badge/source%20code-GitHub-24292f?logo=github)](https://github.com/favonia/evfmt)
 
 `evfmt` is an opinionated formatter for Unicode presentation selectors (`U+FE0E` and `U+FE0F`).
