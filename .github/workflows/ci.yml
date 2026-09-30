@@ -81,7 +81,7 @@ jobs:
       - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 📦 Install cargo-nextest
-        uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-nextest
       - name: 🧪 Run tests
@@ -106,7 +106,7 @@ jobs:
       - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 📦 Install coverage tools
-        uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-llvm-cov,cargo-nextest
       - name: 🧪 Generate coverage report
@@ -148,7 +148,7 @@ jobs:
         with:
           toolchain: stable
       - name: 📦 Install cargo-vet
-        uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-vet
       - name: 🧪 Run cargo-vet
@@ -172,7 +172,7 @@ jobs:
       - name: ⚡ Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: 📦 Install cargo-semver-checks
-        uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-semver-checks
       - name: 🧪 Run semver checks
@@ -194,7 +194,7 @@ jobs:
         with:
           toolchain: stable
       - name: 📦 Install cargo-machete
-        uses: taiki-e/install-action@b8be7f5e140177087325943c4a8e169d01c59b3d # v2
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-machete
       - name: 🧪 Run cargo-machete
