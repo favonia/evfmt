@@ -149,8 +149,12 @@ jobs:
           toolchain: stable
       - name: 📦 Install cargo-vet
         uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
+        env:
+          # cargo-vet 0.10.0 cannot read trusted-publisher records in imports.lock.
+          # renovate: datasource=crate depName=cargo-vet
+          CARGO_VET_VERSION: "0.10.2"
         with:
-          tool: cargo-vet
+          tool: cargo-vet@${{ env.CARGO_VET_VERSION }}
       - name: 🧪 Run cargo-vet
         run: cargo vet
 
