@@ -389,7 +389,6 @@ impl Finding<'_> {
     ///
     /// The iterator length is equal to
     /// [`NonCanonicality::presentation_decisions`] for this finding.
-    #[must_use]
     pub fn default_decisions(&self) -> impl ExactSizeIterator<Item = Presentation> + '_ {
         DefaultDecisions {
             elements: self.analysis.elements.iter(),

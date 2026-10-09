@@ -69,7 +69,10 @@ fn fixed_repair_has_empty_decision_vector() {
         finding.non_canonicality(),
         non_canonicality! { policy_redundant_selectors: 1 }
     );
-    assert!(default_choice_decisions(&finding).is_empty());
+    assert_eq!(
+        default_choice_decisions(&finding),
+        Vec::<Presentation>::new()
+    );
     assert_eq!(finding.default_canonical_replacement(), "#");
     assert_eq!(
         finding.canonical_replacement_with_decisions(&[]),
