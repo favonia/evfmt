@@ -66,7 +66,7 @@ jobs:
       - name: 🚚 Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: 🧪 Run typos
-        uses: crate-ci/typos@02ea592e44b3a53c302f697cddca7641cd051c3d # v1.45.0
+        uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
 
   actionlint:
     name: GitHub Actions
@@ -76,7 +76,7 @@ jobs:
       contents: read
     steps:
       - name: 🛡️ Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
           disable-sudo: true
@@ -89,7 +89,7 @@ jobs:
       - name: 🏗️ Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.2"
+          go-version: "1.27.2"
       - name: 📡 Run `go telemetry on`
         run: |
           go telemetry on
@@ -113,7 +113,7 @@ jobs:
       contents: read
     steps:
       - name: 🛡️ Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
           disable-sudo: true
@@ -126,7 +126,7 @@ jobs:
       - name: 🏗️ Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.2"
+          go-version: "1.27.2"
       - name: 📡 Run `go telemetry on`
         run: |
           go telemetry on
@@ -146,7 +146,7 @@ jobs:
       contents: read
     steps:
       - name: 🛡️ Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
           disable-sudo: true
