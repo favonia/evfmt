@@ -98,7 +98,6 @@ pub(crate) const fn variation_entry(index: usize) -> char {
 /// The returned iterator enumerates exactly the characters for which
 /// [`has_variation_sequence`] returns true.
 #[cfg(test)]
-#[must_use]
 pub(crate) fn variation_sequence_chars() -> impl ExactSizeIterator<Item = char> + Clone + 'static {
     VARIATION_ENTRIES.iter().copied()
 }
